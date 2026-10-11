@@ -1,4 +1,4 @@
-```java
+
 package com.nhom4.QuanLyTiemBanhNgot.exception;
 
 import jakarta.validation.ConstraintViolationException;
@@ -140,4 +140,3 @@ public class GlobalExceptionHandler {
                         status.value(), message, Instant.now()));
     }
 }
-```
