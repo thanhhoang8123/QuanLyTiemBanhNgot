@@ -1,11 +1,13 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
+import com.nhom4.QuanLyTiemBanhNgot.dto.AccountResponse;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Account;
 import com.nhom4.QuanLyTiemBanhNgot.service.AccountService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.function.Function;
 
 @RestController
 @RequestMapping("/api/accounts")
@@ -17,42 +19,59 @@ public class AccountController {
         this.accountService = accountService;
     }
 
+    private AccountResponse toResponse(Account account) {
+        return new AccountResponse(
+                account.getId(),
+                account.getUsername(),
+                account.getRole() != null ? account.getRole().getId() : null,
+                account.getRole() != null ? account.getRole().getName() : null,
+                account.getStatus(),
+                account.getCreatedAt(),
+                account.getUpdatedAt()
+        );
+    }
+
     @GetMapping
-    public List<Account> getAll() {
-        return accountService.getAll();
+    public List<AccountResponse> getAll() {
+        return accountService.getAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Account> getById(@PathVariable Long id) {
+    public ResponseEntity<AccountResponse> getById(@PathVariable Long id) {
         return accountService.getById(id)
+                .map(this::toResponse)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public Account create(@RequestBody Account account) {
-        return accountService.save(account);
+    public AccountResponse create(@RequestBody Account account) {
+        return toResponse(accountService.save(account));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Account> update(
+    public ResponseEntity<AccountResponse> update(
             @PathVariable Long id,
             @RequestBody Account account) {
 
-        return accountService.getById(id)
-                .map(existingAccount -> {
-                    existingAccount.setUsername(account.getUsername());
-                    existingAccount.setPasswordHash(account.getPasswordHash());
-                    existingAccount.setRole(account.getRole());
-                    existingAccount.setStatus(account.getStatus());
-                    existingAccount.setCreatedAt(account.getCreatedAt());
-                    existingAccount.setUpdatedAt(account.getUpdatedAt());
+        return accountService.getById(id).map(existingAccount -> {
+            existingAccount.setUsername(account.getUsername());
 
-                    return ResponseEntity.ok(
-                            accountService.save(existingAccount)
-                    );
-                })
-                .orElse(ResponseEntity.notFound().build());
+            if (account.getPasswordHash() != null
+                    && !account.getPasswordHash().isBlank()) {
+                existingAccount.setPasswordHash(account.getPasswordHash());
+            }
+
+            existingAccount.setRole(account.getRole());
+            existingAccount.setStatus(account.getStatus());
+
+            return ResponseEntity.ok(
+                    toResponse(accountService.save(existingAccount))
+            );
+        }).orElse(ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{id}")
