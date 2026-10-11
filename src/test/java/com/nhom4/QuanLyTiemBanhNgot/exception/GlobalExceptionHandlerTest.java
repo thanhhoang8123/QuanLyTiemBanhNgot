@@ -55,10 +55,11 @@ class GlobalExceptionHandlerTest {
         MethodArgumentNotValidException exception =
                 new MethodArgumentNotValidException(null, bindingResult);
 
-        var response = handler.handleValidationException(exception);
+        org.springframework.http.ResponseEntity<ErrorResponse> response =
+                handler.handleValidation(exception);
 
         assertEquals(HttpStatus.BAD_REQUEST.value(), response.getStatusCode().value());
-        assertEquals("Số lượng phải lớn hơn 0", response.getBody().message());
+        assertEquals("quantity: Số lượng phải lớn hơn 0", response.getBody().message());
     }
 
     @Test
@@ -68,7 +69,8 @@ class GlobalExceptionHandlerTest {
                 validator.validate(new InvalidRequest(""));
         var exception = new jakarta.validation.ConstraintViolationException(violations);
 
-        var response = handler.handleValidationException(exception);
+        org.springframework.http.ResponseEntity<ErrorResponse> response =
+                handler.handleValidation(exception);
 
         assertEquals(HttpStatus.BAD_REQUEST.value(), response.getStatusCode().value());
         assertEquals("Tên không được để trống", response.getBody().message());
