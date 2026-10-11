@@ -1,5 +1,8 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.CreateOrderRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderUpdateRequest;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Order;
 import com.nhom4.QuanLyTiemBanhNgot.service.OrderService;
 import org.springframework.web.bind.annotation.*;
@@ -62,8 +65,8 @@ public class OrderController {
      *               Chuyển JSON từ request thành đối tượng Order.
      */
     @PostMapping
-    public Order createOrder(@RequestBody Order order) {
-        return orderService.save(order);
+    public OrderResponse createOrder(@RequestBody CreateOrderRequest request) {
+        return orderService.create(request);
     }
 
     /**
@@ -71,17 +74,13 @@ public class OrderController {
      *
      * Cập nhật đơn hàng.
      *
-     * ID lấy từ URL sẽ được gán cho object Order.
+     * Chỉ cập nhật địa chỉ giao hàng.
      */
     @PutMapping("/{id}")
-    public Order updateOrder(
+    public OrderResponse updateOrder(
             @PathVariable Long id,
-            @RequestBody Order order) {
-
-        // Đảm bảo cập nhật đúng ID được truyền trên URL.
-        order.setId(id);
-
-        return orderService.save(order);
+            @RequestBody OrderUpdateRequest request) {
+        return orderService.updateOrder(id, request);
     }
 
     /**
@@ -91,6 +90,6 @@ public class OrderController {
      */
     @DeleteMapping("/{id}")
     public void deleteOrder(@PathVariable Long id) {
-        orderService.deleteById(id);
+        orderService.deleteOrder(id);
     }
 }

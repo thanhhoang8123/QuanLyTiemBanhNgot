@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
  * Bảng này lưu thông tin thanh toán của đơn hàng.
  *
  * Quan hệ:
- * Order 1 ----- N Payment
+ * Order 1 ----- 0..1 Payment
  */
 @Entity
 @Table(name = "payments")
@@ -37,8 +37,8 @@ public class Payment {
      *
      * order_id → orders.id
      */
-    @ManyToOne
-    @JoinColumn(name = "order_id")
+    @OneToOne
+    @JoinColumn(name = "order_id", nullable = false, unique = true)
     private Order order;
 
     /**

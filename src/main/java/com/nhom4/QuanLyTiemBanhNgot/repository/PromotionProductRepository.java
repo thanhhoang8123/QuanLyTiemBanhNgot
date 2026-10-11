@@ -17,4 +17,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface PromotionProductRepository
         extends JpaRepository<PromotionProduct, PromotionProductId> {
 
+    boolean existsByIdPromotionId(Long promotionId);
 }

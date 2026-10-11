@@ -1,16 +1,19 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
-import com.nhom4.QuanLyTiemBanhNgot.entity.CustomOrder;
+import com.nhom4.QuanLyTiemBanhNgot.dto.customorder.CreateCustomOrderRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.customorder.CustomOrderResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.customorder.UpdateCustomOrderRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.customorder.UpdateCustomOrderStatusRequest;
 import com.nhom4.QuanLyTiemBanhNgot.service.CustomOrderService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
  * REST Controller cho bảng custom_orders.
- *
- * Đường dẫn:
- * /api/custom-orders
  */
 @RestController
 @RequestMapping("/api/custom-orders")
@@ -18,73 +21,45 @@ public class CustomOrderController {
 
     private final CustomOrderService customOrderService;
 
-    /**
-     * Constructor Injection.
-     */
-    public CustomOrderController(
-            CustomOrderService customOrderService) {
-
+    public CustomOrderController(CustomOrderService customOrderService) {
         this.customOrderService = customOrderService;
     }
 
-    /**
-     * GET /api/custom-orders
-     *
-     * Lấy tất cả đơn bánh đặt riêng.
-     */
     @GetMapping
-    public List<CustomOrder> getAllCustomOrders() {
-        return customOrderService.findAll();
+    public ResponseEntity<List<CustomOrderResponse>> getAllCustomOrders() {
+        return ResponseEntity.ok(customOrderService.findAll());
     }
 
-    /**
-     * GET /api/custom-orders/{id}
-     *
-     * Lấy một đơn đặt bánh.
-     */
     @GetMapping("/{id}")
-    public CustomOrder getCustomOrderById(
+    public ResponseEntity<CustomOrderResponse> getCustomOrderById(
             @PathVariable Long id) {
-
-        return customOrderService.findById(id);
+        return ResponseEntity.ok(customOrderService.findById(id));
     }
 
-    /**
-     * POST /api/custom-orders
-     *
-     * Tạo đơn đặt bánh riêng.
-     */
     @PostMapping
-    public CustomOrder createCustomOrder(
-            @RequestBody CustomOrder customOrder) {
-
-        return customOrderService.save(customOrder);
+    public ResponseEntity<CustomOrderResponse> createCustomOrder(
+            @Valid @RequestBody CreateCustomOrderRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(customOrderService.create(request));
     }
 
-    /**
-     * PUT /api/custom-orders/{id}
-     *
-     * Cập nhật đơn đặt bánh.
-     */
     @PutMapping("/{id}")
-    public CustomOrder updateCustomOrder(
+    public ResponseEntity<CustomOrderResponse> updateCustomOrder(
             @PathVariable Long id,
-            @RequestBody CustomOrder customOrder) {
-
-        customOrder.setId(id);
-
-        return customOrderService.save(customOrder);
+            @Valid @RequestBody UpdateCustomOrderRequest request) {
+        return ResponseEntity.ok(customOrderService.update(id, request));
     }
 
-    /**
-     * DELETE /api/custom-orders/{id}
-     *
-     * Xóa đơn đặt bánh.
-     */
-    @DeleteMapping("/{id}")
-    public void deleteCustomOrder(
-            @PathVariable Long id) {
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<CustomOrderResponse> updateCustomOrderStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateCustomOrderStatusRequest request) {
+        return ResponseEntity.ok(customOrderService.updateStatus(id, request));
+    }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteCustomOrder(@PathVariable Long id) {
         customOrderService.deleteById(id);
+        return ResponseEntity.noContent().build();
     }
 }

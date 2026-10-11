@@ -1,7 +1,10 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
-import com.nhom4.QuanLyTiemBanhNgot.entity.Payment;
+import com.nhom4.QuanLyTiemBanhNgot.dto.payment.CreatePaymentRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.payment.PaymentResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.payment.SimulatePaymentRequest;
 import com.nhom4.QuanLyTiemBanhNgot.service.PaymentService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -31,7 +34,7 @@ public class PaymentController {
      * Lấy tất cả thanh toán.
      */
     @GetMapping
-    public List<Payment> getAllPayments() {
+    public List<PaymentResponse> getAllPayments() {
         return paymentService.findAll();
     }
 
@@ -41,7 +44,7 @@ public class PaymentController {
      * Lấy một thanh toán theo ID.
      */
     @GetMapping("/{id}")
-    public Payment getPaymentById(@PathVariable Long id) {
+    public PaymentResponse getPaymentById(@PathVariable Long id) {
         return paymentService.findById(id);
     }
 
@@ -51,25 +54,31 @@ public class PaymentController {
      * Tạo thanh toán mới.
      */
     @PostMapping
-    public Payment createPayment(
-            @RequestBody Payment payment) {
+    public PaymentResponse createPayment(
+            @Valid @RequestBody CreatePaymentRequest request) {
+        return paymentService.create(request);
+    }
 
-        return paymentService.save(payment);
+    /**
+     * POST /api/payments/{id}/simulate
+     *
+     * Mô phỏng kết quả thanh toán SUCCESS hoặc FAILED.
+     */
+    @PostMapping("/{id}/simulate")
+    public PaymentResponse simulatePayment(
+            @PathVariable Long id,
+            @Valid @RequestBody SimulatePaymentRequest request) {
+        return paymentService.simulate(id, request);
     }
 
     /**
      * PUT /api/payments/{id}
      *
-     * Cập nhật thanh toán.
+     * Đường dẫn được giữ nguyên; cập nhật trực tiếp chưa được hỗ trợ nghiệp vụ.
      */
     @PutMapping("/{id}")
-    public Payment updatePayment(
-            @PathVariable Long id,
-            @RequestBody Payment payment) {
-
-        payment.setId(id);
-
-        return paymentService.save(payment);
+    public void updatePayment(@PathVariable Long id) {
+        paymentService.update(id);
     }
 
     /**
