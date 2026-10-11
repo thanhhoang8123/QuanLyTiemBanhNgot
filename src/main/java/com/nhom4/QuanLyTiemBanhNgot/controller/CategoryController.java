@@ -1,7 +1,9 @@
+
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 import com.nhom4.QuanLyTiemBanhNgot.entity.Category;
 import com.nhom4.QuanLyTiemBanhNgot.service.CategoryService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,34 +32,21 @@ public class CategoryController {
     }
 
     @PostMapping
-    public Category create(@RequestBody Category category) {
-        return categoryService.save(category);
+    public ResponseEntity<Category> create(
+            @RequestBody Category category) {
+        Category saved = categoryService.save(category);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Category> update(
             @PathVariable Long id,
             @RequestBody Category category) {
-
-        return categoryService.getById(id)
-                .map(existingCategory -> {
-                    existingCategory.setName(category.getName());
-                    existingCategory.setDescription(category.getDescription());
-                    existingCategory.setStatus(category.getStatus());
-
-                    return ResponseEntity.ok(
-                            categoryService.save(existingCategory)
-                    );
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return ResponseEntity.ok(categoryService.update(id, category));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
-        if (categoryService.getById(id).isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
         categoryService.delete(id);
         return ResponseEntity.noContent().build();
     }

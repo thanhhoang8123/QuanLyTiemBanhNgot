@@ -1,7 +1,9 @@
+
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 import com.nhom4.QuanLyTiemBanhNgot.entity.Product;
 import com.nhom4.QuanLyTiemBanhNgot.service.ProductService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,11 +19,19 @@ public class ProductController {
         this.productService = productService;
     }
 
+    // Lấy danh sách sản phẩm
     @GetMapping
     public List<Product> getAll() {
         return productService.getAll();
     }
 
+    // Tìm kiếm theo tên hoặc mã sản phẩm
+    @GetMapping("/search")
+    public List<Product> search(@RequestParam String keyword) {
+        return productService.search(keyword);
+    }
+
+    // Lấy chi tiết sản phẩm
     @GetMapping("/{id}")
     public ResponseEntity<Product> getById(@PathVariable Long id) {
         return productService.getById(id)
@@ -29,44 +39,36 @@ public class ProductController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // Thêm sản phẩm
     @PostMapping
-    public Product create(@RequestBody Product product) {
-        return productService.save(product);
+    public ResponseEntity<Product> create(
+            @RequestBody Product product) {
+
+        Product created = productService.create(product);
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(created);
     }
 
+    // Cập nhật sản phẩm
     @PutMapping("/{id}")
     public ResponseEntity<Product> update(
             @PathVariable Long id,
             @RequestBody Product product) {
 
-        return productService.getById(id)
-                .map(existingProduct -> {
-                    existingProduct.setCategory(product.getCategory());
-                    existingProduct.setProductCode(product.getProductCode());
-                    existingProduct.setName(product.getName());
-                    existingProduct.setDescription(product.getDescription());
-                    existingProduct.setImageUrl(product.getImageUrl());
-                    existingProduct.setPrice(product.getPrice());
-                    existingProduct.setQuantity(product.getQuantity());
-                    existingProduct.setUnit(product.getUnit());
-                    existingProduct.setExpiryDate(product.getExpiryDate());
-                    existingProduct.setStatus(product.getStatus());
-                    existingProduct.setCreatedAt(product.getCreatedAt());
-
-                    return ResponseEntity.ok(
-                            productService.save(existingProduct)
-                    );
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return ResponseEntity.ok(
+                productService.update(id, product)
+        );
     }
 
+    // Ngừng kinh doanh sản phẩm, không xóa cứng
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        if (productService.getById(id).isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
+    public ResponseEntity<Product> deactivate(
+            @PathVariable Long id) {
 
-        productService.delete(id);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(
+                productService.deactivate(id)
+        );
     }
 }
