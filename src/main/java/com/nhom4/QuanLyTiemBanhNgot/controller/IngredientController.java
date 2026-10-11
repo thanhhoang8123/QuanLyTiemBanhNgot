@@ -1,3 +1,4 @@
+
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 import com.nhom4.QuanLyTiemBanhNgot.entity.Ingredient;
@@ -28,6 +29,7 @@ public class IngredientController {
 
     @PostMapping
     public Ingredient create(@RequestBody Ingredient ingredient) {
+        ingredient.setId(null);
         return service.save(ingredient);
     }
 

@@ -1,3 +1,5 @@
+
+
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 import com.nhom4.QuanLyTiemBanhNgot.entity.Supplier;
@@ -28,6 +30,7 @@ public class SupplierController {
 
     @PostMapping
     public Supplier create(@RequestBody Supplier supplier) {
+        supplier.setId(null);
         return service.save(supplier);
     }
 
