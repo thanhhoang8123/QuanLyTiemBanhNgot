@@ -1,6 +1,9 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderItemResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderItemUpdateRequest;
 import com.nhom4.QuanLyTiemBanhNgot.entity.OrderItem;
+import com.nhom4.QuanLyTiemBanhNgot.service.OrderService;
 import com.nhom4.QuanLyTiemBanhNgot.service.OrderItemService;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,12 +20,16 @@ import java.util.List;
 public class OrderItemController {
 
     private final OrderItemService orderItemService;
+    private final OrderService orderService;
 
     /**
      * Constructor Injection.
      */
-    public OrderItemController(OrderItemService orderItemService) {
+    public OrderItemController(
+            OrderItemService orderItemService,
+            OrderService orderService) {
         this.orderItemService = orderItemService;
+        this.orderService = orderService;
     }
 
     /**
@@ -46,31 +53,15 @@ public class OrderItemController {
     }
 
     /**
-     * POST /api/order-items
-     *
-     * Thêm sản phẩm vào chi tiết đơn hàng.
-     */
-    @PostMapping
-    public OrderItem createOrderItem(
-            @RequestBody OrderItem orderItem) {
-
-        return orderItemService.save(orderItem);
-    }
-
-    /**
      * PUT /api/order-items/{id}
      *
      * Cập nhật chi tiết đơn hàng.
      */
     @PutMapping("/{id}")
-    public OrderItem updateOrderItem(
+    public OrderItemResponse updateOrderItem(
             @PathVariable Long id,
-            @RequestBody OrderItem orderItem) {
-
-        // Lấy ID từ URL làm ID cần cập nhật.
-        orderItem.setId(id);
-
-        return orderItemService.save(orderItem);
+            @RequestBody OrderItemUpdateRequest request) {
+        return orderService.updateOrderItem(id, request);
     }
 
     /**
@@ -80,6 +71,6 @@ public class OrderItemController {
      */
     @DeleteMapping("/{id}")
     public void deleteOrderItem(@PathVariable Long id) {
-        orderItemService.deleteById(id);
+        orderService.deleteOrderItem(id);
     }
 }

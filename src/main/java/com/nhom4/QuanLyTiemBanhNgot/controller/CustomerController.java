@@ -1,7 +1,8 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 
-import com.nhom4.QuanLyTiemBanhNgot.entity.Customer;
+import com.nhom4.QuanLyTiemBanhNgot.dto.customer.CustomerRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.customer.CustomerResponse;
 import com.nhom4.QuanLyTiemBanhNgot.service.CustomerService;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,8 +30,19 @@ public class CustomerController {
      * Lấy toàn bộ khách hàng.
      */
     @GetMapping
-    public List<Customer> getAllCustomers() {
+    public List<CustomerResponse> getAllCustomers() {
         return customerService.findAll();
+    }
+
+    /**
+     * GET /api/customers/search?keyword=...
+     *
+     * Tìm theo tên hoặc số điện thoại.
+     */
+    @GetMapping("/search")
+    public List<CustomerResponse> searchCustomers(
+            @RequestParam(required = false) String keyword) {
+        return customerService.search(keyword);
     }
 
     /**
@@ -39,7 +51,7 @@ public class CustomerController {
      * Lấy một khách hàng theo ID.
      */
     @GetMapping("/{id}")
-    public Customer getCustomerById(@PathVariable Long id) {
+    public CustomerResponse getCustomerById(@PathVariable Long id) {
         return customerService.findById(id);
     }
 
@@ -48,11 +60,11 @@ public class CustomerController {
      *
      * Thêm khách hàng mới.
      *
-     * Dữ liệu Customer được gửi trong request body dạng JSON.
+     * Nhận thông tin hồ sơ khách hàng qua request DTO.
      */
     @PostMapping
-    public Customer createCustomer(@RequestBody Customer customer) {
-        return customerService.save(customer);
+    public CustomerResponse createCustomer(@RequestBody CustomerRequest request) {
+        return customerService.create(request);
     }
 
     /**
@@ -63,13 +75,10 @@ public class CustomerController {
      * ID trên URL được dùng làm ID chính thức của bản ghi.
      */
     @PutMapping("/{id}")
-    public Customer updateCustomer(
+    public CustomerResponse updateCustomer(
             @PathVariable Long id,
-            @RequestBody Customer customer) {
-        // Đảm bảo dữ liệu gửi lên được cập nhật đúng bản ghi.
-        customer.setId(id);
-
-        return customerService.save(customer);
+            @RequestBody CustomerRequest request) {
+        return customerService.update(id, request);
     }
 
     /**

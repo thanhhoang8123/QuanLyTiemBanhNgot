@@ -36,17 +36,4 @@ public class OrderItemService {
                 .orElse(null);
     }
 
-    /**
-     * Thêm mới hoặc cập nhật OrderItem.
-     */
-    public OrderItem save(OrderItem orderItem) {
-        return orderItemRepository.save(orderItem);
-    }
-
-    /**
-     * Xóa OrderItem.
-     */
-    public void deleteById(Long id) {
-        orderItemRepository.deleteById(id);
-    }
 }
