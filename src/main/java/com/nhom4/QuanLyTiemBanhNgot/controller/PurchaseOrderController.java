@@ -1,6 +1,7 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
-import com.nhom4.QuanLyTiemBanhNgot.entity.PurchaseOrder;
+import com.nhom4.QuanLyTiemBanhNgot.dto.PurchaseOrderCreateRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.PurchaseOrderResponse;
 import com.nhom4.QuanLyTiemBanhNgot.service.PurchaseOrderService;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,28 +18,27 @@ public class PurchaseOrderController {
     }
 
     @GetMapping
-    public List<PurchaseOrder> findAll() {
+    public List<PurchaseOrderResponse> findAll() {
         return service.findAll();
     }
 
     @GetMapping("/{id}")
-    public PurchaseOrder findById(@PathVariable Long id) {
+    public PurchaseOrderResponse findById(@PathVariable Long id) {
         return service.findById(id);
     }
 
     @PostMapping
-    public PurchaseOrder create(@RequestBody PurchaseOrder purchaseOrder) {
-        return service.save(purchaseOrder);
+    public PurchaseOrderResponse create(@RequestBody PurchaseOrderCreateRequest request) {
+        return service.create(request);
     }
 
-    @PutMapping("/{id}")
-    public PurchaseOrder update(@PathVariable Long id, @RequestBody PurchaseOrder purchaseOrder) {
-        purchaseOrder.setId(id);
-        return service.save(purchaseOrder);
+    @PostMapping("/{id}/receive")
+    public PurchaseOrderResponse receive(@PathVariable Long id) {
+        return service.receive(id);
     }
 
-    @DeleteMapping("/{id}")
-    public void delete(@PathVariable Long id) {
-        service.deleteById(id);
+    @PostMapping("/{id}/cancel")
+    public PurchaseOrderResponse cancel(@PathVariable Long id) {
+        return service.cancel(id);
     }
 }
