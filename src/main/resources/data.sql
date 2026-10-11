@@ -15,17 +15,14 @@ INSERT IGNORE INTO roles (id, role_code, name, description) VALUES
 
 -- =========================================================
 -- 2. ACCOUNTS
--- password_hash dưới đây chỉ là dữ liệu mẫu.
--- Khi làm đăng nhập thật sẽ thay bằng BCrypt hash.
+-- Mật khẩu mẫu: HappyMart@123
 -- =========================================================
 INSERT IGNORE INTO accounts
 (id, username, password_hash, role_id, status, created_at, updated_at) VALUES
-(1, 'admin', '$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890', 1, 'ACTIVE', NOW(), NOW()),
-(2, 'manager', '$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890', 2, 'ACTIVE', NOW(), NOW()),
-(3, 'staff01', '$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890', 3, 'ACTIVE', NOW(), NOW()),
-(4, 'staff02', '$2a$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890', 3, 'ACTIVE', NOW(), NOW());
-
--- =========================================================
+(1, 'admin', '$2a$10$4vzGtXrDBByRFQ9hj2abOuuCzSAvkfpr2i8VrsCMhkihuIdQzJT8C', 1, 'ACTIVE', NOW(), NOW()),
+(2, 'manager', '$2a$10$4vzGtXrDBByRFQ9hj2abOuuCzSAvkfpr2i8VrsCMhkihuIdQzJT8C', 2, 'ACTIVE', NOW(), NOW()),
+(3, 'staff01', '$2a$10$4vzGtXrDBByRFQ9hj2abOuuCzSAvkfpr2i8VrsCMhkihuIdQzJT8C', 3, 'ACTIVE', NOW(), NOW()),
+(4, 'staff02', '$2a$10$4vzGtXrDBByRFQ9hj2abOuuCzSAvkfpr2i8VrsCMhkihuIdQzJT8C', 3, 'ACTIVE', NOW(), NOW());
 -- 3. EMPLOYEES
 -- =========================================================
 INSERT IGNORE INTO employees
