@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+:root {
+  --wa-cream: #FCF9F3;
+  --wa-petal: #FAF0EE;
+  --wa-rosewood: #76534D;
+  --wa-action-ink: #4A302B;
+  --wa-caramel: #D0A263;
+  --wa-caramel-hover: #DAB780;
+  --wa-blush: #E8A69A;
+  --wa-paper: #FFFFFF;
+  --wa-border: #EAE3DA;
+  --wa-sand: #DDCDB8;
+  --wa-muted: #806B65;
+  --wa-rosewood-soft: #9A7972;
+  --wa-caramel-soft: #F6EEDF;
+  --wa-blush-soft: #F9EAE7;
+  --wa-success: #536B50;
+  --wa-success-soft: #EAF0E8;
+  --wa-success-line: #CBD8C7;
+  --wa-warning: #80602F;
+  --wa-warning-soft: #F6EEDC;
+  --wa-warning-line: #E6D1A9;
+  --wa-danger: #914E46;
+  --wa-danger-soft: #F6E9E6;
+  --wa-danger-line: #E2C5BF;
+  --wa-neutral-soft: #F3EFEB;
+  --wa-neutral-ink: #675650;
+}
+
+@theme {
+  --color-cream: var(--wa-cream);
+  --color-petal: var(--wa-petal);
+  --color-rosewood: var(--wa-rosewood);
+  --color-action-ink: var(--wa-action-ink);
+  --color-caramel: var(--wa-caramel);
+  --color-caramel-hover: var(--wa-caramel-hover);
+  --color-blush: var(--wa-blush);
+  --color-paper: var(--wa-paper);
+  --color-border: var(--wa-border);
+  --color-muted: var(--wa-muted);
+  --color-rosewood-soft: var(--wa-rosewood-soft);
+  --color-caramel-soft: var(--wa-caramel-soft);
+  --color-blush-soft: var(--wa-blush-soft);
+  --color-success: var(--wa-success);
+  --color-success-soft: var(--wa-success-soft);
+  --color-success-line: var(--wa-success-line);
+  --color-warning: var(--wa-warning);
+  --color-warning-soft: var(--wa-warning-soft);
+  --color-warning-line: var(--wa-warning-line);
+  --color-danger: var(--wa-danger);
+  --color-danger-soft: var(--wa-danger-soft);
+  --color-danger-line: var(--wa-danger-line);
+  --color-neutral-soft: var(--wa-neutral-soft);
+  --color-neutral-ink: var(--wa-neutral-ink);
+}
+
+:root {
+  font-family: "Be Vietnam Pro", "Segoe UI", Arial, sans-serif;
+  color: var(--wa-rosewood);
+  background: var(--wa-cream);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--wa-caramel) 76%, transparent);
+  outline-offset: 2px;
+}
+
+.font-display {
+  font-family: "Lora", "Iowan Old Style", Georgia, "Times New Roman", serif;
+}
+
+.soft-shadow {
+  box-shadow: 0 8px 24px rgba(118, 83, 77, 0.055);
+}
+
+.chart-grid {
+  background-image: linear-gradient(to bottom, color-mix(in srgb, var(--wa-rosewood) 13%, transparent) 1px, transparent 1px);
+  background-size: 100% 25%;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.donut-chart {
+  background: conic-gradient(
+    var(--wa-caramel) 0% 34%,
+    var(--wa-blush) 34% 59%,
+    var(--wa-rosewood) 59% 79%,
+    #DDCDB8 79% 100%
+  );
+}
+
+::selection {
+  color: var(--wa-rosewood);
+  background: var(--color-blush-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
