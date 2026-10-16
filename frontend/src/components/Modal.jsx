@@ -1,16 +1,25 @@
 import { useEffect } from 'react'
 import Icon from './Icon.jsx'
 
-export default function Modal({ open, title, onClose, children, size = 'max-w-lg' }) {
+export default function Modal({
+  open,
+  title,
+  onClose,
+  children,
+  size = 'max-w-lg',
+  closeOnEscape = true,
+  closeOnBackdrop = true,
+  closeDisabled = false,
+}) {
   useEffect(() => {
     if (!open) return undefined
 
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape' && closeOnEscape) onClose()
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [open, onClose])
+  }, [open, onClose, closeOnEscape])
 
   if (!open) return null
 
@@ -19,7 +28,7 @@ export default function Modal({ open, title, onClose, children, size = 'max-w-lg
       className="fixed inset-0 z-50 flex items-center justify-center bg-rosewood/45 p-4 backdrop-blur-[2px]"
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
+        if (closeOnBackdrop && event.target === event.currentTarget) onClose()
       }}
     >
       <section
@@ -33,8 +42,9 @@ export default function Modal({ open, title, onClose, children, size = 'max-w-lg
           <button
             type="button"
             aria-label="Đóng cửa sổ"
+            disabled={closeDisabled}
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-rosewood transition hover:bg-petal"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-rosewood transition hover:bg-petal disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon name="close" size={18} />
           </button>

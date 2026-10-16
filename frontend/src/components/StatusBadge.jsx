@@ -1,6 +1,10 @@
 const statusStyles = {
   'Đang bán': 'border-success-line bg-success-soft text-success',
   'Tạm ẩn': 'border-border bg-neutral-soft text-neutral-ink',
+  'Đang hoạt động': 'border-success-line bg-success-soft text-success',
+  'Ngừng hoạt động': 'border-border bg-neutral-soft text-neutral-ink',
+  'Chờ xử lý': 'border-warning-line bg-warning-soft text-warning',
+  'Đã nhận': 'border-success-line bg-success-soft text-success',
   'Còn hàng': 'border-success-line bg-success-soft text-success',
   'Sắp hết': 'border-warning-line bg-warning-soft text-warning',
   'Hết hàng': 'border-danger-line bg-danger-soft text-danger',
