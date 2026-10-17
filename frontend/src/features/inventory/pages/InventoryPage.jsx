@@ -73,15 +73,21 @@ export default function InventoryPage({ onToast }) {
   }, [loadItems])
 
   const filteredItems = useMemo(() => items.filter((item) => {
-    const matchesQuery = `${item.ingredientCode ?? ''} ${item.name ?? ''}`.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi'))
+    const normalizedQuery = query.trim().toLocaleLowerCase('vi')
+    const matchesQuery = `${item.ingredientCode ?? ''} ${item.name ?? ''}`
+      .toLocaleLowerCase('vi')
+      .includes(normalizedQuery)
+
     const status = ingredientStatus(item)
-    return matchesQuery && (
+
+    const matchesStatus =
       statusFilter === 'Tất cả trạng thái'
-        ? item.status !== false
+        ? true
         : statusFilter === 'Ngừng hoạt động'
           ? item.status === false
           : item.status !== false && status === statusFilter
-    )
+
+    return matchesQuery && matchesStatus
   }), [items, query, statusFilter])
 
   const openCreate = () => {
