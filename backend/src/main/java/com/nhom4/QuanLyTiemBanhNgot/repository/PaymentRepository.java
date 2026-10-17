@@ -18,6 +18,10 @@ public interface PaymentRepository
     boolean existsByOrder_Id(Long orderId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select payment from Payment payment where payment.order.id = :orderId")
+    Optional<Payment> findByOrder_IdForUpdate(@Param("orderId") Long orderId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select payment from Payment payment where payment.id = :id")
     Optional<Payment> findByIdForUpdate(@Param("id") Long id);
 }

@@ -15,6 +15,8 @@ import java.util.Optional;
 public interface CustomOrderRepository
         extends JpaRepository<CustomOrder, Long> {
 
+    boolean existsByCustomer_Id(Long customerId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select customOrder from CustomOrder customOrder where customOrder.id = :id")
     Optional<CustomOrder> findByIdForUpdate(@Param("id") Long id);

@@ -4,6 +4,9 @@ import com.nhom4.QuanLyTiemBanhNgot.entity.PromotionProduct;
 import com.nhom4.QuanLyTiemBanhNgot.entity.PromotionProductId;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
+import java.util.List;
+
 /**
  * Repository thao tác với bảng promotion_products.
  *
@@ -18,4 +21,9 @@ public interface PromotionProductRepository
         extends JpaRepository<PromotionProduct, PromotionProductId> {
 
     boolean existsByIdPromotionId(Long promotionId);
+
+    List<PromotionProduct> findByPromotion_IdAndProduct_IdIn(
+            Long promotionId,
+            Collection<Long> productIds
+    );
 }

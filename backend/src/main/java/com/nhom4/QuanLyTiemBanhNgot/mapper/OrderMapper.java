@@ -56,8 +56,8 @@ public class OrderMapper {
         return new OrderResponse(
                 order.getId(),
                 order.getOrderCode(),
-                order.getCustomer().getId(),
-                order.getEmployee().getId(),
+                order.getCustomer() == null ? null : order.getCustomer().getId(),
+                order.getEmployee() == null ? null : order.getEmployee().getId(),
                 order.getOrderDate(),
                 order.getDeliveryAddress(),
                 order.getDeliveryStatus(),
@@ -66,15 +66,18 @@ public class OrderMapper {
                 finalAmount,
                 order.getStatus(),
                 order.getCreatedAt(),
-                itemResponses
+                itemResponses,
+                order.getPromotion() == null ? null : order.getPromotion().getId(),
+                order.getPromotionCodeSnapshot(),
+                order.getNote()
         );
     }
 
     public OrderItemResponse toItemResponse(OrderItem orderItem) {
         return new OrderItemResponse(
                 orderItem.getId(),
-                orderItem.getProduct().getId(),
-                orderItem.getProduct().getName(),
+                orderItem.getProduct() == null ? null : orderItem.getProduct().getId(),
+                orderItem.getProduct() == null ? null : orderItem.getProduct().getName(),
                 orderItem.getQuantity(),
                 orderItem.getUnitPrice(),
                 orderItem.getDiscountAmount(),

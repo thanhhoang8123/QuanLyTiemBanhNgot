@@ -6,6 +6,8 @@ import com.nhom4.QuanLyTiemBanhNgot.dto.customer.CustomerResponse;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Customer;
 import com.nhom4.QuanLyTiemBanhNgot.mapper.CustomerMapper;
 import com.nhom4.QuanLyTiemBanhNgot.repository.CustomerRepository;
+import com.nhom4.QuanLyTiemBanhNgot.repository.CustomOrderRepository;
+import com.nhom4.QuanLyTiemBanhNgot.repository.OrderRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,8 @@ import java.util.List;
 public class CustomerService {
 
     private final CustomerRepository customerRepository;
+    private final OrderRepository orderRepository;
+    private final CustomOrderRepository customOrderRepository;
     private final CustomerMapper customerMapper;
 
     /**
@@ -42,8 +46,12 @@ public class CustomerService {
      */
     public CustomerService(
             CustomerRepository customerRepository,
+            OrderRepository orderRepository,
+            CustomOrderRepository customOrderRepository,
             CustomerMapper customerMapper) {
         this.customerRepository = customerRepository;
+        this.orderRepository = orderRepository;
+        this.customOrderRepository = customOrderRepository;
         this.customerMapper = customerMapper;
     }
 
@@ -107,6 +115,14 @@ public class CustomerService {
     @Transactional
     public void deleteById(Long id) {
         Customer customer = findCustomerById(id);
+        if (orderRepository.existsByCustomer_Id(id)
+                || customOrderRepository.existsByCustomer_Id(id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Không thể xóa khách hàng đang có đơn hàng hoặc đơn đặt bánh riêng"
+            );
+        }
+
         customerRepository.delete(customer);
     }
 
