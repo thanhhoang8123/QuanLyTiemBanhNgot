@@ -1,10 +1,12 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.CreateOrderRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderUpdateRequest;
-import com.nhom4.QuanLyTiemBanhNgot.entity.Order;
 import com.nhom4.QuanLyTiemBanhNgot.service.OrderService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -37,7 +39,7 @@ public class OrderController {
      * Lấy danh sách tất cả đơn hàng.
      */
     @GetMapping
-    public List<Order> getAllOrders() {
+    public List<OrderResponse> getAllOrders() {
         return orderService.findAll();
     }
 
@@ -52,8 +54,13 @@ public class OrderController {
      * @PathVariable lấy số 1 từ URL.
      */
     @GetMapping("/{id}")
-    public Order getOrderById(@PathVariable Long id) {
+    public OrderResponse getOrderById(@PathVariable Long id) {
         return orderService.findById(id);
+    }
+
+    @PostMapping("/quote")
+    public OrderQuoteResponse quoteOrder(@Valid @RequestBody OrderQuoteRequest request) {
+        return orderService.quote(request);
     }
 
     /**
@@ -65,8 +72,13 @@ public class OrderController {
      *               Chuyển JSON từ request thành đối tượng Order.
      */
     @PostMapping
-    public OrderResponse createOrder(@RequestBody CreateOrderRequest request) {
+    public OrderResponse createOrder(@Valid @RequestBody CreateOrderRequest request) {
         return orderService.create(request);
+    }
+
+    @PostMapping("/{id}/cancel")
+    public OrderResponse cancelOrder(@PathVariable Long id) {
+        return orderService.cancel(id);
     }
 
     /**

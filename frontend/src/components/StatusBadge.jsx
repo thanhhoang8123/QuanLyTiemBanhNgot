@@ -16,6 +16,9 @@ const statusStyles = {
   'Đã hủy': 'border-danger-line bg-danger-soft text-danger',
   'Đã thanh toán': 'border-success-line bg-success-soft text-success',
   'Chưa thanh toán': 'border-warning-line bg-warning-soft text-warning',
+  'Chờ thanh toán': 'border-warning-line bg-warning-soft text-warning',
+  'Thành công': 'border-success-line bg-success-soft text-success',
+  'Thất bại': 'border-danger-line bg-danger-soft text-danger',
 }
 
 export default function StatusBadge({ status, className = '' }) {

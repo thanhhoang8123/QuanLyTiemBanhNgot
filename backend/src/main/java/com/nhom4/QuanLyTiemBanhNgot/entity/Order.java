@@ -77,6 +77,19 @@ public class Order {
     @JoinColumn(name = "employee_id")
     private Employee employee;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "promotion_id")
+    private Promotion promotion;
+
+    @Column(name = "promotion_code_snapshot", length = 30)
+    private String promotionCodeSnapshot;
+
+    @Column(length = 500)
+    private String note;
+
+    @Column(name = "stock_reserved", nullable = false)
+    private boolean stockReserved;
+
     /**
      * Thời điểm khách đặt hàng.
      *

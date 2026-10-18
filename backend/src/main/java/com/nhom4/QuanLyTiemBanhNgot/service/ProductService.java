@@ -73,7 +73,7 @@ public class ProductService {
 
     @Transactional
     public Product update(Long id, Product product) {
-        Product existing = productRepository.findById(id)
+        Product existing = productRepository.findByIdForUpdate(id)
             .orElseThrow(() -> new ResourceNotFoundException(
                     "Không tìm thấy sản phẩm"
             ));
@@ -106,7 +106,7 @@ public class ProductService {
 
     @Transactional
     public Product deactivate(Long id) {
-        Product product = productRepository.findById(id)
+        Product product = productRepository.findByIdForUpdate(id)
 .orElseThrow(() -> new ResourceNotFoundException(
         "Không tìm thấy sản phẩm"
 ));

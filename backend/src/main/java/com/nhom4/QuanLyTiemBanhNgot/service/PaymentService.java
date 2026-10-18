@@ -76,7 +76,7 @@ public class PaymentService {
      */
     @Transactional
     public PaymentResponse create(CreatePaymentRequest request) {
-        Order order = orderRepository.findById(request.orderId())
+        Order order = orderRepository.findByIdForUpdate(request.orderId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy đơn hàng với ID: " + request.orderId()
                 ));
@@ -138,13 +138,18 @@ public class PaymentService {
                     "Kết quả mô phỏng phải là SUCCESS hoặc FAILED"
             );
         }
-        Payment payment = paymentRepository.findByIdForUpdate(id)
+        Payment existingPayment = paymentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy thanh toán với ID: " + id
                 ));
-        Order order = orderRepository.findByIdForUpdate(payment.getOrder().getId())
+        Long orderId = existingPayment.getOrder().getId();
+        Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy đơn hàng của thanh toán với ID: " + id
+                ));
+        Payment payment = paymentRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy thanh toán với ID: " + id
                 ));
 
         if ("SUCCESS".equals(payment.getStatus())) {

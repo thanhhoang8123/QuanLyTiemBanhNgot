@@ -1,17 +1,53 @@
+import { useEffect, useState } from 'react'
 import Icon from '../../components/Icon.jsx'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 
-const navigation = [
-  { path: '/admin', label: 'Tổng quan', icon: 'dashboard' },
-  { path: '/pos', label: 'Bán hàng POS', icon: 'bag' },
-  { path: '/admin/products', label: 'Sản phẩm', icon: 'package' },
-  { path: '/admin/inventory', label: 'Kho nguyên liệu', icon: 'package' },
-  { path: '/admin/suppliers', label: 'Nhà cung cấp', icon: 'receipt' },
-  { path: '/admin/purchase-orders', label: 'Phiếu nhập hàng', icon: 'receipt' },
-  { path: '/admin/orders', label: 'Đơn hàng', icon: 'receipt' },
+const navigationGroups = [
+  {
+    id: 'sales',
+    label: 'Bán hàng & đơn hàng',
+    icon: 'bag',
+    items: [
+      { path: '/pos', label: 'Bán hàng POS', icon: 'bag' },
+      { path: '/admin/orders', label: 'Đơn hàng', icon: 'receipt' },
+      { path: '/admin/payments', label: 'Thanh toán', icon: 'creditCard' },
+      { path: '/admin/customers', label: 'Khách hàng', icon: 'receipt' },
+      { path: '/admin/custom-orders', label: 'Đơn đặt bánh riêng', icon: 'receipt' },
+    ],
+  },
+  {
+    id: 'catalog',
+    label: 'Sản phẩm & kho',
+    icon: 'package',
+    items: [
+      { path: '/admin/products', label: 'Sản phẩm', icon: 'package' },
+      { path: '/admin/inventory', label: 'Kho nguyên liệu', icon: 'package' },
+      { path: '/admin/suppliers', label: 'Nhà cung cấp', icon: 'receipt' },
+      { path: '/admin/purchase-orders', label: 'Phiếu nhập hàng', icon: 'receipt' },
+    ],
+  },
+  {
+    id: 'promotions',
+    label: 'Khuyến mãi',
+    icon: 'tag',
+    items: [
+      { path: '/admin/promotions', label: 'Chương trình khuyến mãi', icon: 'tag' },
+      { path: '/admin/promotion-products', label: 'Sản phẩm áp dụng', icon: 'package' },
+    ],
+  },
 ]
 
 export default function Sidebar({ open, onClose }) {
+  const { pathname } = useLocation()
+  const [expandedGroup, setExpandedGroup] = useState(null)
+
+  useEffect(() => {
+    const activeGroup = navigationGroups.find((group) => (
+      group.items.some((item) => item.path === pathname)
+    ))
+    setExpandedGroup(activeGroup?.id ?? null)
+  }, [pathname])
+
   return (
     <>
       {open && (
@@ -24,11 +60,11 @@ export default function Sidebar({ open, onClose }) {
       )}
       <aside
         id="admin-sidebar"
-        className={`fixed inset-y-0 left-0 z-40 flex w-[248px] flex-col border-r border-border bg-petal px-5 py-6 transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-[248px] flex-col border-r border-border bg-petal px-4 py-5 transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="mb-10 flex items-center gap-3 px-2">
+        <div className="mb-7 flex items-center gap-3 px-2">
           <div className="font-display flex h-11 w-11 items-center justify-center rounded-full border border-caramel bg-paper text-lg text-rosewood shadow-sm">
             W
           </div>
@@ -38,29 +74,76 @@ export default function Sidebar({ open, onClose }) {
           </div>
         </div>
 
-        <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted">Không gian làm việc</p>
-        <nav aria-label="Điều hướng chính" className="space-y-1">
-          {navigation.map((item) => {
+        <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted">Không gian làm việc</p>
+        <nav aria-label="Điều hướng chính" className="min-h-0 flex-1 space-y-0.5 overflow-y-auto pb-2">
+          <NavLink
+            to="/admin"
+            end
+            onClick={onClose}
+            className={({ isActive }) => `mb-1 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs transition ${
+              isActive
+                ? 'bg-caramel font-semibold text-action-ink shadow-sm'
+                : 'text-rosewood hover:bg-paper hover:text-rosewood'
+            }`}
+          >
+            {({ isActive }) => (
+              <>
+                <Icon name="dashboard" size={16} />
+                <span>Tổng quan</span>
+                {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-paper" />}
+              </>
+            )}
+          </NavLink>
+
+          {navigationGroups.map((group) => {
+            const groupIsActive = group.items.some((item) => item.path === pathname)
+            const isExpanded = expandedGroup === group.id
+
             return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                end={item.path === '/admin'}
-                onClick={onClose}
-                className={({ isActive }) => `flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[13px] transition ${
-                  isActive
-                    ? 'bg-caramel font-semibold text-action-ink shadow-sm'
-                    : 'text-rosewood hover:bg-paper hover:text-rosewood'
-                }`}
-              >
-                {({ isActive }) => (
-                  <>
-                    <Icon name={item.icon} size={18} />
-                    <span>{item.label}</span>
-                    {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-paper" />}
-                  </>
+              <div key={group.id}>
+                <button
+                  type="button"
+                  aria-expanded={isExpanded}
+                  onClick={() => setExpandedGroup(isExpanded ? null : group.id)}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold transition ${
+                    groupIsActive
+                      ? 'bg-caramel-soft text-rosewood'
+                      : 'text-rosewood hover:bg-paper'
+                  }`}
+                >
+                  <Icon name={group.icon} size={16} />
+                  <span className="min-w-0 flex-1 truncate">{group.label}</span>
+                  <Icon
+                    name="chevronDown"
+                    size={14}
+                    className={`shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {isExpanded && (
+                  <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-2">
+                    {group.items.map((item) => (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        onClick={onClose}
+                        className={({ isActive }) => `flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] transition ${
+                          isActive
+                            ? 'bg-caramel font-semibold text-action-ink shadow-sm'
+                            : 'text-rosewood hover:bg-paper hover:text-rosewood'
+                        }`}
+                      >
+                        {({ isActive }) => (
+                          <>
+                            <Icon name={item.icon} size={14} className="shrink-0" />
+                            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                            {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-paper" />}
+                          </>
+                        )}
+                      </NavLink>
+                    ))}
+                  </div>
                 )}
-              </NavLink>
+              </div>
             )
           })}
         </nav>

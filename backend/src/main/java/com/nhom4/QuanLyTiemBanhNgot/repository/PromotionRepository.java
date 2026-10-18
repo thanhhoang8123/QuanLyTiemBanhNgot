@@ -16,6 +16,8 @@ public interface PromotionRepository extends JpaRepository<Promotion, Long> {
 
     boolean existsByPromotionCodeIgnoreCaseAndIdNot(String promotionCode, Long id);
 
+    java.util.Optional<Promotion> findByPromotionCodeIgnoreCase(String promotionCode);
+
     List<Promotion> findByPromotionCodeContainingIgnoreCaseOrNameContainingIgnoreCase(
             String promotionCodeKeyword,
             String nameKeyword
