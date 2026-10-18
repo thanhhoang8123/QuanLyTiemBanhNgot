@@ -3,6 +3,8 @@ package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,9 @@ import java.util.Set;
 
 @Service
 public class ImageUploadService {
+
+    private static final Logger logger =
+            LoggerFactory.getLogger(ImageUploadService.class);
 
     private final ObjectProvider<Cloudinary> cloudinaryProvider;
 
@@ -57,11 +62,23 @@ public class ImageUploadService {
                     "Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP");
         }
 
-        Map<?, ?> result = cloudinary.uploader().upload(
-                file.getBytes(),
-                ObjectUtils.asMap(
-                        "folder", "quan-ly-tiem-banh/products",
-                        "resource_type", "image"));
+        Map<?, ?> result;
+        try {
+            result = cloudinary.uploader().upload(
+                    file.getBytes(),
+                    ObjectUtils.asMap(
+                            "folder", "quan-ly-tiem-banh/products",
+                            "resource_type", "image"));
+        } catch (IOException | RuntimeException exception) {
+            // Không log exception message vì lỗi từ SDK có thể chứa thông tin request.
+            logger.warn(
+                    "Cloudinary image upload failed ({})",
+                    exception.getClass().getSimpleName());
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Cloudinary không xử lý được ảnh. Kiểm tra cấu hình Cloudinary "
+                            + "và kết nối mạng rồi thử lại.");
+        }
 
         Object secureUrl = result.get("secure_url");
 
