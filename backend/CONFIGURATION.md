@@ -16,6 +16,9 @@ Spring Boot nhận các biến môi trường sau qua các property trong
 | `CLOUDINARY_API_KEY` | `cloudinary.api-key` |
 | `CLOUDINARY_API_SECRET` | `cloudinary.api-secret` |
 
+Cloud name sẽ được trim khoảng trắng ở đầu/cuối trước khi tạo Cloudinary client.
+Không chèn dấu cách vào giữa cloud name.
+
 ### Thiết lập tạm trong PowerShell
 
 Thay các giá trị mẫu bằng credential được nhóm cấp. Các biến chỉ tồn tại trong

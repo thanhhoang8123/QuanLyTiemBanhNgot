@@ -18,7 +18,7 @@ public class CloudinaryConfig {
     @Conditional(CloudinaryConfiguredCondition.class)
     public Cloudinary cloudinary(Environment environment) {
         return new Cloudinary(ObjectUtils.asMap(
-                "cloud_name", environment.getRequiredProperty("cloudinary.cloud-name"),
+                "cloud_name", environment.getRequiredProperty("cloudinary.cloud-name").trim(),
                 "api_key", environment.getRequiredProperty("cloudinary.api-key"),
                 "api_secret", environment.getRequiredProperty("cloudinary.api-secret"),
                 "secure", true));
