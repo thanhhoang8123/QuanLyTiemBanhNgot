@@ -1,10 +1,15 @@
-# Custom orders
+# Custom Orders
 
-Feature này dành cho giao diện đơn đặt bánh riêng khi được triển khai.
+Trang quản trị `/admin/custom-orders` quản lý các đơn bánh thiết kế riêng độc
+lập với luồng bán hàng POS:
 
-- Đặt page, component, service và hook dưới `features/custom-orders/` khi cần;
-  đăng ký route tập trung trong `src/App.jsx`.
-- Phối hợp với Customers, Orders, Products và backend về quy trình/trạng thái và
-  hợp đồng API.
-- Dùng `src/services/apiClient.js` thông qua service của feature.
-- Không đặt secret hoặc kết nối database trực tiếp trong frontend.
+- Xem, tìm kiếm, lọc trạng thái và xem chi tiết đơn.
+- Tạo/cập nhật yêu cầu bánh, khách hàng, nhân viên tiếp nhận, thời điểm giao,
+  giá dự kiến và tiền cọc.
+- Chuyển trạng thái theo các bước được backend cho phép; xóa chỉ áp dụng cho
+  đơn `PENDING`.
+
+Page tải dữ liệu thật qua `customOrderService.js`, `customerService.js` và API
+`/employees`. Backend quản lý `orderDate`, khởi tạo trạng thái `PENDING`, xác
+nhận quan hệ đang hoạt động, giới hạn giá trị tiền/ngày giao, quy tắc chuyển
+trạng thái và quyền xóa. Frontend không tạo trạng thái hoặc tự hoàn tất đơn.

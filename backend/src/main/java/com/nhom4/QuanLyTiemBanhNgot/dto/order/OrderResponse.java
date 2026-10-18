@@ -17,6 +17,9 @@ public record OrderResponse(
         BigDecimal finalAmount,
         String status,
         LocalDateTime createdAt,
-        List<OrderItemResponse> items
+        List<OrderItemResponse> items,
+        Long promotionId,
+        String promotionCode,
+        String note
 ) {
 }

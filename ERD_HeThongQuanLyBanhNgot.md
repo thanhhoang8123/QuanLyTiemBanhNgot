@@ -193,15 +193,25 @@ Chi tiết từng nguyên liệu trong phiếu nhập.
 | order_code | VARCHAR(30) | |
 | customer_id | BIGINT | FK → `customers.id` |
 | employee_id | BIGINT | FK → `employees.id` (người lập đơn) |
+| promotion_id | BIGINT | NULL, FK → `promotions.id` |
+| promotion_code_snapshot | VARCHAR(30) | Mã khuyến mãi tại thời điểm tạo đơn |
 | order_date | TIMESTAMP | |
 | delivery_address | VARCHAR(255) | NULL nếu khách mua tại quầy |
+| note | VARCHAR(500) | Ghi chú đơn hàng |
 | delivery_status | VARCHAR(30) | NOT_REQUIRED / PENDING / DELIVERED |
 | total_amount | DECIMAL(15,2) | Tổng tiền trước giảm giá |
 | discount_amount | DECIMAL(15,2) | Số tiền được giảm (tính từ khuyến mãi áp dụng) |
 | status | VARCHAR(30) | PENDING / CONFIRMED / COMPLETED / CANCELLED |
+| stock_reserved | BOOLEAN | Đã trừ tồn kho cho các dòng sản phẩm của đơn |
 | created_at | TIMESTAMP | |
 
 > Tổng tiền sau giảm giá (`final_amount`) không lưu cứng trong CSDL — tính toán ở tầng code Java: `final_amount = total_amount - discount_amount`, để tránh dữ liệu trùng lặp/lệch nhau.
+
+`stock_reserved` phân biệt các đơn mới đã trừ tồn với đơn cũ tạo trước khi có
+luồng giữ tồn; khi hủy đơn PENDING, backend chỉ hoàn số lượng nếu cờ này đang bật.
+Migration được Flyway tự động áp dụng khi backend khởi động:
+`backend/src/main/resources/db/migration/V20261017_2__pos_orders_promotion_note.sql`.
+Các migration đã chạy được ghi nhận trong bảng `flyway_schema_history`.
 
 ### `order_items`
 Chi tiết sản phẩm trong đơn hàng.
@@ -222,7 +232,7 @@ Thanh toán cho đơn hàng.
 | Cột | Kiểu dữ liệu | Ghi chú |
 |---|---|---|
 | id | BIGINT | PK |
-| order_id | BIGINT | FK → `orders.id` |
+| order_id | BIGINT | FK → `orders.id`, UNIQUE |
 | payment_method | VARCHAR(30) | Phân loại thanh toán — `CASH`, `CARD`, `EWALLET` |
 | amount | DECIMAL(15,2) | |
 | status | VARCHAR(30) | PENDING / SUCCESS / FAILED |
@@ -230,7 +240,7 @@ Thanh toán cho đơn hàng.
 | provider | VARCHAR(100) | Chỉ dùng khi `payment_method` = EWALLET (Momo, ZaloPay...) |
 | paid_at | TIMESTAMP | |
 
-**Quan hệ:** `customers` (1) — (N) `orders` (1) — (N) `order_items` (N) — (1) `products`; `orders` (1) — (0..1) `payments`.
+**Quan hệ:** `customers` (1) — (N) `orders`; `promotions` (0..1) — (N) `orders`; `orders` (1) — (N) `order_items` (N) — (1) `products`; `orders` (1) — (0..1) `payments`.
 
 Mỗi Order có thể chưa có Payment; một Payment phải thuộc về đúng một Order; mỗi Order không được có nhiều hơn một Payment.
 
@@ -264,7 +274,7 @@ Chương trình khuyến mãi.
 | Cột | Kiểu dữ liệu | Ghi chú |
 |---|---|---|
 | id | BIGINT | PK |
-| promotion_code | VARCHAR(30) | |
+| promotion_code | VARCHAR(30) | UNIQUE |
 | name | VARCHAR(100) | |
 | discount_percent | DECIMAL(5,2) | |
 | max_discount | DECIMAL(15,2) | Số tiền giảm tối đa |
@@ -305,4 +315,3 @@ Bảng trung gian (N-N): 1 khuyến mãi áp dụng cho nhiều sản phẩm, 1 
 | 16 | promotion_products | Promotion |
 
 ---
-

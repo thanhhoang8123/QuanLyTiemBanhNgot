@@ -60,6 +60,17 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
+        <!-- Spring Boot tích hợp Flyway để tự áp dụng migration khi ứng dụng khởi động. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Spring Boot Validation: Kiểm tra dữ liệu đầu vào,
             ví dụ dữ liệu bắt buộc, độ dài chuỗi và giá trị hợp lệ -->
         <dependency>
@@ -119,6 +130,20 @@
 
     <build>
         <plugins>
+
+            <!-- Exposes Flyway repair/info goals for database maintenance tasks. -->
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
+                <version>12.4.0</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.flywaydb</groupId>
+                        <artifactId>flyway-mysql</artifactId>
+                        <version>12.4.0</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
 
             <!-- Spring Boot -->
             <plugin>

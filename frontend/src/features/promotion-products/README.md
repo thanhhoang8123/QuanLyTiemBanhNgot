@@ -1,10 +1,17 @@
-# Promotion products
+# Promotion Products
 
-Feature này dành cho giao diện liên kết khuyến mãi với sản phẩm nếu cần quản lý
-liên kết riêng trên frontend.
+Trang quản trị tại `/admin/promotion-products` dùng dữ liệu API để:
 
-- Đặt page, component và service dưới `features/promotion-products/` khi cần;
-  route đăng ký tập trung trong `src/App.jsx`.
-- Phối hợp với Promotions, Products và backend về hợp đồng API liên kết.
-- Gọi API qua service của feature và `src/services/apiClient.js`.
-- Không đặt secret hoặc kết nối database trực tiếp trong frontend.
+- Xem và tìm liên kết khuyến mãi - sản phẩm; lọc theo chương trình khuyến mãi.
+- Tạo một liên kết bằng cách chọn chương trình và sản phẩm chưa được gắn với
+  chương trình đó.
+- Gỡ liên kết sau khi xác nhận. Việc này không xóa sản phẩm hoặc khuyến mãi.
+
+Service trong feature gọi `GET`, `POST` và `DELETE /api/promotion-products`
+thông qua `src/services/apiClient.js`. Danh sách khuyến mãi và sản phẩm được
+tải từ service hiện có để hiển thị tên, mã và trạng thái; không thêm trường hay
+endpoint cho API liên kết.
+
+Backend là nơi kiểm tra hai ID tồn tại và từ chối cặp đã có. Giao diện ẩn sản
+phẩm đã liên kết khỏi lựa chọn để tránh thao tác trùng thông thường; lỗi trùng
+do backend trả về vẫn được hiển thị nếu có request đồng thời.

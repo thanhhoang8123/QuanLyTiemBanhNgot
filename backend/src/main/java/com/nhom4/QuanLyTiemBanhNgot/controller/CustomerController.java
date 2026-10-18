@@ -4,6 +4,7 @@ package com.nhom4.QuanLyTiemBanhNgot.controller;
 import com.nhom4.QuanLyTiemBanhNgot.dto.customer.CustomerRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.customer.CustomerResponse;
 import com.nhom4.QuanLyTiemBanhNgot.service.CustomerService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -63,7 +64,7 @@ public class CustomerController {
      * Nhận thông tin hồ sơ khách hàng qua request DTO.
      */
     @PostMapping
-    public CustomerResponse createCustomer(@RequestBody CustomerRequest request) {
+    public CustomerResponse createCustomer(@Valid @RequestBody CustomerRequest request) {
         return customerService.create(request);
     }
 
@@ -77,7 +78,7 @@ public class CustomerController {
     @PutMapping("/{id}")
     public CustomerResponse updateCustomer(
             @PathVariable Long id,
-            @RequestBody CustomerRequest request) {
+            @Valid @RequestBody CustomerRequest request) {
         return customerService.update(id, request);
     }
 

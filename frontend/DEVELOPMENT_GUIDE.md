@@ -16,8 +16,8 @@
   thuộc một nghiệp vụ.
 - `src/services/apiClient.js`: HTTP client dùng chung; feature API gọi client này
   thông qua service riêng.
-- `src/data/mockData.js`: dữ liệu đang được Dashboard, Orders và POS cùng dùng;
-  giữ tại đây cho tới khi việc tách theo domain được xem xét riêng.
+- `src/data/mockData.js`: Dashboard và các màn hình prototype còn dùng dữ liệu
+  mẫu; POS và Orders không dùng mock thay cho dữ liệu bán hàng backend.
 
 ### Cấu trúc hiện có
 
@@ -41,8 +41,13 @@ src/
     categories/
       pages/README.md
       services/categoryService.js
-    custom-orders/README.md
-    customers/README.md
+    custom-orders/
+      README.md
+      pages/CustomOrdersPage.jsx
+      services/customOrderService.js
+    customers/
+      pages/CustomersPage.jsx
+      services/customerService.js
     dashboard/
       components/
       pages/DashboardPage.jsx
@@ -50,18 +55,29 @@ src/
     inventory/
       pages/InventoryPage.jsx
       services/ingredientService.js
-    orders/pages/OrdersPage.jsx
-    payments/README.md
+    orders/
+      pages/OrdersPage.jsx
+      services/orderService.js
+    payments/
+      README.md
+      pages/PaymentsPage.jsx
+      services/paymentService.js
     pos/
-      components/
+      components/CartPanel.jsx
+      components/ProductCard.jsx
       pages/PosPage.jsx
     products/
       adapters/productAdapter.js
       components/ProductArtwork.jsx
       pages/ProductsPage.jsx
       services/productService.js
-    promotion-products/README.md
-    promotions/README.md
+    promotion-products/
+      README.md
+      pages/PromotionProductsPage.jsx
+      services/promotionProductService.js
+    promotions/
+      pages/PromotionsPage.jsx
+      services/promotionService.js
     purchase-orders/
       pages/PurchaseOrdersPage.jsx
       services/purchaseOrderService.js
@@ -85,14 +101,34 @@ service/hook/component giả chỉ để làm cây thư mục đồng đều.
 - Inventory, Suppliers và Purchase Orders có page gọi service tương ứng.
 - Category hiện có service đọc danh mục và được Products/Shop sử dụng; chưa có
   trang quản trị category.
+- Customers có page quản lý hồ sơ và service gọi API backend. Trạng thái và điểm
+  tích lũy chỉ được hiển thị; page không gửi các trường này khi tạo/cập nhật.
+- Custom Orders có page/service gọi API backend để tiếp nhận, xem, cập nhật,
+  chuyển trạng thái và xóa đơn bánh thiết kế riêng độc lập với POS.
+- Promotions có page/service gọi API backend để tìm kiếm, lọc, xem chi tiết,
+  tạo, cập nhật và xóa chương trình khuyến mãi. Thao tác áp dụng promotion vào
+  Orders chưa được tích hợp.
+- Promotion Products có page/service dùng API backend để xem, tìm kiếm, lọc,
+  tạo và gỡ liên kết giữa chương trình khuyến mãi với sản phẩm.
 - Shop tải category và product qua API service dùng chung; đây là chức năng đọc
   danh mục/sản phẩm, không phải checkout.
-- Dashboard, Orders và POS đang dùng dữ liệu/state mock. Orders cập nhật state
-  phía frontend; POS mô phỏng giỏ hàng/checkout, không tạo đơn hay thanh toán
-  thật.
-- Customers, Payments, Custom Orders, Promotions, Promotion Products, Accounts,
-  Employees, Roles, Activity Logs và Order Status History hiện chỉ có tài liệu
-  định hướng trong feature folders; chưa có UI/service tương ứng trong frontend.
+- Orders tải danh sách/chi tiết, tạo đơn và báo giá qua API backend. Backend
+  lấy giá, kiểm tra/trừ tồn kho trong transaction và tính promotion; đơn PENDING
+  có thể hủy để hoàn kho. Chi tiết đơn cho phép cập nhật số lượng khi còn đủ
+  điều kiện; backend đồng bộ tồn và tổng tiền, từ chối sửa nếu có Payment.
+- POS tải Products, Customers và Employees thật. Backend báo giá mã Promotion,
+  tạo Order có ghi chú và tính lại khi tạo; sau đó POS tạo Payment, mô phỏng
+  `SUCCESS`/`FAILED` theo flow hiện có. Đơn thanh toán thất bại giữ tồn để thử
+  lại; hủy đơn PENDING xóa Payment chưa thành công và hoàn tồn. Không kết nối
+  cổng thanh toán thật.
+- Payments tải Payment/Order qua API backend, tạo thanh toán cho đơn đủ điều
+  kiện và mô phỏng kết quả `SUCCESS`/`FAILED`. Thành công đổi Order từ `PENDING`
+  sang `CONFIRMED`; thất bại không làm thay đổi trạng thái Order. Đây không phải
+  tích hợp cổng thanh toán thật.
+- Dashboard và một số màn hình prototype vẫn dùng dữ liệu/state mock.
+- Accounts, Employees, Roles, Activity Logs và Order Status History hiện chỉ có
+  tài liệu định hướng trong feature folders; chưa có UI/service tương ứng trong
+  frontend.
 
 Tài liệu này mô tả code frontend hiện có, không khẳng định API backend đã được
 kiểm thử hoặc nghiệp vụ đã hoàn tất.

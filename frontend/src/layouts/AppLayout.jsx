@@ -11,6 +11,10 @@ const pageTitles = {
   '/admin/suppliers': 'Nhà cung cấp',
   '/admin/purchase-orders': 'Phiếu nhập hàng',
   '/admin/orders': 'Đơn hàng',
+  '/admin/customers': 'Khách hàng',
+  '/admin/custom-orders': 'Đơn đặt bánh riêng',
+  '/admin/promotions': 'Khuyến mãi',
+  '/admin/promotion-products': 'Sản phẩm áp dụng khuyến mãi',
 }
 
 export default function AppLayout() {
