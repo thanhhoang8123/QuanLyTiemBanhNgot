@@ -26,6 +26,16 @@ public class Account {
     @JoinColumn(name = "role_id")
     private Role role;
 
+    @Column(name = "email", length = 100, unique = true)
+    private String email;
+
+    @Column(name = "email_verified", nullable = false)
+    private Boolean emailVerified = false;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id")
+    private Customer customer;
+
     @Column(name = "status", length = 20)
     private String status;
 

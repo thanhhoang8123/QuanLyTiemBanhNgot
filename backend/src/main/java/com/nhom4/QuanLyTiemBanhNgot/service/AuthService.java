@@ -47,6 +47,15 @@ public class AuthService {
             );
         }
 
+        if (account.getRole() != null
+                && "CUSTOMER".equalsIgnoreCase(account.getRole().getRoleCode())
+                && !Boolean.TRUE.equals(account.getEmailVerified())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Vui lòng xác minh email trước khi đăng nhập"
+            );
+        }
+
         if (!"ACTIVE".equalsIgnoreCase(account.getStatus())) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,

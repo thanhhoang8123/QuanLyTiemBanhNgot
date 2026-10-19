@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap');
 
 :root {
   --wa-cream: #FCF9F3;
@@ -53,6 +54,8 @@
   --color-danger-line: var(--wa-danger-line);
   --color-neutral-soft: var(--wa-neutral-soft);
   --color-neutral-ink: var(--wa-neutral-ink);
+  --font-display: "Playfair Display", Georgia, serif;
+  --font-sans: "Be Vietnam Pro", "Segoe UI", Arial, sans-serif;
 }
 
 :root {
@@ -110,7 +113,11 @@ textarea:focus-visible {
 }
 
 .font-display {
-  font-family: "Lora", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  font-family: "Be Vietnam Pro", Arial, sans-serif;
+  font-weight: 600;
+  font-kerning: normal;
+  font-variant-ligatures: normal;
+  letter-spacing: normal;
 }
 
 .soft-shadow {
