@@ -21,6 +21,8 @@ import java.util.List;
  */
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
+    boolean existsByEmailIgnoreCase(String email);
+
     List<Customer> findByFullNameContainingIgnoreCaseOrPhoneContaining(
             String fullNameKeyword,
             String phoneKeyword

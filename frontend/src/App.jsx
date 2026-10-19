@@ -17,6 +17,9 @@ import NotFoundPage from './pages/NotFoundPage.jsx'
 import ShopLayout from './layouts/ShopLayout.jsx'
 import ShopHomePage from './features/shop/pages/ShopHomePage.jsx'
 import ShopProductsPage from './features/shop/pages/ShopProductsPage.jsx'
+import RegisterPage from './features/auth/pages/RegisterPage.jsx'
+import VerifyEmailPage from './features/auth/pages/VerifyEmailPage.jsx'
+import LoginPage from './features/auth/pages/LoginPage.jsx'
 import Icon from './components/Icon.jsx'
 
 export default function App() {
@@ -40,8 +43,11 @@ export default function App() {
     <>
       <Routes>
         <Route path="shop" element={<ShopLayout />}>
+          <Route path="login" element={<LoginPage />} />
           <Route index element={<ShopHomePage />} />
           <Route path="products" element={<ShopProductsPage />} />
+          <Route path="register" element={<RegisterPage />} />
+          <Route path="verify-email" element={<VerifyEmailPage />} />
         </Route>
         <Route element={<AppLayout />}>
           <Route path="admin" element={<DashboardPage onToast={showToast} />} />
