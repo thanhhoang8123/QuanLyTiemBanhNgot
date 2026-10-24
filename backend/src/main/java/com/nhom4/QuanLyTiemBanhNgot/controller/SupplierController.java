@@ -4,12 +4,14 @@ package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 import com.nhom4.QuanLyTiemBanhNgot.entity.Supplier;
 import com.nhom4.QuanLyTiemBanhNgot.service.SupplierService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/suppliers")
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
 public class SupplierController {
 
     private final SupplierService service;

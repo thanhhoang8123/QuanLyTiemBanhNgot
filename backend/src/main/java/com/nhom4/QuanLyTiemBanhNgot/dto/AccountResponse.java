@@ -7,6 +7,7 @@ public record AccountResponse(
         String username,
         Long roleId,
         String roleName,
+        String roleCode,
         String status,
         LocalDateTime createdAt,
         LocalDateTime updatedAt

@@ -19,10 +19,10 @@ INSERT IGNORE INTO roles (id, role_code, name, description) VALUES
 -- =========================================================
 INSERT IGNORE INTO accounts
 (id, username, password_hash, role_id, status, created_at, updated_at) VALUES
-(1, 'admin', '$2a$10$4vzGtXrDBByRFQ9hj2abOuuCzSAvkfpr2i8VrsCMhkihuIdQzJT8C', 1, 'ACTIVE', NOW(), NOW()),
-(2, 'manager', '$2a$10$4vzGtXrDBByRFQ9hj2abOuuCzSAvkfpr2i8VrsCMhkihuIdQzJT8C', 2, 'ACTIVE', NOW(), NOW()),
-(3, 'staff01', '$2a$10$4vzGtXrDBByRFQ9hj2abOuuCzSAvkfpr2i8VrsCMhkihuIdQzJT8C', 3, 'ACTIVE', NOW(), NOW()),
-(4, 'staff02', '$2a$10$4vzGtXrDBByRFQ9hj2abOuuCzSAvkfpr2i8VrsCMhkihuIdQzJT8C', 3, 'ACTIVE', NOW(), NOW());
+(1, 'admin', '$2a$10$4iyrzR3kE80yajsk4JvqeeiHyTdWxBFNZFOVL8bzolzMpWtqw0i4.', 1, 'ACTIVE', NOW(), NOW()),
+(2, 'manager', '$2a$10$4iyrzR3kE80yajsk4JvqeeiHyTdWxBFNZFOVL8bzolzMpWtqw0i4.', 2, 'ACTIVE', NOW(), NOW()),
+(3, 'staff01', '$2a$10$4iyrzR3kE80yajsk4JvqeeiHyTdWxBFNZFOVL8bzolzMpWtqw0i4.', 3, 'ACTIVE', NOW(), NOW()),
+(4, 'staff02', '$2a$10$4iyrzR3kE80yajsk4JvqeeiHyTdWxBFNZFOVL8bzolzMpWtqw0i4.', 3, 'ACTIVE', NOW(), NOW());
 -- 3. EMPLOYEES
 -- =========================================================
 INSERT IGNORE INTO employees

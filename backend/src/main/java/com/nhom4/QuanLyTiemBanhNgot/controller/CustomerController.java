@@ -5,6 +5,7 @@ import com.nhom4.QuanLyTiemBanhNgot.dto.customer.CustomerRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.customer.CustomerResponse;
 import com.nhom4.QuanLyTiemBanhNgot.service.CustomerService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/customers")
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
 public class CustomerController {
 
     private final CustomerService customerService;

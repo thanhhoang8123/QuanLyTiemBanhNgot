@@ -31,5 +31,5 @@ export function deleteCustomOrder(id) {
 }
 
 export function getEmployees({ signal } = {}) {
-  return apiRequest('/employees', { signal })
+  return apiRequest('/employees/options', { signal })
 }

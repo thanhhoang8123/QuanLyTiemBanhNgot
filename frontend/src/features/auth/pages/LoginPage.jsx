@@ -15,12 +15,14 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const { csrfToken } = await apiRequest('/auth/csrf')
-      await apiRequest('/auth/login', {
+      const { account } = await apiRequest('/auth/login', {
         method: 'POST',
         body: { username: username.trim(), password },
         headers: { 'X-CSRF-Token': csrfToken },
       })
-      navigate('/shop', { replace: true })
+
+      const roleCode = (account?.roleCode || '').toUpperCase()
+      navigate(roleCode === 'CUSTOMER' ? '/shop' : '/admin', { replace: true })
     } catch (err) {
       setError(err.message || 'Đăng nhập chưa thành công. Vui lòng thử lại.')
     } finally {

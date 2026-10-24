@@ -10,9 +10,29 @@ export default function RegisterPage() {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [isResending, setIsResending] = useState(false)
+  const [resendMessage, setResendMessage] = useState('')
+  const [resendError, setResendError] = useState('')
   const navigate = useNavigate()
 
   const update = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
+
+  async function resendVerification() {
+    setIsResending(true)
+    setResendMessage('')
+    setResendError('')
+    try {
+      const result = await apiRequest('/auth/resend-verification', {
+        method: 'POST',
+        body: { email: form.email.trim() },
+      })
+      setResendMessage(result?.message || 'Nếu tài khoản đang chờ xác minh, hướng dẫn sẽ được gửi nếu đủ điều kiện.')
+    } catch (requestError) {
+      setResendError(requestError.message || 'Chưa thể gửi lại email. Vui lòng thử lại sau.')
+    } finally {
+      setIsResending(false)
+    }
+  }
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -21,6 +41,7 @@ export default function RegisterPage() {
       setError('Mật khẩu xác nhận chưa khớp.')
       return
     }
+
     setIsSubmitting(true)
     try {
       await apiRequest('/auth/register', {
@@ -58,6 +79,11 @@ export default function RegisterPage() {
             <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Kiểm tra hộp thư</p>
             <h2 className="font-display mt-3 text-3xl text-[#4A302B]">Bạn sắp hoàn tất rồi!</h2>
             <p className="mt-4 text-sm leading-7 text-[#806B65]">Nếu email được gửi thành công, hãy mở email xác minh từ WA Pâtisserie. Liên kết xác minh có hiệu lực trong 30 phút.</p>
+            {resendMessage && <p role="status" className="mt-4 rounded-xl bg-[#EAF0E8] px-4 py-3 text-xs leading-5 text-[#536B50]">{resendMessage}</p>}
+            {resendError && <p role="alert" className="mt-4 rounded-xl bg-[#F6E9E6] px-4 py-3 text-xs leading-5 text-[#914E46]">{resendError}</p>}
+            <button type="button" disabled={isResending} onClick={resendVerification} className="mt-5 rounded-full border border-[#DDCDB8] px-5 py-3 text-sm font-semibold text-[#76534D] transition hover:bg-[#FCF9F3] disabled:cursor-not-allowed disabled:opacity-60">
+              {isResending ? 'Đang gửi...' : 'Gửi lại email xác minh'}
+            </button>
             <button type="button" onClick={() => navigate('/shop')} className="mt-7 rounded-full bg-[#76534D] px-6 py-3 text-sm font-semibold text-white hover:bg-[#4A302B]">Quay lại cửa hàng</button>
           </div>
         ) : (

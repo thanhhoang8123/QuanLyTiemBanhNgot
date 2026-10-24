@@ -20,6 +20,14 @@ export function cancelOrder(id) {
   return apiRequest(`/orders/${encodeURIComponent(id)}/cancel`, { method: 'POST' })
 }
 
+export function markOrderDelivered(id) {
+  return apiRequest(`/orders/${encodeURIComponent(id)}/deliver`, { method: 'POST' })
+}
+
+export function completeOrder(id) {
+  return apiRequest(`/orders/${encodeURIComponent(id)}/complete`, { method: 'POST' })
+}
+
 export function updateOrderItemQuantity(id, quantity) {
   return apiRequest(`/order-items/${encodeURIComponent(id)}`, {
     method: 'PUT',
@@ -28,5 +36,5 @@ export function updateOrderItemQuantity(id, quantity) {
 }
 
 export function getEmployees({ signal } = {}) {
-  return apiRequest('/employees', { signal })
+  return apiRequest('/employees/options', { signal })
 }

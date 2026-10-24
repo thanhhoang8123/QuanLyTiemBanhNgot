@@ -7,6 +7,7 @@ import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderUpdateRequest;
 import com.nhom4.QuanLyTiemBanhNgot.service.OrderService;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/orders")
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
 public class OrderController {
 
     /**
@@ -79,6 +81,16 @@ public class OrderController {
     @PostMapping("/{id}/cancel")
     public OrderResponse cancelOrder(@PathVariable Long id) {
         return orderService.cancel(id);
+    }
+
+    @PostMapping("/{id}/deliver")
+    public OrderResponse markOrderDelivered(@PathVariable Long id) {
+        return orderService.markDelivered(id);
+    }
+
+    @PostMapping("/{id}/complete")
+    public OrderResponse completeOrder(@PathVariable Long id) {
+        return orderService.complete(id);
     }
 
     /**

@@ -1,6 +1,13 @@
 import Icon from '../../components/Icon.jsx'
 
-export default function Topbar({ title, onMenuClick, menuExpanded = false }) {
+export default function Topbar({
+  title,
+  account,
+  isLoggingOut = false,
+  onLogout,
+  onMenuClick,
+  menuExpanded = false,
+}) {
   const today = new Intl.DateTimeFormat('vi-VN', {
     weekday: 'long',
     day: 'numeric',
@@ -39,7 +46,22 @@ export default function Topbar({ title, onMenuClick, menuExpanded = false }) {
           <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-blush" />
         </button>
         <div className="hidden h-8 border-l border-border sm:block" />
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-rosewood text-[11px] font-semibold text-white">MA</div>
+        <div className="hidden min-w-0 text-right sm:block">
+          <p className="max-w-32 truncate text-xs font-semibold text-rosewood">
+            {account?.username || 'Tài khoản'}
+          </p>
+          <p className="text-[10px] text-muted">
+            {account?.roleName || account?.roleCode || ''}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onLogout}
+          disabled={isLoggingOut}
+          className="rounded-xl border border-border bg-paper px-3 py-2 text-[11px] font-semibold text-rosewood transition hover:border-caramel hover:bg-petal disabled:cursor-wait disabled:opacity-60"
+        >
+          {isLoggingOut ? 'Đang thoát...' : 'Đăng xuất'}
+        </button>
       </div>
     </header>
   )

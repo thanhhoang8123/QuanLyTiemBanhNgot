@@ -1,6 +1,6 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
-import com.nhom4.QuanLyTiemBanhNgot.entity.OrderStatusHistory;
+import com.nhom4.QuanLyTiemBanhNgot.document.OrderStatusHistory;
 import com.nhom4.QuanLyTiemBanhNgot.service.OrderStatusHistoryService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,12 +21,6 @@ public class OrderStatusHistoryController {
 
     @GetMapping("/{orderId}/status-history")
     public List<OrderStatusHistory> getStatusHistory(@PathVariable Long orderId) {
-        System.out.println("ORDER ID NHAN DUOC: " + orderId);
-
-        List<OrderStatusHistory> result = service.findByOrderId(orderId);
-
-        System.out.println("SO BAN GHI TIM THAY: " + result.size());
-
-        return result;
+        return service.findByOrderId(orderId);
     }
 }

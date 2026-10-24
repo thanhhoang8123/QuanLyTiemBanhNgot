@@ -1,20 +1,33 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
+import com.nhom4.QuanLyTiemBanhNgot.dto.employee.EmployeeOptionResponse;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Employee;
 import com.nhom4.QuanLyTiemBanhNgot.service.EmployeeService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/employees")
+@PreAuthorize("hasRole('ADMIN')")
 public class EmployeeController {
 
     private final EmployeeService employeeService;
 
     public EmployeeController(EmployeeService employeeService) {
         this.employeeService = employeeService;
+    }
+
+    @GetMapping("/options")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
+    public List<EmployeeOptionResponse> getOptions() {
+        return employeeService.getAll().stream()
+                .filter(employee -> Boolean.TRUE.equals(employee.getStatus()))
+                .map(employee -> new EmployeeOptionResponse(
+                        employee.getId(), employee.getFullName()))
+                .toList();
     }
 
     @GetMapping
