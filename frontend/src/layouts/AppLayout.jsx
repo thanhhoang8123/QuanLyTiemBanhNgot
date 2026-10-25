@@ -18,6 +18,7 @@ const pageTitles = {
   '/admin/custom-orders': 'Đơn đặt bánh riêng',
   '/admin/promotions': 'Khuyến mãi',
   '/admin/promotion-products': 'Sản phẩm áp dụng khuyến mãi',
+  '/admin/logs': 'Nhật ký hệ thống',
 }
 
 export default function AppLayout() {
@@ -36,7 +37,10 @@ export default function AppLayout() {
       const { csrfToken } = await apiRequest('/auth/csrf')
       await apiRequest('/auth/logout', {
         method: 'POST',
-        headers: { 'X-CSRF-Token': csrfToken },
+        headers: {
+          'X-CSRF-Token': csrfToken,
+          'X-XSRF-TOKEN': csrfToken,
+        },
       })
       setAccount(null)
       navigate('/shop/login', { replace: true })

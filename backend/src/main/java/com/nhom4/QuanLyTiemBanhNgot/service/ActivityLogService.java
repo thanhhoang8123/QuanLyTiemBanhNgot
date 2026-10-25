@@ -2,6 +2,7 @@ package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import com.nhom4.QuanLyTiemBanhNgot.document.ActivityLog;
 import com.nhom4.QuanLyTiemBanhNgot.repository.ActivityLogRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 
 @Service
 public class ActivityLogService {
@@ -21,6 +23,10 @@ public class ActivityLogService {
             MongoAfterCommitWriter afterCommitWriter) {
         this.repository = repository;
         this.afterCommitWriter = afterCommitWriter;
+    }
+
+    public List<ActivityLog> findRecent(int limit) {
+        return repository.findAllByOrderByCreatedAtDesc(PageRequest.of(0, limit));
     }
 
     public void recordPurchaseOrderStatusAfterCommit(

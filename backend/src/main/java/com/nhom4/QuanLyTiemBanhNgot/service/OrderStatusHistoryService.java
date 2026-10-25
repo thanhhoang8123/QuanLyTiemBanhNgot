@@ -2,6 +2,7 @@ package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import com.nhom4.QuanLyTiemBanhNgot.document.OrderStatusHistory;
 import com.nhom4.QuanLyTiemBanhNgot.repository.OrderStatusHistoryRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -51,6 +52,10 @@ public class OrderStatusHistoryService {
 
     public List<OrderStatusHistory> findByOrderId(Long orderId) {
         return repository.findByOrderIdAndNewStatusIsNotNullOrderByCreatedAtDesc(orderId);
+    }
+
+    public List<OrderStatusHistory> findRecent(int limit) {
+        return repository.findAllByNewStatusIsNotNullOrderByCreatedAtDesc(PageRequest.of(0, limit));
     }
 
     private String currentUsername() {

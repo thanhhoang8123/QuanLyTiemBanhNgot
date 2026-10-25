@@ -89,6 +89,8 @@ public class SecurityConfig {
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**").permitAll()
                 .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
+                .requestMatchers("/api/customer/orders/**").hasRole("CUSTOMER")
+                .requestMatchers("/api/management/logs/**").hasAnyRole("ADMIN", "MANAGER")
                 .requestMatchers(HttpMethod.GET, "/api/employees/options")
                     .hasAnyRole("ADMIN", "MANAGER", "STAFF")
                 .requestMatchers("/api/roles/**", "/api/employees/**").hasRole("ADMIN")

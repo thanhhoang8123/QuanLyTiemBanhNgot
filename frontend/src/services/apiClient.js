@@ -57,9 +57,11 @@ export async function apiRequest(
   })
 
   if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(requestMethod)
-        && !headers.has('X-XSRF-TOKEN')) {
+        && (!headers.has('X-XSRF-TOKEN') || !headers.has('X-CSRF-Token'))) {
     try {
-        headers.set('X-XSRF-TOKEN', await getCsrfCookieToken())
+        const csrfToken = await getCsrfCookieToken()
+        if (!headers.has('X-XSRF-TOKEN')) headers.set('X-XSRF-TOKEN', csrfToken)
+        if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', csrfToken)
     } catch (error) {
         if (error instanceof ApiError) throw error
         throw new ApiError('Không thể khởi tạo bảo vệ CSRF. Hãy kiểm tra kết nối backend.')

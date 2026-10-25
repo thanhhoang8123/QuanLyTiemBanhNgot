@@ -19,6 +19,7 @@ import { getProducts } from '../../products/services/productService.js'
 
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 text-sm text-rosewood outline-none transition focus:border-caramel'
 const moneyFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 })
+const walkInCustomerEmail = 'pos.walkin@example.invalid'
 const paymentMethods = [
   { value: 'CASH', label: 'Tiền mặt' },
   { value: 'CARD', label: 'Thẻ' },
@@ -116,12 +117,20 @@ export default function PosPage({
   }, [loadCatalogs])
 
   const activeCustomers = useMemo(
-    () => customers.filter((customer) => customer.status === true),
+    () => customers
+      .filter((customer) => customer.status === true)
+      .sort((first, second) => Number(second.email === walkInCustomerEmail) - Number(first.email === walkInCustomerEmail)),
     [customers],
   )
+  const selectedCustomer = activeCustomers.find((customer) => String(customer.id) === customerId)
+  const isWalkInCustomer = selectedCustomer?.email === walkInCustomerEmail
   const activeEmployees = useMemo(
     () => employees.filter((employee) => employee.status === true),
     [employees],
+  )
+  const currentEmployee = useMemo(
+    () => activeEmployees.find((employee) => employee.currentUser === true),
+    [activeEmployees],
   )
   const activeProducts = useMemo(
     () => products.filter((product) => product.status === true && product.stock > 0),
@@ -143,10 +152,10 @@ export default function PosPage({
     if (activeCustomers.length && !activeCustomers.some((customer) => String(customer.id) === customerId)) {
       setCustomerId(String(activeCustomers[0].id))
     }
-    if (activeEmployees.length && !activeEmployees.some((employee) => String(employee.id) === employeeId)) {
-      setEmployeeId(String(activeEmployees[0].id))
+    if (String(currentEmployee?.id ?? '') !== employeeId) {
+      setEmployeeId(currentEmployee ? String(currentEmployee.id) : '')
     }
-  }, [activeCustomers, activeEmployees, customerId, employeeId])
+  }, [activeCustomers, activeEmployees, currentEmployee, customerId, employeeId])
 
   useEffect(() => {
     if (cart.length === 0 || createdOrder) {
@@ -322,9 +331,21 @@ export default function PosPage({
       const payment = await simulatePayment(createdPayment.id, result)
       setCreatedPayment(payment)
       if (result === 'SUCCESS') {
+        const earnedPoints = isWalkInCustomer
+          ? 0
+          : Math.floor(Number(payment.amount) / 10000)
+        if (earnedPoints > 0) {
+          setCustomers((current) => current.map((customer) => (
+            Number(customer.id) === Number(customerId)
+              ? { ...customer, loyaltyPoints: Number(customer.loyaltyPoints ?? 0) + earnedPoints }
+              : customer
+          )))
+        }
         clearCart()
         await refreshProducts()
-        onToast(`Đơn ${createdOrder.orderCode} đã thanh toán thành công.`)
+        onToast(earnedPoints > 0
+          ? `Đơn ${createdOrder.orderCode} đã thanh toán thành công; khách được cộng ${earnedPoints} điểm.`
+          : `Đơn ${createdOrder.orderCode} đã thanh toán thành công.`)
       }
     } catch (error) {
       setCheckoutError(getErrorMessage(error))
@@ -494,25 +515,36 @@ export default function PosPage({
                   <option value="">Chọn khách hàng</option>
                   {activeCustomers.map((customer) => (
                     <option key={customer.id} value={customer.id}>
-                      {customer.fullName} · {customer.phone}
+                      {customer.email === walkInCustomerEmail
+                        ? 'Khách vãng lai'
+                        : `${customer.fullName} · ${customer.phone} · ${customer.loyaltyPoints ?? 0} điểm`}
                     </option>
                   ))}
                 </select>
               </FormField>
+              <p className="text-[11px] leading-5 text-muted sm:col-span-2">
+                {selectedCustomer
+                  ? isWalkInCustomer
+                    ? 'Khách vãng lai không cần cung cấp thông tin và không tích điểm.'
+                    : `Khách hiện có ${selectedCustomer.loyaltyPoints ?? 0} điểm; cứ đủ 10.000đ thanh toán thành công được cộng 1 điểm.`
+                  : 'Chọn Khách vãng lai hoặc hồ sơ khách hàng có sẵn.'}
+              </p>
               <FormField id="pos-employee" label="Nhân viên lập đơn" required>
-                <select
+                <input
                   id="pos-employee"
-                  required
-                  value={employeeId}
-                  onChange={(event) => setEmployeeId(event.target.value)}
+                  type="text"
+                  readOnly
+                  value={currentEmployee?.fullName ?? ''}
+                  placeholder="Tài khoản chưa có hồ sơ nhân viên"
+                  disabled={!currentEmployee}
                   className={inputClass}
-                >
-                  <option value="">Chọn nhân viên</option>
-                  {activeEmployees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>{employee.fullName}</option>
-                  ))}
-                </select>
+                />
               </FormField>
+              {!currentEmployee && (
+                <p role="alert" className="text-xs text-danger sm:col-span-2">
+                  Đây là hồ sơ người bán, không phải hồ sơ khách hàng. Khách vãng lai vẫn có thể mua, nhưng tài khoản đang đăng nhập cần được liên kết với hồ sơ nhân viên trước khi lập đơn. Vui lòng nhờ quản trị viên liên kết tài khoản.
+                </p>
+              )}
             </div>
             <FormField id="pos-payment-method" label="Phương thức thanh toán" required>
               <select
@@ -540,7 +572,7 @@ export default function PosPage({
               <Button
                 type="submit"
                 disabled={processing || !quote || quoteLoading || Boolean(quoteError)
-                  || !activeCustomers.length || !activeEmployees.length
+                  || !activeCustomers.length || !currentEmployee
                   || Number(quote?.finalAmount) <= 0}
               >
                 {processing ? 'Đang tạo đơn...' : 'Tạo đơn và thanh toán'}

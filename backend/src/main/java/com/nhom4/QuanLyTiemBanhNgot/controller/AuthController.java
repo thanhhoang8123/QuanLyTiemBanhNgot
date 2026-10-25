@@ -56,9 +56,9 @@ public class AuthController {
     @GetMapping("/csrf")
     public Map<String, String> csrf(HttpServletRequest request, CsrfToken csrfToken) {
         HttpSession session = request.getSession(true);
-        // Resolve Spring's deferred token so the CSRF repository writes its cookie.
-        csrfToken.getToken();
-        return Map.of("csrfToken", getOrCreateCsrf(session));
+        String token = csrfToken.getToken();
+        session.setAttribute(CSRF_SESSION_KEY, token);
+        return Map.of("csrfToken", token);
     }
 
     @PostMapping("/register")
@@ -86,10 +86,11 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request,
                                                @RequestHeader(value = "X-CSRF-Token", required = false) String csrfToken,
+                                               @RequestHeader(value = "X-XSRF-TOKEN", required = false) String xsrfToken,
                                                HttpServletRequest httpRequest,
                                                HttpServletResponse httpResponse) {
         HttpSession oldSession = httpRequest.getSession(true);
-        requireValidCsrf(oldSession, csrfToken);
+        requireValidCsrf(oldSession, tokenForValidation(csrfToken, xsrfToken));
         Account account = authService.login(request.username(), request.password());
 
         Authentication authentication = authenticationManager.authenticate(
@@ -120,11 +121,19 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpSession session,
-                                       @RequestHeader(value = "X-CSRF-Token", required = false) String csrfToken) {
-        requireValidCsrf(session, csrfToken);
+                                       @RequestHeader(value = "X-CSRF-Token", required = false) String csrfToken,
+                                       @RequestHeader(value = "X-XSRF-TOKEN", required = false) String xsrfToken) {
+        requireValidCsrf(session, tokenForValidation(csrfToken, xsrfToken));
         SecurityContextHolder.clearContext();
         session.invalidate();
         return ResponseEntity.noContent().build();
+    }
+
+    private String tokenForValidation(String csrfToken, String xsrfToken) {
+        if (csrfToken != null && !csrfToken.isBlank()) {
+            return csrfToken;
+        }
+        return xsrfToken;
     }
 
     private AccountResponse accountResponse(Account account) {

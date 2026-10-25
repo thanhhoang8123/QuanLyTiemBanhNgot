@@ -42,6 +42,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @EntityGraph(attributePaths = {"customer", "employee"})
     List<Order> findAllByOrderByOrderDateDesc();
 
+    @EntityGraph(attributePaths = {"customer", "employee"})
+    List<Order> findByCustomer_IdOrderByOrderDateDesc(Long customerId);
+
+    @EntityGraph(attributePaths = {"customer", "employee"})
+    Optional<Order> findByIdAndCustomer_Id(Long id, Long customerId);
+
+    @EntityGraph(attributePaths = {"customer", "employee"})
+    Optional<Order> findByCustomer_IdAndCustomerRequestKey(Long customerId, String customerRequestKey);
+
     @Override
     @EntityGraph(attributePaths = {"customer", "employee"})
     Optional<Order> findById(Long id);

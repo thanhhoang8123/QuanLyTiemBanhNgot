@@ -7,6 +7,7 @@ import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderUpdateRequest;
 import com.nhom4.QuanLyTiemBanhNgot.service.OrderService;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -74,8 +75,10 @@ public class OrderController {
      *               Chuyển JSON từ request thành đối tượng Order.
      */
     @PostMapping
-    public OrderResponse createOrder(@Valid @RequestBody CreateOrderRequest request) {
-        return orderService.create(request);
+    public OrderResponse createOrder(
+            @Valid @RequestBody CreateOrderRequest request,
+            Authentication authentication) {
+        return orderService.createForAuthenticatedEmployee(request, authentication.getName());
     }
 
     @PostMapping("/{id}/cancel")

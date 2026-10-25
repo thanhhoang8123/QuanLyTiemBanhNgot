@@ -3,12 +3,14 @@ package com.nhom4.QuanLyTiemBanhNgot.service;
 import com.nhom4.QuanLyTiemBanhNgot.dto.payment.CreatePaymentRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.payment.PaymentResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.payment.SimulatePaymentRequest;
+import com.nhom4.QuanLyTiemBanhNgot.entity.Customer;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Payment;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Order;
 import com.nhom4.QuanLyTiemBanhNgot.exception.BadRequestException;
 import com.nhom4.QuanLyTiemBanhNgot.exception.ConflictException;
 import com.nhom4.QuanLyTiemBanhNgot.exception.ResourceNotFoundException;
 import com.nhom4.QuanLyTiemBanhNgot.mapper.PaymentMapper;
+import com.nhom4.QuanLyTiemBanhNgot.repository.CustomerRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.OrderRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PaymentRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -26,8 +28,12 @@ import java.util.List;
 @Service
 public class PaymentService {
 
+    private static final String WALK_IN_CUSTOMER_EMAIL = "pos.walkin@example.invalid";
+    private static final BigDecimal AMOUNT_PER_LOYALTY_POINT = new BigDecimal("10000");
+
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
+    private final CustomerRepository customerRepository;
     private final PaymentMapper paymentMapper;
     private final OrderStatusHistoryService orderStatusHistoryService;
 
@@ -37,10 +43,12 @@ public class PaymentService {
     public PaymentService(
             PaymentRepository paymentRepository,
             OrderRepository orderRepository,
+            CustomerRepository customerRepository,
             PaymentMapper paymentMapper,
             OrderStatusHistoryService orderStatusHistoryService) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
+        this.customerRepository = customerRepository;
         this.paymentMapper = paymentMapper;
         this.orderStatusHistoryService = orderStatusHistoryService;
     }
@@ -176,6 +184,7 @@ public class PaymentService {
         if ("SUCCESS".equals(request.result())) {
             payment.setStatus("SUCCESS");
             payment.setPaidAt(LocalDateTime.now(ZoneOffset.UTC));
+            awardLoyaltyPoints(order.getCustomer(), payment.getAmount());
             if ("PENDING".equals(order.getStatus())) {
                 String oldStatus = order.getStatus();
                 order.setStatus("CONFIRMED");
@@ -189,6 +198,34 @@ public class PaymentService {
         }
 
         return paymentMapper.toResponse(paymentRepository.save(payment));
+    }
+
+    private void awardLoyaltyPoints(Customer orderCustomer, BigDecimal paidAmount) {
+        if (orderCustomer == null
+                || WALK_IN_CUSTOMER_EMAIL.equalsIgnoreCase(orderCustomer.getEmail())
+                || paidAmount == null
+                || paidAmount.signum() <= 0) {
+            return;
+        }
+
+        int pointsToAward = paidAmount
+                .divideToIntegralValue(AMOUNT_PER_LOYALTY_POINT)
+                .intValueExact();
+        if (pointsToAward == 0) return;
+
+        Customer customer = customerRepository.findByIdForUpdate(orderCustomer.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy khách hàng của đơn hàng"
+                ));
+        int currentPoints = customer.getLoyaltyPoints() == null
+                ? 0
+                : customer.getLoyaltyPoints();
+        try {
+            customer.setLoyaltyPoints(Math.addExact(currentPoints, pointsToAward));
+        } catch (ArithmeticException exception) {
+            throw new ConflictException("Điểm tích lũy của khách hàng đã vượt giới hạn");
+        }
+        customerRepository.save(customer);
     }
 
     /**

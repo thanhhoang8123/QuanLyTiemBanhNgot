@@ -1,5 +1,6 @@
 package com.nhom4.QuanLyTiemBanhNgot.service;
 
+import com.nhom4.QuanLyTiemBanhNgot.dto.employee.EmployeeOptionResponse;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Employee;
 import com.nhom4.QuanLyTiemBanhNgot.repository.EmployeeRepository;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,10 @@ public class EmployeeService {
 
     public List<Employee> getAll() {
         return employeeRepository.findAll();
+    }
+
+    public List<EmployeeOptionResponse> getActiveOptions(String username) {
+        return employeeRepository.findActiveOptions(username);
     }
 
     public Optional<Employee> getById(Long id) {

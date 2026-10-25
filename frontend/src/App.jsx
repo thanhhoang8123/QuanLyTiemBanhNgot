@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AppLayout from './layouts/AppLayout.jsx'
 import DashboardPage from './features/dashboard/pages/DashboardPage.jsx'
 import PosPage from './features/pos/pages/PosPage.jsx'
@@ -17,16 +17,24 @@ import NotFoundPage from './pages/NotFoundPage.jsx'
 import ShopLayout from './layouts/ShopLayout.jsx'
 import ShopHomePage from './features/shop/pages/ShopHomePage.jsx'
 import ShopProductsPage from './features/shop/pages/ShopProductsPage.jsx'
+import ShopProductDetailPage from './features/shop/pages/ShopProductDetailPage.jsx'
+import ShopCartPage from './features/shop/pages/ShopCartPage.jsx'
+import ShopCheckoutPage from './features/shop/pages/ShopCheckoutPage.jsx'
+import ShopOrderResultPage from './features/shop/pages/ShopOrderResultPage.jsx'
+import ShopOrdersPage from './features/shop/pages/ShopOrdersPage.jsx'
+import ShopOrderDetailPage from './features/shop/pages/ShopOrderDetailPage.jsx'
 import RegisterPage from './features/auth/pages/RegisterPage.jsx'
 import VerifyEmailPage from './features/auth/pages/VerifyEmailPage.jsx'
 import LoginPage from './features/auth/pages/LoginPage.jsx'
 import AccountsPage from './features/accounts/pages/AccountsPage.jsx'
+import ManagementLogsPage from './features/activity-logs/pages/ManagementLogsPage.jsx'
 import Icon from './components/Icon.jsx'
 import { apiRequest } from './services/apiClient.js'
 import { ADMIN_ROLES, MANAGER_ROLES, STAFF_ROLES } from './features/auth/permissions.js'
 import { AuthContext } from './features/auth/AuthContext.js'
 
 function RequireAuth({ children, allowedRoles = STAFF_ROLES }) {
+  const location = useLocation()
   const inheritedAuth = useContext(AuthContext)
   const [account, setAccount] = useState(null)
   const [status, setStatus] = useState('checking')
@@ -67,7 +75,7 @@ function RequireAuth({ children, allowedRoles = STAFF_ROLES }) {
   }
 
   if (status === 'unauthenticated') {
-    return <Navigate to="/shop/login" replace />
+    return <Navigate to="/shop/login" replace state={{ from: location }} />
   }
 
   const roleCode = (account?.roleCode || '').toUpperCase()
@@ -106,6 +114,12 @@ export default function App() {
           <Route path="login" element={<LoginPage />} />
           <Route index element={<ShopHomePage />} />
           <Route path="products" element={<ShopProductsPage />} />
+          <Route path="products/:productId" element={<ShopProductDetailPage />} />
+          <Route path="cart" element={<ShopCartPage />} />
+          <Route path="checkout" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopCheckoutPage /></RequireAuth>} />
+          <Route path="order-result" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopOrderResultPage /></RequireAuth>} />
+          <Route path="orders" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopOrdersPage /></RequireAuth>} />
+          <Route path="orders/:orderId" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopOrderDetailPage /></RequireAuth>} />
           <Route path="register" element={<RegisterPage />} />
           <Route path="verify-email" element={<VerifyEmailPage />} />
         </Route>
@@ -125,6 +139,7 @@ export default function App() {
           <Route path="admin/payments" element={<RequireAuth allowedRoles={STAFF_ROLES}><PaymentsPage onToast={showToast} /></RequireAuth>} />
           <Route path="admin/promotions" element={<RequireAuth allowedRoles={MANAGER_ROLES}><PromotionsPage onToast={showToast} /></RequireAuth>} />
           <Route path="admin/promotion-products" element={<RequireAuth allowedRoles={MANAGER_ROLES}><PromotionProductsPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/logs" element={<RequireAuth allowedRoles={MANAGER_ROLES}><ManagementLogsPage /></RequireAuth>} />
           <Route
             path="pos"
             element={(

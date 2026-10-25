@@ -76,6 +76,22 @@ public class CustomOrderService {
     }
 
     @Transactional
+    public CustomOrderResponse createForAuthenticatedEmployee(
+            CreateCustomOrderRequest request,
+            String username) {
+        Employee currentEmployee = employeeRepository.findByAccount_UsernameAndStatusTrue(username)
+                .orElseThrow(() -> new ConflictException(
+                        "Tài khoản đăng nhập chưa được liên kết với hồ sơ nhân viên đang hoạt động"
+                ));
+        if (request == null || !currentEmployee.getId().equals(request.employeeId())) {
+            throw new ConflictException(
+                    "Chỉ được tạo đơn bằng hồ sơ nhân viên của tài khoản đang đăng nhập"
+            );
+        }
+        return create(request);
+    }
+
+    @Transactional
     public CustomOrderResponse update(Long id, UpdateCustomOrderRequest request) {
         validateRequest(request);
         CustomOrder customOrder = findEntityByIdForUpdate(id);

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
 import Icon from '../../../components/Icon.jsx'
 import ShopProductCard from '../components/ShopProductCard.jsx'
 import useShopCatalog from '../hooks/useShopCatalog.js'
@@ -18,6 +18,7 @@ function CatalogError({ message, onRetry }) {
 
 export default function ShopProductsPage() {
   const { categories, products, isLoading, error, retry } = useShopCatalog()
+  const { addToCart } = useOutletContext()
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('default')
@@ -133,7 +134,7 @@ export default function ShopProductsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
-          {visibleProducts.map((product) => <ShopProductCard key={product.id} product={product} />)}
+          {visibleProducts.map((product) => <ShopProductCard key={product.id} product={product} onAddToCart={addToCart} />)}
         </div>
       )}
     </div>

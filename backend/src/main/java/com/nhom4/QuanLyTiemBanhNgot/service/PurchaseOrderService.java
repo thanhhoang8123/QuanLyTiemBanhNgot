@@ -10,6 +10,7 @@ import com.nhom4.QuanLyTiemBanhNgot.repository.IngredientRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PurchaseOrderItemRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PurchaseOrderRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.SupplierRepository;
+import com.nhom4.QuanLyTiemBanhNgot.repository.EmployeeRepository;
 import com.nhom4.QuanLyTiemBanhNgot.validation.TV2ValidationUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,7 @@ public class PurchaseOrderService {
     private final PurchaseOrderItemRepository itemRepository;
     private final IngredientRepository ingredientRepository;
     private final SupplierRepository supplierRepository;
+    private final EmployeeRepository employeeRepository;
     private final ActivityLogService activityLogService;
 
     public PurchaseOrderService(
@@ -40,11 +42,13 @@ public class PurchaseOrderService {
             PurchaseOrderItemRepository itemRepository,
             IngredientRepository ingredientRepository,
             SupplierRepository supplierRepository,
+            EmployeeRepository employeeRepository,
             ActivityLogService activityLogService) {
         this.repository = repository;
         this.itemRepository = itemRepository;
         this.ingredientRepository = ingredientRepository;
         this.supplierRepository = supplierRepository;
+        this.employeeRepository = employeeRepository;
         this.activityLogService = activityLogService;
     }
 
@@ -134,6 +138,22 @@ public class PurchaseOrderService {
                 order.getId(), null, "PENDING", "Tạo phiếu nhập hàng");
 
         return toResponse(order);
+    }
+
+    @Transactional
+    public PurchaseOrderResponse createForAuthenticatedEmployee(
+            PurchaseOrderCreateRequest request,
+            String username) {
+        var currentEmployee = employeeRepository.findByAccount_UsernameAndStatusTrue(username)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Tài khoản đăng nhập chưa được liên kết với hồ sơ nhân viên đang hoạt động"));
+        if (request == null || !currentEmployee.getId().equals(request.employeeId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Chỉ được tạo phiếu nhập bằng hồ sơ nhân viên của tài khoản đang đăng nhập");
+        }
+        return create(request);
     }
 
     @Transactional
