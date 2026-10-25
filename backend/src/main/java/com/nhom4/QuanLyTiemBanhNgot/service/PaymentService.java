@@ -29,6 +29,7 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final PaymentMapper paymentMapper;
+    private final OrderStatusHistoryService orderStatusHistoryService;
 
     /**
      * Constructor Injection.
@@ -36,10 +37,12 @@ public class PaymentService {
     public PaymentService(
             PaymentRepository paymentRepository,
             OrderRepository orderRepository,
-            PaymentMapper paymentMapper) {
+            PaymentMapper paymentMapper,
+            OrderStatusHistoryService orderStatusHistoryService) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
         this.paymentMapper = paymentMapper;
+        this.orderStatusHistoryService = orderStatusHistoryService;
     }
 
     /**
@@ -174,8 +177,11 @@ public class PaymentService {
             payment.setStatus("SUCCESS");
             payment.setPaidAt(LocalDateTime.now(ZoneOffset.UTC));
             if ("PENDING".equals(order.getStatus())) {
+                String oldStatus = order.getStatus();
                 order.setStatus("CONFIRMED");
                 orderRepository.save(order);
+                orderStatusHistoryService.recordStatusChangeAfterCommit(
+                        order.getId(), oldStatus, order.getStatus(), "Thanh toán thành công");
             }
         } else {
             payment.setStatus("FAILED");
@@ -198,8 +204,18 @@ public class PaymentService {
     /**
      * Chỉ cho phép xóa Payment chưa thành công.
      */
+    @Transactional
     public void deleteById(Long id) {
-        Payment payment = findPaymentById(id);
+        Payment existingPayment = findPaymentById(id);
+        Long orderId = existingPayment.getOrder().getId();
+        orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy đơn hàng của thanh toán với ID: " + id
+                ));
+        Payment payment = paymentRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy thanh toán với ID: " + id
+                ));
         if ("SUCCESS".equalsIgnoreCase(payment.getStatus())) {
             throw new ConflictException(
                     "Không thể xóa Payment đã thanh toán thành công"

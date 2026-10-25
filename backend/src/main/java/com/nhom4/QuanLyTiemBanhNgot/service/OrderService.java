@@ -70,6 +70,8 @@ public class OrderService {
     private final PromotionRepository promotionRepository;
     private final PromotionProductRepository promotionProductRepository;
     private final OrderMapper orderMapper;
+    private final OrderStatusHistoryService orderStatusHistoryService;
+    private final OrderConfirmationEmailService orderConfirmationEmailService;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -80,7 +82,9 @@ public class OrderService {
             PaymentRepository paymentRepository,
             PromotionRepository promotionRepository,
             PromotionProductRepository promotionProductRepository,
-            OrderMapper orderMapper) {
+            OrderMapper orderMapper,
+            OrderStatusHistoryService orderStatusHistoryService,
+            OrderConfirmationEmailService orderConfirmationEmailService) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.customerRepository = customerRepository;
@@ -90,6 +94,8 @@ public class OrderService {
         this.promotionRepository = promotionRepository;
         this.promotionProductRepository = promotionProductRepository;
         this.orderMapper = orderMapper;
+        this.orderStatusHistoryService = orderStatusHistoryService;
+        this.orderConfirmationEmailService = orderConfirmationEmailService;
     }
 
     /**
@@ -230,6 +236,9 @@ public class OrderService {
 
         order = orderRepository.save(order);
         List<OrderItem> savedItems = orderItemRepository.saveAll(orderItems);
+        orderStatusHistoryService.recordStatusChangeAfterCommit(
+                order.getId(), null, "PENDING", "Tạo đơn hàng");
+        orderConfirmationEmailService.sendOrderConfirmation(order, savedItems);
         return toResponse(order, savedItems);
     }
 
@@ -259,9 +268,54 @@ public class OrderService {
             restoreReservedStock(orderItems);
             order.setStockReserved(false);
         }
+        String oldStatus = order.getStatus();
         order.setStatus("CANCELLED");
         orderRepository.saveAndFlush(order);
+        orderStatusHistoryService.recordStatusChangeAfterCommit(
+                order.getId(), oldStatus, order.getStatus(), "Hủy đơn hàng");
         return toResponse(order, orderItems);
+    }
+
+    @Transactional
+    public OrderResponse markDelivered(Long id) {
+        Order order = orderRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> notFound("Không tìm thấy đơn hàng", id));
+        requireConfirmedOrder(order);
+        if (!"PENDING".equals(order.getDeliveryStatus())
+                || order.getDeliveryAddress() == null
+                || order.getDeliveryAddress().isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Chỉ đơn giao tận nơi đang chờ giao mới có thể đánh dấu đã giao"
+            );
+        }
+        requireSuccessfulPayment(id);
+
+        order.setDeliveryStatus("DELIVERED");
+        orderRepository.saveAndFlush(order);
+        return toResponse(order, orderItemRepository.findByOrder_Id(id));
+    }
+
+    @Transactional
+    public OrderResponse complete(Long id) {
+        Order order = orderRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> notFound("Không tìm thấy đơn hàng", id));
+        requireConfirmedOrder(order);
+        if (!"DELIVERED".equals(order.getDeliveryStatus())
+                && !"NOT_REQUIRED".equals(order.getDeliveryStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Đơn giao tận nơi phải được đánh dấu đã giao trước khi hoàn tất"
+            );
+        }
+        requireSuccessfulPayment(id);
+
+        String oldStatus = order.getStatus();
+        order.setStatus("COMPLETED");
+        orderRepository.saveAndFlush(order);
+        orderStatusHistoryService.recordStatusChangeAfterCommit(
+                order.getId(), oldStatus, order.getStatus(), "Hoàn tất đơn hàng");
+        return toResponse(order, orderItemRepository.findByOrder_Id(id));
     }
 
     /**
@@ -830,6 +884,27 @@ public class OrderService {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Đơn hàng cũ chưa giữ tồn kho; hãy hủy và tạo lại đơn để chỉnh sửa an toàn"
+            );
+        }
+    }
+
+    private void requireConfirmedOrder(Order order) {
+        if (!"CONFIRMED".equals(order.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Chỉ đơn hàng đã xác nhận mới được cập nhật trạng thái giao hàng"
+            );
+        }
+    }
+
+    private void requireSuccessfulPayment(Long orderId) {
+        boolean paid = paymentRepository.findByOrder_IdForUpdate(orderId)
+                .map(payment -> "SUCCESS".equals(payment.getStatus()))
+                .orElse(false);
+        if (!paid) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Chỉ đơn đã thanh toán thành công mới được giao hoặc hoàn tất"
             );
         }
     }

@@ -10,10 +10,43 @@ export class ApiError extends Error {
   }
 }
 
+function readCookie(name) {
+  if (typeof document === 'undefined') return ''
+
+  const prefix = `${name}=`
+  const cookie = document.cookie
+    .split('; ')
+    .find((entry) => entry.startsWith(prefix))
+
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : ''
+}
+
+async function getCsrfCookieToken() {
+  let token = readCookie('XSRF-TOKEN')
+  if (token) return token
+
+  const response = await fetch(`${apiBaseUrl}/auth/csrf`, {
+    headers: { Accept: 'application/json' },
+    credentials: 'include',
+  })
+
+  if (!response.ok) {
+    throw new ApiError('Không thể khởi tạo bảo vệ CSRF. Vui lòng tải lại trang.', response.status)
+  }
+
+  token = readCookie('XSRF-TOKEN')
+  if (!token) {
+    throw new ApiError('Backend chưa cấp CSRF token. Vui lòng kiểm tra cấu hình bảo mật.')
+  }
+
+  return token
+}
+
 export async function apiRequest(
   path,
   { method = 'GET', body, signal, headers: customHeaders } = {}
 ) {
+  const requestMethod = method.toUpperCase()
   const headers = new Headers({
     Accept: 'application/json',
     ...Object.fromEntries(
@@ -23,8 +56,18 @@ export async function apiRequest(
     ),
   })
 
+  if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(requestMethod)
+        && !headers.has('X-XSRF-TOKEN')) {
+    try {
+        headers.set('X-XSRF-TOKEN', await getCsrfCookieToken())
+    } catch (error) {
+        if (error instanceof ApiError) throw error
+        throw new ApiError('Không thể khởi tạo bảo vệ CSRF. Hãy kiểm tra kết nối backend.')
+    }
+  }
+
   const options = {
-    method,
+    method: requestMethod,
     headers,
     signal,
     credentials: 'include',

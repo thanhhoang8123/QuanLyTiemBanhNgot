@@ -3,12 +3,14 @@ package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 import com.nhom4.QuanLyTiemBanhNgot.entity.Ingredient;
 import com.nhom4.QuanLyTiemBanhNgot.service.IngredientService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/ingredients")
+@PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
 public class IngredientController {
 
     private final IngredientService service;

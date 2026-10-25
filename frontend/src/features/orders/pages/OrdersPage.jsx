@@ -16,6 +16,8 @@ import {
   getEmployees,
   getOrderById,
   getOrders,
+  markOrderDelivered,
+  completeOrder,
   updateOrderItemQuantity,
 } from '../services/orderService.js'
 
@@ -138,6 +140,8 @@ export default function OrdersPage({ onToast }) {
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancellingOrder, setCancellingOrder] = useState(false)
   const [cancelError, setCancelError] = useState('')
+  const [updatingOrderStatus, setUpdatingOrderStatus] = useState(false)
+  const [orderStatusError, setOrderStatusError] = useState('')
 
   const loadOrders = useCallback(async ({ signal } = {}) => {
     setLoading(true)
@@ -368,6 +372,24 @@ export default function OrdersPage({ onToast }) {
       setCancelTarget(null)
     } finally {
       setCancellingOrder(false)
+    }
+  }
+
+  const applyOrderStatusChange = async (updateOrder, successMessage) => {
+    if (!displayedOrder || updatingOrderStatus) return
+    setUpdatingOrderStatus(true)
+    setOrderStatusError('')
+    try {
+      const updatedOrder = await updateOrder(displayedOrder.id)
+      setSelectedOrder(updatedOrder)
+      setOrders((current) => current.map((order) => (
+        order.id === updatedOrder.id ? updatedOrder : order
+      )))
+      onToast(successMessage)
+    } catch (error) {
+      setOrderStatusError(getErrorMessage(error))
+    } finally {
+      setUpdatingOrderStatus(false)
     }
   }
 
@@ -874,6 +896,34 @@ export default function OrdersPage({ onToast }) {
                     </Button>
                   </div>
                 )}
+                {displayedOrder.status === 'CONFIRMED' && (
+                  <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+                    {displayedOrder.deliveryStatus === 'PENDING' && (
+                      <Button
+                        disabled={updatingOrderStatus}
+                        onClick={() => applyOrderStatusChange(
+                          markOrderDelivered,
+                          `Đơn ${displayedOrder.orderCode} đã được đánh dấu giao thành công.`,
+                        )}
+                      >
+                        {updatingOrderStatus ? 'Đang cập nhật...' : 'Xác nhận đã giao'}
+                      </Button>
+                    )}
+                    {(displayedOrder.deliveryStatus === 'DELIVERED'
+                      || displayedOrder.deliveryStatus === 'NOT_REQUIRED') && (
+                      <Button
+                        disabled={updatingOrderStatus}
+                        onClick={() => applyOrderStatusChange(
+                          completeOrder,
+                          `Đơn ${displayedOrder.orderCode} đã hoàn tất.`,
+                        )}
+                      >
+                        {updatingOrderStatus ? 'Đang cập nhật...' : 'Hoàn tất đơn'}
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {orderStatusError && <p role="alert" className="text-sm text-danger">{orderStatusError}</p>}
                 {cancelError && <p role="alert" className="text-sm text-danger">{cancelError}</p>}
               </div>
             )}

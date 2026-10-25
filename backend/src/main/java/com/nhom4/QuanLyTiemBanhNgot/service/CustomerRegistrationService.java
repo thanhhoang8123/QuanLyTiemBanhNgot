@@ -8,7 +8,6 @@ import com.nhom4.QuanLyTiemBanhNgot.repository.CustomerRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.RoleRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -20,21 +19,23 @@ import java.util.regex.Pattern;
 @Service
 public class CustomerRegistrationService {
     private static final Pattern USERNAME_PATTERN = Pattern.compile("^[A-Za-z0-9._-]{4,50}$");
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\s@]+@[^\s@]+\.[^\s@]+$");
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
     private final AccountRepository accountRepository;
     private final CustomerRepository customerRepository;
     private final RoleRepository roleRepository;
     private final EmailVerificationService emailVerificationService;
-    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final PasswordEncoder passwordEncoder;
 
     public CustomerRegistrationService(AccountRepository accountRepository,
                                        CustomerRepository customerRepository,
                                        RoleRepository roleRepository,
-                                       EmailVerificationService emailVerificationService) {
+                                       EmailVerificationService emailVerificationService,
+                                       PasswordEncoder passwordEncoder) {
         this.accountRepository = accountRepository;
         this.customerRepository = customerRepository;
         this.roleRepository = roleRepository;
         this.emailVerificationService = emailVerificationService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional
@@ -48,6 +49,12 @@ public class CustomerRegistrationService {
         }
         if (fullName == null || fullName.isBlank() || fullName.trim().length() > 100) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vui lòng nhập họ tên hợp lệ.");
+        }
+        if (phone != null && phone.trim().length() > 15) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số điện thoại không được vượt quá 15 ký tự.");
+        }
+        if (address != null && address.trim().length() > 255) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Địa chỉ không được vượt quá 255 ký tự.");
         }
         if (email == null || !EMAIL_PATTERN.matcher(email.trim()).matches() || email.trim().length() > 100) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email không hợp lệ.");
@@ -86,7 +93,7 @@ public class CustomerRegistrationService {
         account.setUpdatedAt(LocalDateTime.now());
         account = accountRepository.save(account);
 
-        // Email gửi thất bại sẽ làm transaction rollback, tránh để lại tài khoản chưa xác minh không có email.
+        // Token được lưu trong transaction; dịch vụ chỉ gửi email sau khi transaction commit.
         emailVerificationService.sendVerification(account);
     }
 }
