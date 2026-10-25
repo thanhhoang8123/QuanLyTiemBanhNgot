@@ -12,6 +12,7 @@ import {
   receivePurchaseOrder,
 } from '../services/purchaseOrderService.js'
 import { getSuppliers } from '../../suppliers/services/supplierService.js'
+import { getEmployees } from '../../orders/services/orderService.js'
 
 const currency = new Intl.NumberFormat('vi-VN')
 const quantityFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 })
@@ -30,21 +31,23 @@ function formatDateTime(value) {
 }
 
 async function loadPurchaseData(signal) {
-  const [orders, suppliers, ingredients] = await Promise.all([
+  const [orders, suppliers, ingredients, employees] = await Promise.all([
     getPurchaseOrders({ signal }),
     getSuppliers({ signal }),
     getIngredients({ signal }),
+    getEmployees({ signal }),
   ])
-  if (![orders, suppliers, ingredients].every(Array.isArray)) {
+  if (![orders, suppliers, ingredients, employees].every(Array.isArray)) {
     throw new Error('Một API không trả về danh sách dữ liệu hợp lệ.')
   }
-  return { orders, suppliers, ingredients }
+  return { orders, suppliers, ingredients, employees }
 }
 
 export default function PurchaseOrdersPage({ onToast }) {
   const [orders, setOrders] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [ingredients, setIngredients] = useState([])
+  const [employees, setEmployees] = useState([])
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('Tất cả trạng thái')
   const [isLoading, setIsLoading] = useState(true)
@@ -65,6 +68,7 @@ export default function PurchaseOrdersPage({ onToast }) {
       setOrders(data.orders)
       setSuppliers(data.suppliers)
       setIngredients(data.ingredients)
+      setEmployees(data.employees)
     } catch (error) {
       if (error.name !== 'AbortError') setLoadError(getErrorMessage(error))
     } finally {
@@ -80,6 +84,9 @@ export default function PurchaseOrdersPage({ onToast }) {
 
   const activeSuppliers = suppliers.filter((supplier) => supplier.status !== false)
   const activeIngredients = ingredients.filter((ingredient) => ingredient.status !== false)
+  const currentEmployee = employees.find(
+    (employee) => employee.status === true && employee.currentUser === true,
+  )
 
   const filteredOrders = useMemo(() => orders.filter((order) => {
     const matchesQuery = `${order.purchaseCode ?? ''} ${order.supplierName ?? ''} ${order.employeeId ?? ''}`
@@ -93,7 +100,7 @@ export default function PurchaseOrdersPage({ onToast }) {
     setForm({
       ...emptyForm,
       supplierId: activeSuppliers[0]?.id == null ? '' : String(activeSuppliers[0].id),
-      employeeId: '',
+      employeeId: currentEmployee ? String(currentEmployee.id) : '',
       items: activeIngredients.length ? [{ ingredientId: '', quantity: '', unitCost: '' }] : [],
     })
     setFormError('')
@@ -282,8 +289,9 @@ export default function PurchaseOrdersPage({ onToast }) {
         <form className="space-y-5" onSubmit={savePurchaseOrder}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Nhà cung cấp</span><select required value={form.supplierId} onChange={(event) => setForm({ ...form, supplierId: event.target.value })} className={inputClass}><option value="">Chọn nhà cung cấp</option>{activeSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.supplierCode} · {supplier.name}</option>)}</select></label>
-            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">ID nhân viên lập phiếu</span><input required type="number" min="1" step="1" value={form.employeeId} onChange={(event) => setForm({ ...form, employeeId: event.target.value })} className={inputClass} placeholder="Nhập ID nhân viên" /></label>
+            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Người lập phiếu (tài khoản đang đăng nhập)</span><input type="text" readOnly disabled={!currentEmployee} value={currentEmployee?.fullName ?? ''} className={inputClass} placeholder="Tài khoản chưa có hồ sơ nhân viên" /></label>
           </div>
+          {!currentEmployee && <p role="alert" className="text-xs text-danger">Tài khoản chưa được liên kết với hồ sơ nhân viên đang hoạt động. Vui lòng nhờ quản trị viên liên kết trước khi tạo phiếu.</p>}
           <div className="space-y-3">
             <div className="flex items-center justify-between"><h3 className="font-display font-semibold text-rosewood">Nguyên liệu nhập</h3><Button size="sm" variant="secondary" onClick={addLine} disabled={form.items.length >= activeIngredients.length}><Icon name="plus" size={14} /> Thêm dòng</Button></div>
             {form.items.map((item, index) => {
@@ -304,8 +312,8 @@ export default function PurchaseOrdersPage({ onToast }) {
           </div>
           <div className="flex items-center justify-between rounded-xl border border-border bg-petal px-4 py-3"><span className="text-xs font-semibold text-rosewood">Tạm tính (tham khảo)</span><strong className="text-sm text-rosewood">{currency.format(estimatedTotal)}đ</strong></div>
           {formError && <p role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger">{formError}</p>}
-          <p className="text-[10px] leading-5 text-muted">Cần nhập ID nhân viên hợp lệ. Backend sẽ tính tổng tiền và lưu phiếu ở trạng thái chờ xử lý; tồn kho chỉ tăng sau khi xác nhận nhận hàng.</p>
-          <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="secondary" disabled={isSaving} onClick={() => setFormOpen(false)}>Hủy</Button><Button type="submit" disabled={isSaving}>{isSaving ? 'Đang tạo...' : 'Tạo phiếu nhập'}</Button></div>
+          <p className="text-[10px] leading-5 text-muted">Backend sẽ tính tổng tiền và lưu phiếu ở trạng thái chờ xử lý; tồn kho chỉ tăng sau khi xác nhận nhận hàng.</p>
+          <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="secondary" disabled={isSaving} onClick={() => setFormOpen(false)}>Hủy</Button><Button type="submit" disabled={isSaving || !currentEmployee}>{isSaving ? 'Đang tạo...' : 'Tạo phiếu nhập'}</Button></div>
         </form>
       </Modal>
 

@@ -4,6 +4,7 @@ import com.nhom4.QuanLyTiemBanhNgot.dto.employee.EmployeeOptionResponse;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Employee;
 import com.nhom4.QuanLyTiemBanhNgot.service.EmployeeService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,12 +23,8 @@ public class EmployeeController {
 
     @GetMapping("/options")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','STAFF')")
-    public List<EmployeeOptionResponse> getOptions() {
-        return employeeService.getAll().stream()
-                .filter(employee -> Boolean.TRUE.equals(employee.getStatus()))
-                .map(employee -> new EmployeeOptionResponse(
-                        employee.getId(), employee.getFullName()))
-                .toList();
+    public List<EmployeeOptionResponse> getOptions(Authentication authentication) {
+        return employeeService.getActiveOptions(authentication.getName());
     }
 
     @GetMapping

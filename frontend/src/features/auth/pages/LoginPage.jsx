@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { apiRequest } from '../../../services/apiClient.js'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -18,11 +19,18 @@ export default function LoginPage() {
       const { account } = await apiRequest('/auth/login', {
         method: 'POST',
         body: { username: username.trim(), password },
-        headers: { 'X-CSRF-Token': csrfToken },
+        headers: {
+          'X-CSRF-Token': csrfToken,
+          'X-XSRF-TOKEN': csrfToken,
+        },
       })
 
       const roleCode = (account?.roleCode || '').toUpperCase()
-      navigate(roleCode === 'CUSTOMER' ? '/shop' : '/admin', { replace: true })
+      const requestedPath = location.state?.from?.pathname
+      const returnPath = roleCode === 'CUSTOMER' && requestedPath?.startsWith('/shop/')
+        ? requestedPath
+        : null
+      navigate(roleCode === 'CUSTOMER' ? returnPath || '/shop' : '/admin', { replace: true })
     } catch (err) {
       setError(err.message || 'Đăng nhập chưa thành công. Vui lòng thử lại.')
     } finally {

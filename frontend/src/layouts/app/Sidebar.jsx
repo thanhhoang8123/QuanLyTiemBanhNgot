@@ -36,6 +36,14 @@ const navigationGroups = [
       { path: '/admin/promotion-products', label: 'Sản phẩm áp dụng', icon: 'package' },
     ],
   },
+  {
+    id: 'logs',
+    label: 'Nhật ký & lịch sử',
+    icon: 'receipt',
+    items: [
+      { path: '/admin/logs', label: 'Nhật ký NoSQL', icon: 'receipt' },
+    ],
+  },
 ]
 
 export default function Sidebar({ account, open, onClose }) {

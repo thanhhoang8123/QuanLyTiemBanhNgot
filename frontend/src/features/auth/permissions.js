@@ -17,7 +17,8 @@ export function canAccessPath(roleCode, path) {
       || path.startsWith('/admin/suppliers')
       || path.startsWith('/admin/purchase-orders')
       || path.startsWith('/admin/promotions')
-      || path.startsWith('/admin/promotion-products')) {
+      || path.startsWith('/admin/promotion-products')
+      || path.startsWith('/admin/logs')) {
     return MANAGER_ROLES.includes(normalizedRole)
   }
   if (path === '/admin' || path === '/pos'

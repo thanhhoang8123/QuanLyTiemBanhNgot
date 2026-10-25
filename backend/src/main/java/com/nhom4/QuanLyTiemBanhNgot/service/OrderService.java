@@ -2,6 +2,7 @@ package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.CreateOrderItemRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.CreateOrderRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.CustomerOrderRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderItemResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderItemUpdateRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteItemResponse;
@@ -148,6 +149,27 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
+    public List<OrderResponse> findByCustomerId(Long customerId) {
+        List<Order> orders = orderRepository.findByCustomer_IdOrderByOrderDateDesc(customerId);
+        return toResponses(orders);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderResponse findByIdAndCustomerId(Long id, Long customerId) {
+        Order order = orderRepository.findByIdAndCustomer_Id(id, customerId)
+                .orElseThrow(() -> notFound("Không tìm thấy đơn hàng", id));
+        return toResponse(order, orderItemRepository.findByOrder_Id(id));
+    }
+
+    @Transactional(readOnly = true)
+    public OrderResponse findByCustomerIdAndRequestKey(Long customerId, String customerRequestKey) {
+        Order order = orderRepository
+                .findByCustomer_IdAndCustomerRequestKey(customerId, customerRequestKey)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy đơn hàng"));
+        return toResponse(order, orderItemRepository.findByOrder_Id(order.getId()));
+    }
+
+    @Transactional(readOnly = true)
     public OrderQuoteResponse quote(OrderQuoteRequest request) {
         validateItems(request == null ? null : request.items());
         Map<Long, Product> productsById = loadProducts(request.items(), false);
@@ -171,6 +193,79 @@ public class OrderService {
         requireActive(customer.getStatus(), "Khách hàng");
         requireActive(employee.getStatus(), "Nhân viên");
 
+        return createOrder(
+                request,
+                customer,
+                employee,
+                null,
+                true
+        );
+    }
+
+    @Transactional
+    public OrderResponse createForAuthenticatedEmployee(CreateOrderRequest request, String username) {
+        Employee currentEmployee = employeeRepository.findByAccount_UsernameAndStatusTrue(username)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Tài khoản đăng nhập chưa được liên kết với hồ sơ nhân viên đang hoạt động"
+                ));
+        if (request == null || !currentEmployee.getId().equals(request.employeeId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Chỉ được tạo đơn bằng hồ sơ nhân viên của tài khoản đang đăng nhập"
+            );
+        }
+        return create(request);
+    }
+
+    @Transactional
+    public OrderResponse createCustomerOrder(
+            Customer customer,
+            CustomerOrderRequest request,
+            String customerRequestKey) {
+        if (request == null || customer == null || customer.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thông tin đặt hàng không hợp lệ");
+        }
+        requireActive(customer.getStatus(), "Khách hàng");
+        validateCustomerOrderRequest(request);
+
+        Order existingOrder = orderRepository
+                .findByCustomer_IdAndCustomerRequestKey(customer.getId(), customerRequestKey)
+                .orElse(null);
+        if (existingOrder != null) {
+            List<OrderItem> existingItems = orderItemRepository.findByOrder_Id(existingOrder.getId());
+            if (!matchesCustomerOrder(existingOrder, existingItems, request)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Khóa yêu cầu đặt hàng đã được sử dụng cho dữ liệu khác"
+                );
+            }
+            return toResponse(existingOrder, existingItems);
+        }
+
+        CreateOrderRequest orderRequest = new CreateOrderRequest(
+                customer.getId(),
+                null,
+                request.deliveryAddress(),
+                request.items(),
+                request.promotionCode(),
+                request.note()
+        );
+        return createOrder(
+                orderRequest,
+                customer,
+                null,
+                customerRequestKey,
+                false
+        );
+    }
+
+    private OrderResponse createOrder(
+            CreateOrderRequest request,
+            Customer customer,
+            Employee employee,
+            String customerRequestKey,
+            boolean sendConfirmationEmail) {
         validateUniqueProducts(request.items());
         Map<Long, Product> productsById = loadProducts(request.items(), true);
         List<PromotionLine> lines = promotionLines(request.items(), productsById);
@@ -200,6 +295,7 @@ public class OrderService {
         );
         order.setNote(normalizeOptionalText(request.note()));
         order.setStockReserved(true);
+        order.setCustomerRequestKey(customerRequestKey);
 
         // Lưu trước để database cấp ID; ID giúp sinh mã khác nhau cho các đơn tạo đồng thời.
         order = orderRepository.saveAndFlush(order);
@@ -238,7 +334,9 @@ public class OrderService {
         List<OrderItem> savedItems = orderItemRepository.saveAll(orderItems);
         orderStatusHistoryService.recordStatusChangeAfterCommit(
                 order.getId(), null, "PENDING", "Tạo đơn hàng");
-        orderConfirmationEmailService.sendOrderConfirmation(order, savedItems);
+        if (sendConfirmationEmail) {
+            orderConfirmationEmailService.sendOrderConfirmation(order, savedItems);
+        }
         return toResponse(order, savedItems);
     }
 
@@ -444,6 +542,56 @@ public class OrderService {
             }
         }
         return productsById;
+    }
+
+    private void validateCustomerOrderRequest(CustomerOrderRequest request) {
+        if (request.deliveryAddress() != null && request.deliveryAddress().length() > 255) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Địa chỉ giao hàng không được vượt quá 255 ký tự"
+            );
+        }
+        if (request.note() != null && request.note().length() > 500) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ghi chú đơn hàng không được vượt quá 500 ký tự"
+            );
+        }
+        validateItems(request.items());
+    }
+
+    private boolean matchesCustomerOrder(
+            Order order,
+            List<OrderItem> existingItems,
+            CustomerOrderRequest request) {
+        if (!java.util.Objects.equals(
+                normalizeOptionalText(order.getDeliveryAddress()),
+                normalizeOptionalText(request.deliveryAddress()))
+                || !java.util.Objects.equals(
+                normalizeOptionalText(order.getNote()),
+                normalizeOptionalText(request.note()))
+                || !normalizeOptionalCode(order.getPromotionCodeSnapshot())
+                .equals(normalizeOptionalCode(request.promotionCode()))) {
+            return false;
+        }
+
+        Map<Long, Integer> savedQuantities = new HashMap<>();
+        for (OrderItem item : existingItems) {
+            if (item.getProduct() == null || item.getProduct().getId() == null) {
+                return false;
+            }
+            savedQuantities.put(item.getProduct().getId(), item.getQuantity());
+        }
+        Map<Long, Integer> requestedQuantities = new HashMap<>();
+        for (CreateOrderItemRequest item : request.items()) {
+            requestedQuantities.put(item.productId(), item.quantity());
+        }
+        return savedQuantities.equals(requestedQuantities);
+    }
+
+    private String normalizeOptionalCode(String value) {
+        String normalized = normalizeOptionalText(value);
+        return normalized == null ? "" : normalized.toUpperCase(Locale.ROOT);
     }
 
     private List<PromotionLine> promotionLines(
@@ -759,6 +907,31 @@ public class OrderService {
                 orderItems,
                 totalAmount.subtract(discountAmount)
         );
+    }
+
+    private List<OrderResponse> toResponses(List<Order> orders) {
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> orderIds = orders.stream()
+                .map(Order::getId)
+                .toList();
+        Map<Long, List<OrderItem>> itemsByOrderId = new HashMap<>();
+        for (OrderItem item : orderItemRepository.findByOrder_IdIn(orderIds)) {
+            if (item.getOrder() == null || item.getOrder().getId() == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Chi tiết đơn hàng không liên kết với đơn hàng hợp lệ"
+                );
+            }
+            itemsByOrderId.computeIfAbsent(item.getOrder().getId(), ignored -> new ArrayList<>())
+                    .add(item);
+        }
+
+        return orders.stream()
+                .map(order -> toResponse(order, itemsByOrderId.getOrDefault(order.getId(), List.of())))
+                .toList();
     }
 
     private OrderItem findOrderItemById(Long id) {

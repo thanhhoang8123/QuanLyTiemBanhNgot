@@ -90,6 +90,9 @@ public class Order {
     @Column(name = "stock_reserved", nullable = false)
     private boolean stockReserved;
 
+    @Column(name = "customer_request_key", length = 36)
+    private String customerRequestKey;
+
     /**
      * Thời điểm khách đặt hàng.
      *
