@@ -4,6 +4,24 @@ export function getCustomers({ signal } = {}) {
   return apiRequest('/customers', { signal })
 }
 
+export function getCustomerPage({
+  page = 0,
+  size = 20,
+  keyword = '',
+  sort = 'fullName',
+  direction = 'ASC',
+  signal,
+} = {}) {
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+    sort,
+    direction,
+  })
+  if (keyword.trim()) params.set('keyword', keyword.trim())
+  return apiRequest(`/customers/page?${params}`, { signal })
+}
+
 export function getCustomerById(id, { signal } = {}) {
   return apiRequest(`/customers/${encodeURIComponent(id)}`, { signal })
 }

@@ -30,7 +30,8 @@ build/
 !**/src/test/**/build/
 
 ### VS Code ###
-.vscode/
+.vscode/*
+!.vscode/launch.json
 
 # Frontend - Node.js / Vite
 frontend/node_modules/
@@ -40,6 +41,7 @@ frontend/dist/
 .env
 .env.*
 !.env.example
+backend/.env
 frontend/.env
 frontend/.env.*
 !frontend/.env.example

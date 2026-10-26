@@ -21,10 +21,12 @@ export default function StatCard({ stat }) {
         {stat.value}
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] sm:text-[11px]">
-        <span className="inline-flex items-center gap-0.5 font-bold text-success">
-          <Icon name="arrowUp" size={13} />
-          {stat.change}
-        </span>
+        {stat.change && (
+          <span className="inline-flex items-center gap-0.5 font-bold text-success">
+            <Icon name="arrowUp" size={13} />
+            {stat.change}
+          </span>
+        )}
         <span className="text-muted">{stat.note}</span>
       </div>
     </article>

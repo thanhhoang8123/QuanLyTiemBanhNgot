@@ -2,6 +2,7 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 import com.nhom4.QuanLyTiemBanhNgot.entity.Category;
+import com.nhom4.QuanLyTiemBanhNgot.dto.PageResponse;
 import com.nhom4.QuanLyTiemBanhNgot.service.CategoryService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,16 @@ public class CategoryController {
     @GetMapping
     public List<Category> getAll() {
         return categoryService.getAll();
+    }
+
+    @GetMapping("/page")
+    public PageResponse<Category> getPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "name") String sort,
+            @RequestParam(defaultValue = "ASC") String direction) {
+        return PageResponse.from(categoryService.getPage(page, size, keyword, sort, direction));
     }
 
     @GetMapping("/{id}")

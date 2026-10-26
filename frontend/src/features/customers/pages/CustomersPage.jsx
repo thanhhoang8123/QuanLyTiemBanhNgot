@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Button from '../../../components/Button.jsx'
 import ConfirmDialog from '../../../components/ConfirmDialog.jsx'
 import DataTable from '../../../components/DataTable.jsx'
@@ -7,6 +7,7 @@ import FormField from '../../../components/FormField.jsx'
 import Icon from '../../../components/Icon.jsx'
 import LoadingState from '../../../components/LoadingState.jsx'
 import Modal from '../../../components/Modal.jsx'
+import PaginationControls from '../../../components/PaginationControls.jsx'
 import PageHeader from '../../../components/PageHeader.jsx'
 import SearchFilter from '../../../components/SearchFilter.jsx'
 import StatusBadge from '../../../components/StatusBadge.jsx'
@@ -14,7 +15,7 @@ import {
   createCustomer,
   deleteCustomer,
   getCustomerById,
-  getCustomers,
+  getCustomerPage,
   updateCustomer,
 } from '../services/customerService.js'
 
@@ -62,6 +63,11 @@ function validateCustomerForm(form) {
 export default function CustomersPage({ onToast }) {
   const [customers, setCustomers] = useState([])
   const [query, setQuery] = useState('')
+  const [sort, setSort] = useState('fullName')
+  const [direction, setDirection] = useState('ASC')
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(20)
+  const [pageInfo, setPageInfo] = useState({ totalElements: 0, totalPages: 0 })
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [listError, setListError] = useState('')
@@ -78,21 +84,38 @@ export default function CustomersPage({ onToast }) {
   const [detailError, setDetailError] = useState('')
   const [detailReloadVersion, setDetailReloadVersion] = useState(0)
 
-  const loadCustomers = useCallback(async (signal) => {
+  const loadCustomers = useCallback(async (signal, requestedPage = page) => {
     setIsLoading(true)
     setLoadError('')
     try {
-      const result = await getCustomers({ signal })
-      if (!Array.isArray(result)) {
+      const result = await getCustomerPage({
+        page: requestedPage,
+        size: pageSize,
+        keyword: query,
+        sort,
+        direction,
+        signal,
+      })
+      if (!Array.isArray(result?.content)
+        || !Number.isInteger(result.page)
+        || !Number.isInteger(result.size)
+        || !Number.isInteger(result.totalPages)
+        || !Number.isInteger(result.totalElements)) {
         throw new Error('API không trả về danh sách khách hàng hợp lệ.')
       }
-      setCustomers(result)
+      if (result.totalPages === 0 ? requestedPage > 0 : requestedPage >= result.totalPages) {
+        setPage(result.totalPages === 0 ? 0 : result.totalPages - 1)
+        return
+      }
+      setPage(requestedPage)
+      setCustomers(result.content)
+      setPageInfo(result)
     } catch (error) {
       if (error.name !== 'AbortError') setLoadError(getErrorMessage(error))
     } finally {
       if (!signal?.aborted) setIsLoading(false)
     }
-  }, [])
+  }, [direction, page, pageSize, query, sort])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -119,17 +142,6 @@ export default function CustomersPage({ onToast }) {
 
     return () => controller.abort()
   }, [detailId, detailReloadVersion])
-
-  const filteredCustomers = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase('vi')
-    if (!normalizedQuery) return customers
-
-    return customers.filter((customer) => (
-      `${customer.fullName ?? ''} ${customer.phone ?? ''} ${customer.email ?? ''}`
-        .toLocaleLowerCase('vi')
-        .includes(normalizedQuery)
-    ))
-  }, [customers, query])
 
   const openCreate = () => {
     setEditingCustomer(null)
@@ -179,7 +191,8 @@ export default function CustomersPage({ onToast }) {
 
       setFormOpen(false)
       setEditingCustomer(null)
-      await loadCustomers()
+      if (!editingCustomer) setPage(0)
+      await loadCustomers(undefined, editingCustomer ? page : 0)
     } catch (error) {
       setFormError(getErrorMessage(error))
     } finally {
@@ -290,10 +303,26 @@ export default function CustomersPage({ onToast }) {
 
       <SearchFilter
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => { setQuery(event.target.value); setPage(0) }}
         label="Tìm theo tên, số điện thoại hoặc email"
         placeholder="Nhập tên, số điện thoại hoặc email..."
       />
+      <div className="flex flex-wrap gap-2">
+        <label className="flex items-center gap-2 text-xs text-muted">
+          <span>Sắp xếp theo</span>
+          <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(0) }} className="h-9 rounded-xl border border-border bg-white px-3 text-xs text-rosewood">
+            <option value="fullName">Tên</option>
+            <option value="phone">Điện thoại</option>
+            <option value="email">Email</option>
+            <option value="loyaltyPoints">Điểm tích lũy</option>
+            <option value="status">Trạng thái</option>
+          </select>
+        </label>
+        <select aria-label="Chiều sắp xếp khách hàng" value={direction} onChange={(event) => { setDirection(event.target.value); setPage(0) }} className="h-9 rounded-xl border border-border bg-white px-3 text-xs text-rosewood">
+          <option value="ASC">Tăng dần</option>
+          <option value="DESC">Giảm dần</option>
+        </select>
+      </div>
 
       {isLoading ? (
         <LoadingState label="Đang tải danh sách khách hàng..." />
@@ -303,18 +332,26 @@ export default function CustomersPage({ onToast }) {
         <section className="soft-shadow overflow-hidden rounded-2xl border border-border bg-paper">
           <div className="border-b border-border px-5 py-4">
             <p className="text-xs text-muted">
-              Hiển thị {filteredCustomers.length} / {customers.length} khách hàng
+              Hiển thị {customers.length} / {pageInfo.totalElements} khách hàng
             </p>
           </div>
           <DataTable
             columns={columns}
-            rows={filteredCustomers}
+            rows={customers}
             rowKey={(customer) => customer.id}
             ariaLabel="Danh sách khách hàng"
             emptyTitle={customers.length ? 'Không tìm thấy khách hàng' : 'Chưa có khách hàng'}
             emptyDescription={customers.length
               ? 'Thử tên, số điện thoại hoặc email khác.'
               : 'Thêm khách hàng để bắt đầu quản lý hồ sơ.'}
+          />
+          <PaginationControls
+            page={page}
+            size={pageSize}
+            totalElements={pageInfo.totalElements}
+            totalPages={pageInfo.totalPages}
+            onPageChange={setPage}
+            onSizeChange={(value) => { setPageSize(value); setPage(0) }}
           />
         </section>
       )}
