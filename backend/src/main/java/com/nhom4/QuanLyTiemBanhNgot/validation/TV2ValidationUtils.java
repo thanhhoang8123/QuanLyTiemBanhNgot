@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Locale;
 
 public final class TV2ValidationUtils {
@@ -50,6 +51,16 @@ public final class TV2ValidationUtils {
         }
     }
 
+    private static void checkIntegerDigits(
+            BigDecimal value, int maxIntegerDigits, String field) {
+        if (value != null
+                && value.precision() - value.scale() > maxIntegerDigits) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    field + " vượt quá giới hạn lưu trữ");
+        }
+    }
+
     private static String normalize(String value) {
         return value == null
                 ? ""
@@ -68,6 +79,13 @@ public final class TV2ValidationUtils {
         requireText(ingredient.getIngredientCode(), "Mã nguyên liệu");
         requireText(ingredient.getName(), "Tên nguyên liệu");
         requireText(ingredient.getUnit(), "Đơn vị nguyên liệu");
+        if (ingredient.getStockQuantity() == null
+                || ingredient.getMinStockLevel() == null
+                || ingredient.getUnitPrice() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Tồn kho, mức tồn tối thiểu và đơn giá không được để trống");
+        }
 
         checkLength(ingredient.getIngredientCode(), 30, "Mã nguyên liệu");
         checkLength(ingredient.getName(), 150, "Tên nguyên liệu");
@@ -84,6 +102,11 @@ public final class TV2ValidationUtils {
         checkScale(
                 ingredient.getMinStockLevel(), 3, "Mức tồn kho tối thiểu");
         checkScale(ingredient.getUnitPrice(), 2, "Đơn giá");
+        checkIntegerDigits(
+                ingredient.getStockQuantity(), 12, "Số lượng tồn kho");
+        checkIntegerDigits(
+                ingredient.getMinStockLevel(), 12, "Mức tồn kho tối thiểu");
+        checkIntegerDigits(ingredient.getUnitPrice(), 13, "Đơn giá");
     }
 
     public static void validateIngredientDuplicate(
@@ -201,10 +224,23 @@ public final class TV2ValidationUtils {
                     "Phiếu nhập phải có ít nhất một nguyên liệu");
         }
 
+        java.util.Set<Long> seenIngredientIds = new java.util.HashSet<>();
+        BigDecimal total = BigDecimal.ZERO;
         for (PurchaseOrderCreateRequest.PurchaseOrderItemRequest item
                 : request.items()) {
             validatePurchaseOrderItem(item);
+            if (!seenIngredientIds.add(item.ingredientId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Một phiếu nhập không được chứa cùng nguyên liệu nhiều lần");
+            }
+            BigDecimal lineTotal = item.quantity()
+                    .multiply(item.unitCost())
+                    .setScale(2, RoundingMode.HALF_UP);
+            checkIntegerDigits(lineTotal, 13, "Thành tiền");
+            total = total.add(lineTotal);
         }
+        checkIntegerDigits(total, 13, "Tổng tiền phiếu nhập");
     }
 
     public static void validatePurchaseOrderItem(
@@ -223,6 +259,8 @@ public final class TV2ValidationUtils {
 
         checkScale(item.quantity(), 3, "Số lượng");
         checkScale(item.unitCost(), 2, "Đơn giá");
+        checkIntegerDigits(item.quantity(), 12, "Số lượng");
+        checkIntegerDigits(item.unitCost(), 13, "Đơn giá");
     }
 
     public static void validateReceiveItem(
@@ -239,5 +277,11 @@ public final class TV2ValidationUtils {
                     HttpStatus.BAD_REQUEST,
                     "Số lượng nhận phải lớn hơn 0");
         }
+        checkScale(quantity, 3, "Số lượng nhận");
+        BigDecimal currentStock = ingredient.getStockQuantity() == null
+                ? BigDecimal.ZERO
+                : ingredient.getStockQuantity();
+        checkIntegerDigits(
+                currentStock.add(quantity), 12, "Số lượng tồn sau khi nhận");
     }
 }

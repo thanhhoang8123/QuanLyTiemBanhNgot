@@ -11,3 +11,7 @@ export function createSupplier(supplier) {
 export function updateSupplier(id, supplier) {
   return apiRequest(`/suppliers/${encodeURIComponent(id)}`, { method: 'PUT', body: supplier })
 }
+
+export function deleteSupplier(id) {
+  return apiRequest(`/suppliers/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}

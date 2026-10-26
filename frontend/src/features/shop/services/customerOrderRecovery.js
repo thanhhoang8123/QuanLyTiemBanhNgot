@@ -1,6 +1,6 @@
 function requireOrder(order) {
   if (!order || order.id == null) {
-    throw new Error('API chưa trả về mã đơn hợp lệ để xác nhận kết quả.')
+    throw new Error('Chưa thể xác nhận đơn hàng. Vui lòng kiểm tra lại lịch sử đơn.')
   }
   return order
 }

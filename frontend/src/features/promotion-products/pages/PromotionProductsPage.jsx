@@ -15,6 +15,7 @@ import {
   deletePromotionProduct,
   getPromotionProducts,
 } from '../services/promotionProductService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -23,7 +24,7 @@ const currencyFormatter = new Intl.NumberFormat('vi-VN', {
 })
 
 function getErrorMessage(error) {
-  return error?.message || 'Đã xảy ra lỗi khi xử lý yêu cầu.'
+  return getUserFacingErrorMessage(error)
 }
 
 function promotionName(promotion) {
@@ -72,7 +73,7 @@ export default function PromotionProductsPage({ onToast }) {
         if (!Array.isArray(loadedLinks)
           || !Array.isArray(loadedPromotions)
           || !Array.isArray(loadedProducts)) {
-          throw new Error('API không trả về danh sách liên kết, khuyến mãi hoặc sản phẩm hợp lệ.')
+          throw new Error('Chưa thể tải danh sách sản phẩm khuyến mãi. Vui lòng thử lại.')
         }
 
         setLinks(loadedLinks)
@@ -251,7 +252,7 @@ export default function PromotionProductsPage({ onToast }) {
     <div className="space-y-6">
       <PageHeader
         title="Sản phẩm áp dụng khuyến mãi"
-        description="Quản lý các cặp khuyến mãi - sản phẩm hiện có. Hệ thống sử dụng dữ liệu trực tiếp từ API."
+        description="Quản lý các sản phẩm đang áp dụng trong từng chương trình khuyến mãi."
         actions={(
           <Button
             onClick={openCreateForm}

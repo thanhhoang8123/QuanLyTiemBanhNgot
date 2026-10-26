@@ -11,10 +11,12 @@ import { toProductRequest, toProductViewModel } from '../adapters/productAdapter
 import {
   createProduct,
   deactivateProduct,
-  getProductPage,
+  deleteProduct,
+  getProducts,
   uploadProductImage,
   updateProduct,
 } from '../services/productService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const currency = new Intl.NumberFormat('vi-VN')
 const maxImageSize = 5 * 1024 * 1024
@@ -48,28 +50,13 @@ function Field({ label, children }) {
 }
 
 function getApiMessage(error) {
-  return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
+  return getUserFacingErrorMessage(error)
 }
 
-async function fetchCatalog({ page, size, query, categoryId, status, signal }) {
-  const [categoryData, productData] = await Promise.all([
-    getCategories({ signal }),
-    getProductPage({
-      page,
-      size,
-      keyword: query,
-      categoryId,
-      status,
-      signal,
-    }),
-  ])
-  if (!Array.isArray(categoryData)
-    || !Array.isArray(productData?.content)
-    || !Number.isInteger(productData.page)
-    || !Number.isInteger(productData.size)
-    || !Number.isInteger(productData.totalPages)
-    || !Number.isInteger(productData.totalElements)) {
-    throw new Error('API trả về danh sách danh mục hoặc sản phẩm không hợp lệ.')
+async function fetchCatalog() {
+  const [categoryData, productData] = await Promise.all([getCategories(), getProducts()])
+  if (!Array.isArray(categoryData) || !Array.isArray(productData)) {
+    throw new Error('Chưa thể tải danh sách sản phẩm. Vui lòng thử lại.')
   }
 
   return {
@@ -96,7 +83,7 @@ export default function ProductsPage({ onToast }) {
   const [imageFile, setImageFile] = useState(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState('')
   const [uploadedImageUrl, setUploadedImageUrl] = useState('')
-  const [deactivateTarget, setDeactivateTarget] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [pendingProductId, setPendingProductId] = useState(null)
@@ -166,7 +153,7 @@ export default function ProductsPage({ onToast }) {
       setItems(catalog.products)
       setPageInfo(catalog.page)
     } catch (error) {
-      setSyncError(`Thao tác đã thành công trên máy chủ nhưng danh sách chưa đồng bộ được: ${getApiMessage(error)}`)
+      setSyncError(`Thao tác đã hoàn tất nhưng chưa thể làm mới danh sách. Vui lòng tải lại trang. ${getApiMessage(error)}`)
     }
   }
 
@@ -264,7 +251,7 @@ export default function ProductsPage({ onToast }) {
 
       const payload = toProductRequest({ ...form, imageUrl })
       if (editing) {
-        await updateProduct(editing.id, payload)
+        await updateProduct(editing.id, payload, editing.stock)
       } else {
         await createProduct(payload)
       }
@@ -272,9 +259,8 @@ export default function ProductsPage({ onToast }) {
       setEditing(null)
       setForm(emptyForm)
       clearImageSelection()
-      onToast(editing ? 'Đã cập nhật sản phẩm trên máy chủ.' : 'Đã tạo sản phẩm trên máy chủ.')
-      if (!editing) setPage(0)
-      await syncCatalog(editing ? page : 0)
+      onToast(editing ? 'Đã cập nhật sản phẩm.' : 'Đã thêm sản phẩm.')
+      await syncCatalog()
     } catch (error) {
       const retainedImageUrl = newlyUploadedImageUrl || uploadedImageUrl
       setFormError(retainedImageUrl
@@ -290,7 +276,7 @@ export default function ProductsPage({ onToast }) {
       setSyncError('Sản phẩm đã hết hàng; hãy cập nhật tồn kho trước khi mở bán.')
       return
     }
-    if (!item.categoryId) {
+    if (item.status === 'Tạm ẩn' && !item.categoryId) {
       setSyncError('Không thể cập nhật sản phẩm vì dữ liệu chưa có danh mục hợp lệ.')
       return
     }
@@ -298,19 +284,23 @@ export default function ProductsPage({ onToast }) {
     setPendingProductId(item.id)
     setSyncError('')
     try {
-      await updateProduct(item.id, toProductRequest({
-        name: item.name,
-        code: item.code,
-        categoryId: item.categoryId,
-        price: String(item.price),
-        stock: String(item.stock),
-        status: item.status === 'Đang bán' ? 'Tạm ẩn' : 'Đang bán',
-        description: item.description,
-        imageUrl: item.imageUrl,
-        unit: item.unit,
-        expiryDate: item.expiryDate,
-      }))
-      onToast(`Đã cập nhật trạng thái "${item.name}" trên máy chủ.`)
+      if (item.status === 'Đang bán') {
+        await deactivateProduct(item.id)
+      } else {
+        await updateProduct(item.id, toProductRequest({
+          name: item.name,
+          code: item.code,
+          categoryId: item.categoryId,
+          price: String(item.price),
+          stock: String(item.stock),
+          status: 'Đang bán',
+          description: item.description,
+          imageUrl: item.imageUrl,
+          unit: item.unit,
+          expiryDate: item.expiryDate,
+        }), item.stock)
+      }
+      onToast(`Đã cập nhật trạng thái sản phẩm "${item.name}".`)
       await syncCatalog()
     } catch (error) {
       setSyncError(`Không thể cập nhật trạng thái sản phẩm: ${getApiMessage(error)}`)
@@ -319,18 +309,19 @@ export default function ProductsPage({ onToast }) {
     }
   }
 
-  const deactivate = async () => {
-    if (!deactivateTarget) return
+  const removeProduct = async () => {
+    if (!deleteTarget) return
 
-    setPendingProductId(deactivateTarget.id)
+    setPendingProductId(deleteTarget.id)
     setSyncError('')
     try {
-      await deactivateProduct(deactivateTarget.id)
-      onToast(`Đã ngừng kinh doanh "${deactivateTarget.name}" trên máy chủ.`)
-      setDeactivateTarget(null)
+      await deleteProduct(deleteTarget.id)
+      onToast(`Đã xóa sản phẩm "${deleteTarget.name}".`)
+      setDeleteTarget(null)
       await syncCatalog()
     } catch (error) {
-      setSyncError(`Không thể ngừng kinh doanh sản phẩm: ${getApiMessage(error)}`)
+      setSyncError(`Không thể xóa sản phẩm: ${getApiMessage(error)}`)
+      setDeleteTarget(null)
     } finally {
       setPendingProductId(null)
     }
@@ -369,13 +360,13 @@ export default function ProductsPage({ onToast }) {
       cellClassName: 'text-right',
       render: (item) => (
         <div className="inline-flex items-center gap-1">
-          <button type="button" aria-label={`Sửa ${item.name}`} disabled={pendingProductId === item.id} onClick={() => openEdit(item)} className="flex h-8 w-8 items-center justify-center rounded-lg text-rosewood transition hover:bg-petal disabled:opacity-50">
+          <button type="button" aria-label={`Sửa ${item.name}`} disabled={pendingProductId !== null || isSaving} onClick={() => openEdit(item)} className="flex h-8 w-8 items-center justify-center rounded-lg text-rosewood transition hover:bg-petal disabled:opacity-50">
             <Icon name="edit" size={15} />
           </button>
-          <button type="button" aria-label={item.status === 'Đang bán' ? `Ẩn ${item.name}` : `Mở bán ${item.name}`} disabled={pendingProductId === item.id} onClick={() => toggleStatus(item)} className="rounded-lg px-2 py-1.5 text-[10px] font-semibold text-rosewood transition hover:bg-petal disabled:opacity-50">
+          <button type="button" aria-label={item.status === 'Đang bán' ? `Ẩn ${item.name}` : `Mở bán ${item.name}`} disabled={pendingProductId !== null || isSaving} onClick={() => toggleStatus(item)} className="rounded-lg px-2 py-1.5 text-[10px] font-semibold text-rosewood transition hover:bg-petal disabled:opacity-50">
             {item.status === 'Đang bán' ? 'Ẩn' : 'Mở bán'}
           </button>
-          <button type="button" aria-label={`Ngừng kinh doanh ${item.name}`} disabled={item.status !== 'Đang bán' || pendingProductId === item.id} onClick={() => setDeactivateTarget(item)} className="flex h-8 w-8 items-center justify-center rounded-lg text-danger transition hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="button" aria-label={`Xóa ${item.name}`} disabled={pendingProductId !== null || isSaving} onClick={() => setDeleteTarget(item)} className="flex h-8 w-8 items-center justify-center rounded-lg text-danger transition hover:bg-danger-soft disabled:cursor-not-allowed disabled:opacity-40">
             <Icon name="trash" size={15} />
           </button>
         </div>
@@ -392,7 +383,6 @@ export default function ProductsPage({ onToast }) {
         <div>
           <p className="text-[11px] font-semibold tracking-wide text-muted">Danh mục sản phẩm</p>
           <h2 className="font-display mt-1 text-[28px] text-rosewood sm:text-[32px]">Sản phẩm</h2>
-          <p className="mt-1 text-xs text-muted">Quản lý bánh, giá bán và trạng thái kinh doanh.</p>
         </div>
         <Button onClick={openCreate} disabled={isLoading || Boolean(loadError)}><Icon name="plus" size={16} /> Thêm sản phẩm</Button>
       </div>
@@ -485,7 +475,7 @@ export default function ProductsPage({ onToast }) {
               <input autoFocus required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className={inputClass} placeholder="Ví dụ: Bánh mousse xoài" />
             </Field>
             <Field label="Mã sản phẩm">
-              <input required value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} className={inputClass} placeholder="WA-009" />
+              <input required value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} className={inputClass} placeholder="DF-009" />
             </Field>
             <Field label="Danh mục">
               <select required value={form.categoryId} onChange={(event) => setForm({ ...form, categoryId: event.target.value })} className={inputClass}>
@@ -547,13 +537,13 @@ export default function ProductsPage({ onToast }) {
         </form>
       </Modal>
 
-      <Modal open={Boolean(deactivateTarget)} title="Ngừng kinh doanh sản phẩm?" onClose={() => { if (pendingProductId == null) setDeactivateTarget(null) }} size="max-w-md">
+      <Modal open={Boolean(deleteTarget)} title="Xóa sản phẩm?" onClose={() => { if (pendingProductId == null) setDeleteTarget(null) }} size="max-w-md">
         <p className="text-sm leading-6 text-rosewood">
-          Sản phẩm <strong className="text-rosewood">{deactivateTarget?.name}</strong> sẽ được chuyển sang trạng thái tạm ẩn. Dữ liệu sản phẩm không bị xóa.
+          Xóa sản phẩm <strong className="text-rosewood">{deleteTarget?.name}</strong>? Sản phẩm đã có trong đơn hàng sẽ không thể xóa.
         </p>
         <div className="mt-5 flex justify-end gap-2">
-          <Button variant="secondary" disabled={pendingProductId != null} onClick={() => setDeactivateTarget(null)}>Hủy</Button>
-          <Button variant="danger" disabled={pendingProductId != null} onClick={() => void deactivate()}><Icon name="trash" size={15} /> {pendingProductId != null ? 'Đang xử lý...' : 'Ngừng kinh doanh'}</Button>
+          <Button variant="secondary" disabled={pendingProductId != null} onClick={() => setDeleteTarget(null)}>Hủy</Button>
+          <Button variant="danger" disabled={pendingProductId != null} onClick={() => void removeProduct()}><Icon name="trash" size={15} /> {pendingProductId != null ? 'Đang xử lý...' : 'Xóa sản phẩm'}</Button>
         </div>
       </Modal>
     </div>

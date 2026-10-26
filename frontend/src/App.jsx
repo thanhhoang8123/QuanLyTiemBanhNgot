@@ -94,7 +94,6 @@ function RequireAuth({ children, allowedRoles = STAFF_ROLES }) {
 export default function App() {
   const [toast, setToast] = useState('')
   const [posCart, setPosCart] = useState([])
-  const [posPromotionCode, setPosPromotionCode] = useState('')
   const [posNote, setPosNote] = useState('')
 
   const showToast = (message) => {
@@ -130,7 +129,7 @@ export default function App() {
           <Route path="verify-email" element={<VerifyEmailPage />} />
         </Route>
         <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
-          <Route path="admin" element={<DashboardPage onToast={showToast} />} />
+          <Route path="admin" element={<RequireAuth allowedRoles={STAFF_ROLES}><DashboardPage /></RequireAuth>} />
           <Route
             path="admin/accounts"
             element={<RequireAuth allowedRoles={ADMIN_ROLES}><AccountsPage onToast={showToast} /></RequireAuth>}
@@ -154,8 +153,6 @@ export default function App() {
                   onToast={showToast}
                   cart={posCart}
                   onCartChange={setPosCart}
-                  promotionCode={posPromotionCode}
-                  onPromotionCodeChange={setPosPromotionCode}
                   note={posNote}
                   onNoteChange={setPosNote}
                 />

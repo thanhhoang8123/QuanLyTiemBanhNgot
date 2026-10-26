@@ -2,6 +2,8 @@ package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import com.nhom4.QuanLyTiemBanhNgot.document.OrderStatusHistory;
 import com.nhom4.QuanLyTiemBanhNgot.repository.OrderStatusHistoryRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -15,6 +17,8 @@ import java.util.Objects;
 
 @Service
 public class OrderStatusHistoryService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(OrderStatusHistoryService.class);
 
     private final OrderStatusHistoryRepository repository;
     private final MongoAfterCommitWriter afterCommitWriter;
@@ -51,11 +55,21 @@ public class OrderStatusHistoryService {
     }
 
     public List<OrderStatusHistory> findByOrderId(Long orderId) {
-        return repository.findByOrderIdAndNewStatusIsNotNullOrderByCreatedAtDesc(orderId);
+        try {
+            return repository.findByOrderIdAndNewStatusIsNotNullOrderByCreatedAtDesc(orderId);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Unable to read order status history from MongoDB; returning an empty result set.", exception);
+            return List.of();
+        }
     }
 
     public List<OrderStatusHistory> findRecent(int limit) {
-        return repository.findAllByNewStatusIsNotNullOrderByCreatedAtDesc(PageRequest.of(0, limit));
+        try {
+            return repository.findAllByNewStatusIsNotNullOrderByCreatedAtDesc(PageRequest.of(0, limit));
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Unable to read recent order status history from MongoDB; returning an empty result set.", exception);
+            return List.of();
+        }
     }
 
     private String currentUsername() {

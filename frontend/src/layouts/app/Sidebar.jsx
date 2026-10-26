@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react'
 import Icon from '../../components/Icon.jsx'
+
+const roleLabels = {
+  ADMIN: 'Quản trị viên',
+  MANAGER: 'Quản lý',
+  STAFF: 'Nhân viên',
+  CUSTOMER: 'Khách hàng',
+}
 import { NavLink, useLocation } from 'react-router-dom'
 import { canAccessPath } from '../../features/auth/permissions.js'
 
@@ -41,7 +48,7 @@ const navigationGroups = [
     label: 'Nhật ký & lịch sử',
     icon: 'receipt',
     items: [
-      { path: '/admin/logs', label: 'Nhật ký NoSQL', icon: 'receipt' },
+      { path: '/admin/logs', label: 'Nhật ký hoạt động', icon: 'receipt' },
     ],
   },
 ]
@@ -78,7 +85,7 @@ export default function Sidebar({ account, open, onClose }) {
             W
           </div>
           <div>
-            <p className="font-display text-[19px] leading-tight tracking-wide text-rosewood">WA Pâtisserie</p>
+            <p className="font-display text-[19px] leading-tight tracking-wide text-rosewood">Daily Fresh</p>
             <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-muted">Sweet moments</p>
           </div>
         </div>
@@ -192,7 +199,7 @@ export default function Sidebar({ account, open, onClose }) {
           </div>
           <div className="min-w-0">
             <p className="truncate text-xs font-semibold text-rosewood">{account?.username || 'Đang tải...'}</p>
-            <p className="mt-0.5 text-[10px] text-muted">{account?.roleName || account?.roleCode || ''}</p>
+            <p className="mt-0.5 text-[10px] text-muted">{account?.roleName || roleLabels[account?.roleCode] || ''}</p>
           </div>
         </div>
       </aside>

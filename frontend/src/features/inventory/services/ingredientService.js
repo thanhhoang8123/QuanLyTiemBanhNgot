@@ -11,3 +11,7 @@ export function createIngredient(ingredient) {
 export function updateIngredient(id, ingredient) {
   return apiRequest(`/ingredients/${encodeURIComponent(id)}`, { method: 'PUT', body: ingredient })
 }
+
+export function deleteIngredient(id) {
+  return apiRequest(`/ingredients/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}

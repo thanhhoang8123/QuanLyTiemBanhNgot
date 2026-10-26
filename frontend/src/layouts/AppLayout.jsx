@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from './app/Sidebar.jsx'
 import Topbar from './app/Topbar.jsx'
-import { apiRequest } from '../services/apiClient.js'
+import { apiRequest, getUserFacingErrorMessage } from '../services/apiClient.js'
 import { AuthContext } from '../features/auth/AuthContext.js'
 
 const pageTitles = {
@@ -18,7 +18,7 @@ const pageTitles = {
   '/admin/custom-orders': 'Đơn đặt bánh riêng',
   '/admin/promotions': 'Khuyến mãi',
   '/admin/promotion-products': 'Sản phẩm áp dụng khuyến mãi',
-  '/admin/logs': 'Nhật ký hệ thống',
+  '/admin/logs': 'Nhật ký hoạt động',
 }
 
 export default function AppLayout() {
@@ -45,7 +45,7 @@ export default function AppLayout() {
       setAccount(null)
       navigate('/shop/login', { replace: true })
     } catch (error) {
-      setLogoutError(error instanceof Error ? error.message : 'Không thể đăng xuất. Vui lòng thử lại.')
+      setLogoutError(getUserFacingErrorMessage(error, 'Không thể đăng xuất. Vui lòng thử lại.'))
     } finally {
       setIsLoggingOut(false)
     }

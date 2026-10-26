@@ -2,7 +2,6 @@ package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.core.task.TaskRejectedException;
@@ -23,29 +22,25 @@ public class MongoAfterCommitWriter {
     public void execute(String operation, Runnable write) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()
                 || !TransactionSynchronizationManager.isSynchronizationActive()) {
-            throw new IllegalStateException(
-                    "MongoDB audit writes must be scheduled inside a MySQL transaction");
+            LOGGER.warn(
+                    "MongoDB audit write for {} executed outside a DB transaction; persisting synchronously instead.",
+                    operation
+            );
+            try {
+                write.run();
+            } catch (RuntimeException exception) {
+                LOGGER.error("MongoDB write failed for operation: {}", operation, exception);
+            }
+            return;
         }
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
                 try {
-                    mongoAuditTaskExecutor.execute(() -> {
-                        try {
-                            write.run();
-                        } catch (DataAccessException exception) {
-                            LOGGER.error(
-                                    "MongoDB write failed after MySQL commit: {}",
-                                    operation,
-                                    exception);
-                        }
-                    });
-                } catch (TaskRejectedException exception) {
-                    LOGGER.error(
-                            "MongoDB write could not be queued after MySQL commit: {}",
-                            operation,
-                            exception);
+                    write.run();
+                } catch (RuntimeException exception) {
+                    LOGGER.error("MongoDB write failed after MySQL commit: {}", operation, exception);
                 }
             }
         });

@@ -40,6 +40,18 @@ export function quoteOrder(order, { signal } = {}) {
   return apiRequest('/orders/quote', { method: 'POST', body: order, signal })
 }
 
+export function quotePosOrder(order, { signal } = {}) {
+  return apiRequest('/orders/pos-quote', { method: 'POST', body: order, signal })
+}
+
+export function getPromotionSuggestions(items, { signal } = {}) {
+  return apiRequest('/orders/promotion-suggestions', {
+    method: 'POST',
+    body: { items },
+    signal,
+  })
+}
+
 export function cancelOrder(id) {
   return apiRequest(`/orders/${encodeURIComponent(id)}/cancel`, { method: 'POST' })
 }

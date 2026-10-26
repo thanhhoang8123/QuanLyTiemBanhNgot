@@ -7,7 +7,7 @@ import FormField from '../../../components/FormField.jsx'
 import Icon from '../../../components/Icon.jsx'
 import LoadingState from '../../../components/LoadingState.jsx'
 import Modal from '../../../components/Modal.jsx'
-import PaginationControls from '../../../components/PaginationControls.jsx'
+import Pagination, { usePagination } from '../../../components/Pagination.jsx'
 import StatusBadge from '../../../components/StatusBadge.jsx'
 import { getCustomers } from '../../customers/services/customerService.js'
 import { getProducts } from '../../products/services/productService.js'
@@ -21,8 +21,10 @@ import {
   updateOrderItemQuantity,
   getOrderPage,
 } from '../services/orderService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 text-sm text-rosewood outline-none transition focus:border-caramel'
+const emptyOrderItems = []
 const moneyFormat = new Intl.NumberFormat('vi-VN', {
   maximumFractionDigits: 2,
 })
@@ -46,7 +48,7 @@ const emptyForm = {
 }
 
 function getErrorMessage(error) {
-  return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
+  return getUserFacingErrorMessage(error)
 }
 
 function formatMoney(value) {
@@ -65,11 +67,11 @@ function formatDateTime(value) {
 }
 
 function getStatusLabel(status) {
-  return statusLabels[status] ?? status ?? 'Không rõ'
+  return statusLabels[status] ?? 'Đang cập nhật'
 }
 
 function getDeliveryLabel(status) {
-  return deliveryLabels[status] ?? status ?? 'Không rõ'
+  return deliveryLabels[status] ?? 'Đang cập nhật'
 }
 
 function validateForm(form, productsById) {
@@ -143,30 +145,9 @@ export default function OrdersPage({ onToast }) {
     setLoading(true)
     setLoadError('')
     try {
-      const result = await getOrderPage({
-        page: requestedPage,
-        size: pageSize,
-        keyword: query,
-        status: statusFilter,
-        dateFrom,
-        dateTo,
-        sort,
-        direction,
-        signal,
-      })
-      if (!Array.isArray(result?.content)
-        || !Number.isInteger(result.page)
-        || !Number.isInteger(result.size)
-        || !Number.isInteger(result.totalPages)
-        || !Number.isInteger(result.totalElements)) {
-        throw new Error('API danh sách đơn hàng trả về dữ liệu không đúng định dạng.')
-      }
-      if (result.totalPages === 0 ? requestedPage > 0 : requestedPage >= result.totalPages) {
-        setPage(result.totalPages === 0 ? 0 : result.totalPages - 1)
-        return
-      }
-      setOrders(result.content)
-      setPageInfo(result)
+      const result = await getOrders({ signal })
+      if (!Array.isArray(result)) throw new Error('Chưa thể tải danh sách đơn hàng. Vui lòng thử lại.')
+      setOrders(result)
     } catch (error) {
       if (signal?.aborted || error.name === 'AbortError') return
       setLoadError(getErrorMessage(error))
@@ -185,7 +166,7 @@ export default function OrdersPage({ onToast }) {
         getProducts({ signal }),
       ])
       if (![customers, employees, products].every(Array.isArray)) {
-        throw new Error('API khách hàng, nhân viên hoặc sản phẩm trả về dữ liệu không đúng định dạng.')
+        throw new Error('Chưa thể tải dữ liệu tạo đơn. Vui lòng thử lại.')
       }
       setCatalogs({
         customers,
@@ -267,12 +248,35 @@ export default function OrdersPage({ onToast }) {
     [catalogs.products],
   )
 
-  const filteredOrders = orders
-  const activeOrders = orders.filter((order) => (
+  const filteredOrders = useMemo(() => orders.filter((order) => {
+    const customer = customersById.get(order.customerId)
+    const searchValue = [
+      order.orderCode,
+      customer?.fullName,
+      customer?.phone,
+    ].filter(Boolean).join(' ').toLocaleLowerCase('vi')
+    const dateKey = getDateKey(order.orderDate)
+
+    return searchValue.includes(query.trim().toLocaleLowerCase('vi'))
+      && (!statusFilter || order.status === statusFilter)
+      && (!dateFrom || dateKey >= dateFrom)
+      && (!dateTo || dateKey <= dateTo)
+  }), [orders, customersById, query, statusFilter, dateFrom, dateTo])
+
+  const now = new Date()
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-')
+  const todayOrders = orders.filter((order) => getDateKey(order.orderDate) === today)
+  const activeOrders = todayOrders.filter((order) => (
     order.status === 'PENDING' || order.status === 'CONFIRMED'
   ))
-  const completedOrders = orders.filter((order) => order.status === 'COMPLETED')
-  const cancelledOrders = orders.filter((order) => order.status === 'CANCELLED')
+  const completedOrders = todayOrders.filter((order) => order.status === 'COMPLETED')
+  const revenue = todayOrders
+    .filter((order) => order.status === 'CONFIRMED' || order.status === 'COMPLETED')
+    .reduce((sum, order) => sum + Number(order.finalAmount ?? 0), 0)
 
   const estimatedTotal = form.items.reduce((sum, item) => {
     const product = productsById.get(Number(item.productId))
@@ -360,7 +364,7 @@ export default function OrdersPage({ onToast }) {
       await loadCatalogs()
       setEditingOrderItemId(null)
       setQuantityDraft('')
-      onToast(`Đã cập nhật số lượng và đồng bộ tổng tiền đơn ${refreshedOrder.orderCode}.`)
+      onToast(`Đã cập nhật số lượng và tổng tiền đơn ${refreshedOrder.orderCode}.`)
     } catch (error) {
       setOrderItemError(updateSucceeded
         ? `Số lượng đã được lưu nhưng không tải lại được tổng tiền: ${getErrorMessage(error)}`
@@ -486,6 +490,7 @@ export default function OrdersPage({ onToast }) {
 
   const displayedOrder = selectedOrder
     ?? orders.find((order) => order.id === selectedOrderId)
+  const orderItemPagination = usePagination(displayedOrder?.items ?? emptyOrderItems)
 
   return (
     <div className="space-y-6">
@@ -505,10 +510,10 @@ export default function OrdersPage({ onToast }) {
 
       <section aria-label="Tổng quan đơn hàng phù hợp" className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 2xl:grid-cols-4">
         {[
-          { label: 'Đơn phù hợp', value: pageInfo.totalElements, icon: 'receipt' },
-          { label: 'Đang xử lý trên trang', value: activeOrders.length, icon: 'clock' },
-          { label: 'Hoàn tất trên trang', value: completedOrders.length, icon: 'check' },
-          { label: 'Đã hủy trên trang', value: cancelledOrders.length, icon: 'receipt' },
+          { label: 'Đơn trong ngày', value: todayOrders.length, icon: 'receipt' },
+          { label: 'Đang xử lý', value: activeOrders.length, icon: 'clock' },
+          { label: 'Hoàn tất', value: completedOrders.length, icon: 'check' },
+          { label: 'Doanh thu đã thanh toán', value: formatMoney(revenue), icon: 'trending-up' },
         ].map((stat) => (
           <article key={stat.label} className="soft-shadow flex items-center justify-between rounded-2xl border border-border bg-paper p-4 sm:p-5">
             <div className="min-w-0">
@@ -688,7 +693,7 @@ export default function OrdersPage({ onToast }) {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <h3 className="text-sm font-semibold text-rosewood">Sản phẩm</h3>
-                      <p className="mt-1 text-[11px] text-muted">Giá bên dưới chỉ để tham khảo; server tự lấy giá chính thức.</p>
+                      <p className="mt-1 text-[11px] text-muted">Đơn giá chính thức sẽ được áp dụng khi tạo đơn.</p>
                     </div>
                     <Button
                       type="button"
@@ -838,7 +843,7 @@ export default function OrdersPage({ onToast }) {
                 <div>
                   <h3 className="font-display text-base font-semibold text-rosewood">Sản phẩm trong đơn</h3>
                   <div className="mt-2 divide-y divide-border rounded-xl border border-border bg-white px-4">
-                    {(displayedOrder.items ?? []).map((item) => (
+                    {orderItemPagination.pageItems.map((item) => (
                       <div key={item.id} className="flex flex-col gap-2 py-3 text-[11px] sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <p className="font-semibold text-rosewood">
@@ -902,6 +907,13 @@ export default function OrdersPage({ onToast }) {
                         </div>
                       </div>
                     ))}
+                    <Pagination
+                      currentPage={orderItemPagination.currentPage}
+                      pageSize={orderItemPagination.pageSize}
+                      totalItems={orderItemPagination.totalItems}
+                      onPageChange={orderItemPagination.setCurrentPage}
+                      onPageSizeChange={orderItemPagination.setPageSize}
+                    />
                     {orderItemError && (
                       <p role="alert" className="border-t border-border py-3 text-xs text-danger">
                         {orderItemError}
@@ -969,7 +981,7 @@ export default function OrdersPage({ onToast }) {
         open={cancelTarget != null}
         title="Hủy đơn hàng?"
         description={cancelTarget
-          ? `Đơn ${cancelTarget.orderCode} sẽ chuyển sang CANCELLED. Nếu đơn đã giữ tồn kho, số lượng sẽ được hoàn lại. Payment chưa thành công sẽ bị xóa.`
+          ? `Bạn có chắc chắn muốn hủy đơn ${cancelTarget.orderCode} không? Số lượng đã giữ sẽ được hoàn lại kho; khoản thanh toán chưa hoàn tất sẽ bị gỡ khỏi đơn.`
           : ''}
         confirmLabel="Hủy đơn"
         onConfirm={confirmCancelOrder}

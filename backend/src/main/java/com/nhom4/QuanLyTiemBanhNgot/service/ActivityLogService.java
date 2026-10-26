@@ -2,6 +2,8 @@ package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import com.nhom4.QuanLyTiemBanhNgot.document.ActivityLog;
 import com.nhom4.QuanLyTiemBanhNgot.repository.ActivityLogRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -15,6 +17,8 @@ import java.util.List;
 @Service
 public class ActivityLogService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ActivityLogService.class);
+
     private final ActivityLogRepository repository;
     private final MongoAfterCommitWriter afterCommitWriter;
 
@@ -26,7 +30,12 @@ public class ActivityLogService {
     }
 
     public List<ActivityLog> findRecent(int limit) {
-        return repository.findAllByOrderByCreatedAtDesc(PageRequest.of(0, limit));
+        try {
+            return repository.findAllByOrderByCreatedAtDesc(PageRequest.of(0, limit));
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Unable to read activity logs from MongoDB; returning an empty result set.", exception);
+            return List.of();
+        }
     }
 
     public void recordPurchaseOrderStatusAfterCommit(

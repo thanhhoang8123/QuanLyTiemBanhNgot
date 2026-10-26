@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import Pagination, { usePagination } from '../../../components/Pagination.jsx'
 import {
   getVnPayReturnTransactionReference,
   isVnPayReturn,
@@ -8,33 +9,27 @@ import {
   getCustomerVnPayPaymentStatus,
   reconcileCustomerVnPayPayment,
 } from '../services/customerOrderService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
+
+const orderStatusLabels = {
+  PENDING: 'Chờ xác nhận',
+  CONFIRMED: 'Đã xác nhận',
+  COMPLETED: 'Hoàn tất',
+  CANCELLED: 'Đã hủy',
+}
 
 const moneyFormat = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
   currency: 'VND',
   maximumFractionDigits: 0,
 })
-const statusPollDelays = [1000, 2000, 4000]
-
-function getOrderStatusLabel(status) {
-  const labels = {
-    PENDING: 'Đang xử lý',
-    CONFIRMED: 'Đã xác nhận',
-    PROCESSING: 'Đang chuẩn bị',
-    PREPARING: 'Đang chuẩn bị',
-    READY: 'Sẵn sàng nhận',
-    COMPLETED: 'Hoàn tất',
-    DELIVERED: 'Đã giao',
-    CANCELLED: 'Đã hủy',
-    CANCELED: 'Đã hủy',
-  }
-  return labels[status] || 'Đang cập nhật'
-}
+const emptyItems = []
 
 export default function ShopOrderResultPage() {
   const location = useLocation()
   const { state, search } = location
   const order = state?.order
+  const itemPagination = usePagination(order?.items ?? emptyItems)
   const hasVnPayReturn = isVnPayReturn(search)
   const transactionReference = getVnPayReturnTransactionReference(search)
   const [paymentStatus, setPaymentStatus] = useState(null)
@@ -78,7 +73,7 @@ export default function ShopOrderResultPage() {
         } else if (error.status === 404) {
           setStatusError('Không tìm thấy giao dịch. Vui lòng kiểm tra lịch sử đơn hàng.')
         } else {
-          setStatusError('Chưa thể kiểm tra thanh toán lúc này. Vui lòng thử lại sau.')
+          setStatusError(getUserFacingErrorMessage(error, 'Chưa thể tải trạng thái thanh toán.'))
         }
       } finally {
         if (active) setStatusLoading(false)
@@ -109,7 +104,7 @@ export default function ShopOrderResultPage() {
       const result = await reconcileCustomerVnPayPayment(transactionReference)
       if (result?.payment) setPaymentStatus(result.payment)
       setReconciliationMessage(
-        result?.message || 'Đã kiểm tra giao dịch với VNPay.',
+        result?.message || 'Đã kiểm tra kết quả thanh toán.',
       )
     } catch (error) {
       if (error.status === 401) {
@@ -119,7 +114,10 @@ export default function ShopOrderResultPage() {
       } else if (error.status === 404) {
         setReconciliationError('Không tìm thấy giao dịch. Vui lòng kiểm tra lịch sử đơn hàng.')
       } else {
-        setReconciliationError('Chưa thể kiểm tra giao dịch lúc này. Trạng thái đơn chưa thay đổi; vui lòng thử lại sau.')
+        setReconciliationError(getUserFacingErrorMessage(
+          error,
+          'Không thể kiểm tra giao dịch với VNPay lúc này. Trạng thái đơn chưa thay đổi.',
+        ))
       }
     } finally {
       setReconciliationLoading(false)
@@ -130,30 +128,39 @@ export default function ShopOrderResultPage() {
     <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7 sm:py-16">
       {hasVnPayReturn ? (
         <div role="status" className="rounded-3xl border border-[#EAE3DA] bg-white p-7 text-center shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-10">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">VNPay Sandbox</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Thanh toán thử nghiệm VNPay</p>
           <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B]">
             {verifiedSuccess
-              ? 'Thanh toán thành công'
+              ? 'Giao dịch thử nghiệm thành công'
               : verifiedFailure
-                ? 'Thanh toán chưa thành công'
+                ? 'Giao dịch thử nghiệm chưa thành công'
                 : reconciliationRequired
                   ? 'Giao dịch cần được đối soát'
                   : 'Đang xác minh thanh toán'}
           </h1>
           <p className="mt-3 text-sm leading-6 text-[#806B65]">
             {verifiedSuccess
-                ? 'Thanh toán đã được xác nhận. Cảm ơn bạn đã đặt hàng.'
+              ? 'Kết quả thử nghiệm đã được xác nhận. Giao dịch này không phát sinh thanh toán thật.'
               : verifiedFailure
-                  ? 'Giao dịch chưa thành công. Vui lòng kiểm tra đơn hàng trước khi thanh toán lại.'
+                ? 'Giao dịch thử nghiệm chưa thành công. Bạn có thể kiểm tra đơn hàng hoặc liên hệ cửa hàng.'
                 : reconciliationRequired
-                  ? 'Giao dịch đang được cửa hàng kiểm tra. Đơn hàng chưa được xác nhận thanh toán.'
-                      : 'Đang kiểm tra kết quả thanh toán. Vui lòng không thanh toán lại trong lúc này.'}
+                  ? 'Giao dịch đang được cửa hàng kiểm tra trước khi xác nhận đơn.'
+                    : 'Chưa thể xác nhận kết quả giao dịch. Vui lòng kiểm tra lại trạng thái đơn hàng.'}
           </p>
           {paymentStatus && (
             <dl className="mx-auto mt-5 grid max-w-md gap-2 rounded-2xl bg-[#FCF9F3] p-4 text-left text-xs text-[#675650]">
               <div className="flex justify-between gap-3"><dt>Mã đơn</dt><dd className="font-semibold">#{paymentStatus.orderId}</dd></div>
-              <div className="flex justify-between gap-3"><dt>Đơn hàng</dt><dd className="font-semibold">{getOrderStatusLabel(paymentStatus.orderStatus)}</dd></div>
-              <div className="flex justify-between gap-3"><dt>Thanh toán</dt><dd className="font-semibold">{paymentStatus.paymentStatus === 'SUCCESS' ? 'Đã thanh toán' : paymentStatus.paymentStatus === 'FAILED' ? 'Chưa thành công' : 'Đang xử lý'}</dd></div>
+              <div className="flex justify-between gap-3"><dt>Trạng thái đơn</dt><dd className="font-semibold">{{
+                PENDING: 'Chờ xác nhận',
+                CONFIRMED: 'Đã xác nhận',
+                COMPLETED: 'Hoàn tất',
+                CANCELLED: 'Đã hủy',
+              }[paymentStatus.orderStatus] ?? 'Đang cập nhật'}</dd></div>
+              <div className="flex justify-between gap-3"><dt>Thanh toán</dt><dd className="font-semibold">{{
+                PENDING: 'Đang chờ xác nhận',
+                SUCCESS: 'Đã xác nhận',
+                FAILED: 'Chưa thành công',
+              }[paymentStatus.paymentStatus] ?? 'Đang cập nhật'}</dd></div>
               {paymentStatus.paidAt && <div className="flex justify-between gap-3"><dt>Thời điểm thanh toán</dt><dd>{new Date(paymentStatus.paidAt).toLocaleString('vi-VN')}</dd></div>}
             </dl>
           )}
@@ -216,7 +223,7 @@ export default function ShopOrderResultPage() {
             </div>
             <div>
               <dt className="text-xs text-[#806B65]">Trạng thái đơn</dt>
-              <dd className="mt-1 font-medium text-[#4A302B]">{order.status || 'Chờ xử lý'}</dd>
+              <dd className="mt-1 font-medium text-[#4A302B]">{orderStatusLabels[order.status] ?? 'Chờ xác nhận'}</dd>
             </div>
             <div>
               <dt className="text-xs text-[#806B65]">Tổng cần thanh toán</dt>
@@ -230,13 +237,20 @@ export default function ShopOrderResultPage() {
             <div className="mt-5 border-t border-[#EAE3DA] pt-4 text-left">
               <h2 className="font-display text-lg text-[#4A302B]">Sản phẩm</h2>
               <ul className="mt-3 space-y-2">
-                {order.items.map((item) => (
+                {itemPagination.pageItems.map((item) => (
                   <li key={item.id ?? `${item.productId}-${item.productName}`} className="flex justify-between gap-3 text-xs">
                     <span className="text-[#806B65]">{item.productName} × {item.quantity}</span>
                     <span className="whitespace-nowrap font-medium text-[#4A302B]">{moneyFormat.format(Number(item.lineTotal ?? 0))}</span>
                   </li>
                 ))}
               </ul>
+              <Pagination
+                currentPage={itemPagination.currentPage}
+                pageSize={itemPagination.pageSize}
+                totalItems={itemPagination.totalItems}
+                onPageChange={itemPagination.setCurrentPage}
+                onPageSizeChange={itemPagination.setPageSize}
+              />
             </div>
           )}
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">

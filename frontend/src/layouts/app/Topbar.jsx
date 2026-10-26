@@ -1,5 +1,12 @@
 import Icon from '../../components/Icon.jsx'
 
+const roleLabels = {
+  ADMIN: 'Quản trị viên',
+  MANAGER: 'Quản lý',
+  STAFF: 'Nhân viên',
+  CUSTOMER: 'Khách hàng',
+}
+
 export default function Topbar({
   title,
   account,
@@ -28,7 +35,7 @@ export default function Topbar({
           <Icon name="menu" size={19} />
         </button>
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted">WA Pâtisserie</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted">Daily Fresh</p>
           <h1 className="font-display mt-0.5 text-lg font-semibold text-rosewood sm:text-xl">{title}</h1>
         </div>
       </div>
@@ -51,7 +58,7 @@ export default function Topbar({
             {account?.username || 'Tài khoản'}
           </p>
           <p className="text-[10px] text-muted">
-            {account?.roleName || account?.roleCode || ''}
+            {account?.roleName || roleLabels[account?.roleCode] || ''}
           </p>
         </div>
         <button
