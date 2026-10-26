@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Button from '../../../components/Button.jsx'
 import DataTable from '../../../components/DataTable.jsx'
 import Icon from '../../../components/Icon.jsx'
 import Modal from '../../../components/Modal.jsx'
+import PaginationControls from '../../../components/PaginationControls.jsx'
 import { ProductArtwork } from '../components/ProductArtwork.jsx'
 import StatusBadge from '../../../components/StatusBadge.jsx'
 import { getCategories } from '../../categories/services/categoryService.js'
@@ -10,7 +11,7 @@ import { toProductRequest, toProductViewModel } from '../adapters/productAdapter
 import {
   createProduct,
   deactivateProduct,
-  getProducts,
+  getProductPage,
   uploadProductImage,
   updateProduct,
 } from '../services/productService.js'
@@ -50,15 +51,31 @@ function getApiMessage(error) {
   return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
 }
 
-async function fetchCatalog() {
-  const [categoryData, productData] = await Promise.all([getCategories(), getProducts()])
-  if (!Array.isArray(categoryData) || !Array.isArray(productData)) {
+async function fetchCatalog({ page, size, query, categoryId, status, signal }) {
+  const [categoryData, productData] = await Promise.all([
+    getCategories({ signal }),
+    getProductPage({
+      page,
+      size,
+      keyword: query,
+      categoryId,
+      status,
+      signal,
+    }),
+  ])
+  if (!Array.isArray(categoryData)
+    || !Array.isArray(productData?.content)
+    || !Number.isInteger(productData.page)
+    || !Number.isInteger(productData.size)
+    || !Number.isInteger(productData.totalPages)
+    || !Number.isInteger(productData.totalElements)) {
     throw new Error('API trả về danh sách danh mục hoặc sản phẩm không hợp lệ.')
   }
 
   return {
     categories: categoryData,
-    products: productData.map(toProductViewModel),
+    page: productData,
+    products: productData.content.map(toProductViewModel),
   }
 }
 
@@ -68,6 +85,11 @@ export default function ProductsPage({ onToast }) {
   const [query, setQuery] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [status, setStatus] = useState('Tất cả trạng thái')
+  const [sort, setSort] = useState('name')
+  const [direction, setDirection] = useState('ASC')
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(20)
+  const [pageInfo, setPageInfo] = useState({ totalElements: 0, totalPages: 0 })
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptyForm)
@@ -86,37 +108,63 @@ export default function ProductsPage({ onToast }) {
     if (imagePreviewUrl.startsWith('blob:')) URL.revokeObjectURL(imagePreviewUrl)
   }, [imagePreviewUrl])
 
-  const loadCatalog = useCallback(async () => {
+  const loadCatalog = useCallback(async (signal) => {
     setIsLoading(true)
     setLoadError('')
     try {
-      const catalog = await fetchCatalog()
+      const catalog = await fetchCatalog({
+        page,
+        size: pageSize,
+        query,
+        categoryId,
+        status: status === 'Tất cả trạng thái' ? '' : status === 'Đang bán',
+        sort,
+        direction,
+        signal,
+      })
+      if (catalog.page.totalPages === 0 ? page > 0 : page >= catalog.page.totalPages) {
+        setPage(catalog.page.totalPages === 0 ? 0 : catalog.page.totalPages - 1)
+        return
+      }
       setCategories(catalog.categories)
       setItems(catalog.products)
+      setPageInfo(catalog.page)
     } catch (error) {
+      if (signal?.aborted || error.name === 'AbortError') return
       setLoadError(getApiMessage(error))
     } finally {
-      setIsLoading(false)
+      if (!signal?.aborted) setIsLoading(false)
     }
-  }, [])
+  }, [categoryId, direction, page, pageSize, query, sort, status])
 
   useEffect(() => {
-    void loadCatalog()
+    const controller = new AbortController()
+    void loadCatalog(controller.signal)
+    return () => controller.abort()
   }, [loadCatalog])
 
-  const filteredItems = useMemo(() => items.filter((item) => {
-    const matchesQuery = `${item.name} ${item.code}`.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi'))
-    return matchesQuery
-      && (!categoryId || item.categoryId === categoryId)
-      && (status === 'Tất cả trạng thái' || item.status === status)
-  }), [items, query, categoryId, status])
+  const filteredItems = items
 
-  const syncCatalog = async () => {
+  const syncCatalog = async (requestedPage = page) => {
     setSyncError('')
     try {
-      const catalog = await fetchCatalog()
+      const catalog = await fetchCatalog({
+        page: requestedPage,
+        size: pageSize,
+        query,
+        categoryId,
+        status: status === 'Tất cả trạng thái' ? '' : status === 'Đang bán',
+        sort,
+        direction,
+      })
+      if (catalog.page.totalPages === 0 ? requestedPage > 0 : requestedPage >= catalog.page.totalPages) {
+        setPage(catalog.page.totalPages === 0 ? 0 : catalog.page.totalPages - 1)
+        return
+      }
+      setPage(requestedPage)
       setCategories(catalog.categories)
       setItems(catalog.products)
+      setPageInfo(catalog.page)
     } catch (error) {
       setSyncError(`Thao tác đã thành công trên máy chủ nhưng danh sách chưa đồng bộ được: ${getApiMessage(error)}`)
     }
@@ -225,7 +273,8 @@ export default function ProductsPage({ onToast }) {
       setForm(emptyForm)
       clearImageSelection()
       onToast(editing ? 'Đã cập nhật sản phẩm trên máy chủ.' : 'Đã tạo sản phẩm trên máy chủ.')
-      await syncCatalog()
+      if (!editing) setPage(0)
+      await syncCatalog(editing ? page : 0)
     } catch (error) {
       const retainedImageUrl = newlyUploadedImageUrl || uploadedImageUrl
       setFormError(retainedImageUrl
@@ -363,9 +412,9 @@ export default function ProductsPage({ onToast }) {
         <>
           <section aria-label="Tổng quan sản phẩm" className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-3">
             {[
-              { label: 'Tổng sản phẩm', value: items.length, icon: 'package' },
-              { label: 'Đang kinh doanh', value: activeCount, icon: 'check' },
-              { label: 'Tồn kho thấp', value: lowStockCount, icon: 'receipt' },
+              { label: 'Tổng sản phẩm phù hợp', value: pageInfo.totalElements, icon: 'package' },
+              { label: 'Đang kinh doanh trên trang', value: activeCount, icon: 'check' },
+              { label: 'Tồn kho thấp trên trang', value: lowStockCount, icon: 'receipt' },
             ].map((stat) => (
               <article key={stat.label} className="soft-shadow flex items-center justify-between rounded-2xl border border-border bg-paper p-4 sm:p-5">
                 <div>
@@ -381,22 +430,32 @@ export default function ProductsPage({ onToast }) {
             <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
               <div>
                 <h3 className="font-display text-lg font-semibold text-rosewood">Danh sách sản phẩm</h3>
-                <p className="mt-1 text-[11px] text-muted">{filteredItems.length} sản phẩm phù hợp</p>
+                <p className="mt-1 text-[11px] text-muted">{pageInfo.totalElements} sản phẩm phù hợp</p>
               </div>
-              <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 xl:grid-cols-5">
                 <label className="relative min-w-0 min-[480px]:col-span-1">
                   <span className="sr-only">Tìm sản phẩm</span>
                   <Icon name="search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-rosewood" />
-                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tên hoặc mã..." className="h-10 w-full rounded-xl border border-border bg-white pl-9 pr-3 text-[11px] text-rosewood outline-none focus:border-caramel-hover" />
+                  <input value={query} onChange={(event) => { setQuery(event.target.value); setPage(0) }} placeholder="Tên hoặc mã..." className="h-10 w-full rounded-xl border border-border bg-white pl-9 pr-3 text-[11px] text-rosewood outline-none focus:border-caramel-hover" />
                 </label>
-                <select aria-label="Lọc danh mục" value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="h-10 rounded-xl border border-border bg-white px-3 text-[11px] text-rosewood outline-none focus:border-caramel-hover">
+                <select aria-label="Lọc danh mục" value={categoryId} onChange={(event) => { setCategoryId(event.target.value); setPage(0) }} className="h-10 rounded-xl border border-border bg-white px-3 text-[11px] text-rosewood outline-none focus:border-caramel-hover">
                   <option value="">Tất cả danh mục</option>
                   {categories.map((item) => <option key={item.id} value={String(item.id)}>{item.name}</option>)}
                 </select>
-                <select aria-label="Lọc trạng thái sản phẩm" value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-xl border border-border bg-white px-3 text-[11px] text-rosewood outline-none focus:border-caramel-hover">
+                <select aria-label="Lọc trạng thái sản phẩm" value={status} onChange={(event) => { setStatus(event.target.value); setPage(0) }} className="h-10 rounded-xl border border-border bg-white px-3 text-[11px] text-rosewood outline-none focus:border-caramel-hover">
                   <option>Tất cả trạng thái</option>
                   <option>Đang bán</option>
                   <option>Tạm ẩn</option>
+                </select>
+                <select aria-label="Sắp xếp sản phẩm theo" value={sort} onChange={(event) => { setSort(event.target.value); setPage(0) }} className="h-10 rounded-xl border border-border bg-white px-3 text-[11px] text-rosewood outline-none focus:border-caramel-hover">
+                  <option value="name">Tên</option>
+                  <option value="price">Giá</option>
+                  <option value="quantity">Tồn kho</option>
+                  <option value="createdAt">Ngày tạo</option>
+                </select>
+                <select aria-label="Chiều sắp xếp sản phẩm" value={direction} onChange={(event) => { setDirection(event.target.value); setPage(0) }} className="h-10 rounded-xl border border-border bg-white px-3 text-[11px] text-rosewood outline-none focus:border-caramel-hover">
+                  <option value="ASC">Tăng dần</option>
+                  <option value="DESC">Giảm dần</option>
                 </select>
               </div>
             </div>
@@ -406,6 +465,14 @@ export default function ProductsPage({ onToast }) {
               rowKey={(item) => item.id}
               emptyTitle={items.length ? 'Không tìm thấy sản phẩm' : 'Chưa có sản phẩm'}
               emptyDescription={items.length ? 'Thử từ khóa, danh mục hoặc trạng thái khác.' : 'Dữ liệu sản phẩm sẽ xuất hiện tại đây sau khi được tạo.'}
+            />
+            <PaginationControls
+              page={page}
+              size={pageSize}
+              totalElements={pageInfo.totalElements}
+              totalPages={pageInfo.totalPages}
+              onPageChange={setPage}
+              onSizeChange={(value) => { setPageSize(value); setPage(0) }}
             />
           </section>
         </>

@@ -96,6 +96,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
                 .requestMatchers("/api/customer/orders/**").hasRole("CUSTOMER")
                 .requestMatchers("/api/customer/payments/**").hasRole("CUSTOMER")
+                .requestMatchers("/api/dashboard/**")
+                    .hasAnyRole("ADMIN", "MANAGER", "STAFF")
                 .requestMatchers("/api/management/logs/**").hasAnyRole("ADMIN", "MANAGER")
                 .requestMatchers(HttpMethod.GET, "/api/employees/options")
                     .hasAnyRole("ADMIN", "MANAGER", "STAFF")

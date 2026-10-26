@@ -29,6 +29,9 @@ import com.nhom4.QuanLyTiemBanhNgot.repository.ProductRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PromotionProductRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PromotionRepository;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -47,6 +50,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.Set;
 
 /**
  * Service xử lý các thao tác liên quan đến Order.
@@ -139,6 +143,38 @@ public class OrderService {
                         itemsByOrderId.getOrDefault(order.getId(), List.of())
                 ))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<OrderResponse> findPage(
+            int page,
+            int size,
+            String keyword,
+            String status,
+            LocalDate dateFrom,
+            LocalDate dateTo,
+            String sort,
+            String direction) {
+        if (dateFrom != null && dateTo != null && dateFrom.isAfter(dateTo)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "dateFrom must be before or equal to dateTo");
+        }
+        if (LocalDate.MAX.equals(dateTo)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "dateTo is out of range");
+        }
+        Pageable pageable = PaginationSupport.pageRequest(
+                page, size, sort, direction, "orderDate",
+                Set.of("id", "orderDate", "orderCode", "totalAmount", "status", "createdAt"));
+        String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
+        String normalizedStatus = status == null || status.isBlank() ? null : status.trim();
+        LocalDateTime startInclusive = dateFrom == null ? null : dateFrom.atStartOfDay();
+        LocalDateTime endExclusive = dateTo == null
+                ? null
+                : dateTo.plusDays(1).atStartOfDay();
+        Page<Order> orders = orderRepository.findPageByFilters(
+                normalizedKeyword, normalizedStatus, startInclusive, endExclusive, pageable);
+        return new PageImpl<>(
+                toResponses(orders.getContent()), pageable, orders.getTotalElements());
     }
 
     /**

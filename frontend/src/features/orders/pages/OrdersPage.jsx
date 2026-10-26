@@ -7,6 +7,7 @@ import FormField from '../../../components/FormField.jsx'
 import Icon from '../../../components/Icon.jsx'
 import LoadingState from '../../../components/LoadingState.jsx'
 import Modal from '../../../components/Modal.jsx'
+import PaginationControls from '../../../components/PaginationControls.jsx'
 import StatusBadge from '../../../components/StatusBadge.jsx'
 import { getCustomers } from '../../customers/services/customerService.js'
 import { getProducts } from '../../products/services/productService.js'
@@ -15,10 +16,10 @@ import {
   cancelOrder,
   getEmployees,
   getOrderById,
-  getOrders,
   markOrderDelivered,
   completeOrder,
   updateOrderItemQuantity,
+  getOrderPage,
 } from '../services/orderService.js'
 
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 text-sm text-rosewood outline-none transition focus:border-caramel'
@@ -61,16 +62,6 @@ function formatDateTime(value) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date)
-}
-
-function getDateKey(value) {
-  if (typeof value !== 'string') return ''
-  const date = new Date(`${value}Z`)
-  if (Number.isNaN(date.getTime())) return ''
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
 }
 
 function getStatusLabel(status) {
@@ -125,6 +116,11 @@ export default function OrdersPage({ onToast }) {
   const [statusFilter, setStatusFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [sort, setSort] = useState('orderDate')
+  const [direction, setDirection] = useState('DESC')
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(20)
+  const [pageInfo, setPageInfo] = useState({ totalElements: 0, totalPages: 0 })
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -143,20 +139,41 @@ export default function OrdersPage({ onToast }) {
   const [updatingOrderStatus, setUpdatingOrderStatus] = useState(false)
   const [orderStatusError, setOrderStatusError] = useState('')
 
-  const loadOrders = useCallback(async ({ signal } = {}) => {
+  const loadOrders = useCallback(async ({ signal, requestedPage = page } = {}) => {
     setLoading(true)
     setLoadError('')
     try {
-      const result = await getOrders({ signal })
-      if (!Array.isArray(result)) throw new Error('API danh sách đơn hàng trả về dữ liệu không đúng định dạng.')
-      setOrders(result)
+      const result = await getOrderPage({
+        page: requestedPage,
+        size: pageSize,
+        keyword: query,
+        status: statusFilter,
+        dateFrom,
+        dateTo,
+        sort,
+        direction,
+        signal,
+      })
+      if (!Array.isArray(result?.content)
+        || !Number.isInteger(result.page)
+        || !Number.isInteger(result.size)
+        || !Number.isInteger(result.totalPages)
+        || !Number.isInteger(result.totalElements)) {
+        throw new Error('API danh sách đơn hàng trả về dữ liệu không đúng định dạng.')
+      }
+      if (result.totalPages === 0 ? requestedPage > 0 : requestedPage >= result.totalPages) {
+        setPage(result.totalPages === 0 ? 0 : result.totalPages - 1)
+        return
+      }
+      setOrders(result.content)
+      setPageInfo(result)
     } catch (error) {
       if (signal?.aborted || error.name === 'AbortError') return
       setLoadError(getErrorMessage(error))
     } finally {
       if (!signal?.aborted) setLoading(false)
     }
-  }, [])
+  }, [dateFrom, dateTo, direction, page, pageSize, query, sort, statusFilter])
 
   const loadCatalogs = useCallback(async ({ signal } = {}) => {
     setCatalogLoading(true)
@@ -186,9 +203,14 @@ export default function OrdersPage({ onToast }) {
   useEffect(() => {
     const controller = new AbortController()
     loadOrders({ signal: controller.signal })
+    return () => controller.abort()
+  }, [loadOrders])
+
+  useEffect(() => {
+    const controller = new AbortController()
     loadCatalogs({ signal: controller.signal })
     return () => controller.abort()
-  }, [loadCatalogs, loadOrders])
+  }, [loadCatalogs])
 
   useEffect(() => {
     if (selectedOrderId == null) return undefined
@@ -222,6 +244,10 @@ export default function OrdersPage({ onToast }) {
     () => catalogs.employees.filter((employee) => employee.status === true),
     [catalogs.employees],
   )
+  const customersById = useMemo(
+    () => new Map(catalogs.customers.map((customer) => [customer.id, customer])),
+    [catalogs.customers],
+  )
   const currentEmployee = useMemo(
     () => activeEmployees.find((employee) => employee.currentUser === true),
     [activeEmployees],
@@ -232,10 +258,6 @@ export default function OrdersPage({ onToast }) {
     ),
     [catalogs.products],
   )
-  const customersById = useMemo(
-    () => new Map(catalogs.customers.map((customer) => [customer.id, customer])),
-    [catalogs.customers],
-  )
   const employeesById = useMemo(
     () => new Map(catalogs.employees.map((employee) => [employee.id, employee])),
     [catalogs.employees],
@@ -245,30 +267,12 @@ export default function OrdersPage({ onToast }) {
     [catalogs.products],
   )
 
-  const filteredOrders = useMemo(() => orders.filter((order) => {
-    const customer = customersById.get(order.customerId)
-    const searchValue = [
-      order.orderCode,
-      customer?.fullName,
-      customer?.phone,
-    ].filter(Boolean).join(' ').toLocaleLowerCase('vi')
-    const dateKey = getDateKey(order.orderDate)
-
-    return searchValue.includes(query.trim().toLocaleLowerCase('vi'))
-      && (!statusFilter || order.status === statusFilter)
-      && (!dateFrom || dateKey >= dateFrom)
-      && (!dateTo || dateKey <= dateTo)
-  }), [orders, customersById, query, statusFilter, dateFrom, dateTo])
-
-  const today = getDateKey(new Date().toISOString().slice(0, 19))
-  const todayOrders = orders.filter((order) => getDateKey(order.orderDate) === today)
-  const activeOrders = todayOrders.filter((order) => (
+  const filteredOrders = orders
+  const activeOrders = orders.filter((order) => (
     order.status === 'PENDING' || order.status === 'CONFIRMED'
   ))
-  const completedOrders = todayOrders.filter((order) => order.status === 'COMPLETED')
-  const revenue = todayOrders
-    .filter((order) => order.status !== 'CANCELLED')
-    .reduce((sum, order) => sum + Number(order.finalAmount ?? 0), 0)
+  const completedOrders = orders.filter((order) => order.status === 'COMPLETED')
+  const cancelledOrders = orders.filter((order) => order.status === 'CANCELLED')
 
   const estimatedTotal = form.items.reduce((sum, item) => {
     const product = productsById.get(Number(item.productId))
@@ -316,10 +320,8 @@ export default function OrdersPage({ onToast }) {
           quantity: Number(item.quantity),
         })),
       })
-      setOrders((current) => [
-        createdOrder,
-        ...current.filter((order) => order.id !== createdOrder.id),
-      ])
+      setPage(0)
+      await loadOrders({ requestedPage: 0 })
       setCreateOpen(false)
       setForm(emptyForm)
       await loadCatalogs()
@@ -354,6 +356,7 @@ export default function OrdersPage({ onToast }) {
       setOrders((current) => current.map((order) => (
         order.id === refreshedOrder.id ? refreshedOrder : order
       )))
+      await loadOrders()
       await loadCatalogs()
       setEditingOrderItemId(null)
       setQuantityDraft('')
@@ -378,6 +381,7 @@ export default function OrdersPage({ onToast }) {
       )))
       setSelectedOrder(cancelledOrder)
       setCancelTarget(null)
+      await loadOrders()
       await loadCatalogs()
       onToast(`Đơn ${cancelledOrder.orderCode} đã hủy; tồn kho được hoàn lại.`)
     } catch (error) {
@@ -398,6 +402,7 @@ export default function OrdersPage({ onToast }) {
       setOrders((current) => current.map((order) => (
         order.id === updatedOrder.id ? updatedOrder : order
       )))
+      await loadOrders()
       onToast(successMessage)
     } catch (error) {
       setOrderStatusError(getErrorMessage(error))
@@ -498,12 +503,12 @@ export default function OrdersPage({ onToast }) {
         </Button>
       </div>
 
-      <section aria-label="Tổng quan đơn hàng hôm nay" className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 2xl:grid-cols-4">
+      <section aria-label="Tổng quan đơn hàng phù hợp" className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 2xl:grid-cols-4">
         {[
-          { label: 'Đơn trong ngày', value: todayOrders.length, icon: 'receipt' },
-          { label: 'Đang xử lý', value: activeOrders.length, icon: 'clock' },
-          { label: 'Hoàn tất', value: completedOrders.length, icon: 'check' },
-          { label: 'Doanh thu đơn hợp lệ', value: formatMoney(revenue), icon: 'trending-up' },
+          { label: 'Đơn phù hợp', value: pageInfo.totalElements, icon: 'receipt' },
+          { label: 'Đang xử lý trên trang', value: activeOrders.length, icon: 'clock' },
+          { label: 'Hoàn tất trên trang', value: completedOrders.length, icon: 'check' },
+          { label: 'Đã hủy trên trang', value: cancelledOrders.length, icon: 'receipt' },
         ].map((stat) => (
           <article key={stat.label} className="soft-shadow flex items-center justify-between rounded-2xl border border-border bg-paper p-4 sm:p-5">
             <div className="min-w-0">
@@ -530,15 +535,15 @@ export default function OrdersPage({ onToast }) {
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:p-5">
           <div>
             <h3 className="font-display text-lg font-semibold text-rosewood">Danh sách đơn hàng</h3>
-            <p className="mt-1 text-[11px] text-muted">{filteredOrders.length} trên {orders.length} đơn hàng</p>
+            <p className="mt-1 text-[11px] text-muted">{pageInfo.totalElements} đơn hàng phù hợp</p>
           </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(190px,1.3fr)_minmax(150px,1fr)_minmax(160px,1fr)_minmax(160px,1fr)]">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-6">
             <label className="relative">
               <span className="sr-only">Tìm mã đơn hoặc khách hàng</span>
               <Icon name="search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-rosewood" />
               <input
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => { setQuery(event.target.value); setPage(0) }}
                 placeholder="Mã đơn hoặc khách hàng..."
                 className={`${inputClass} pl-9 text-[11px]`}
               />
@@ -546,7 +551,7 @@ export default function OrdersPage({ onToast }) {
             <select
               aria-label="Lọc trạng thái đơn hàng"
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
+              onChange={(event) => { setStatusFilter(event.target.value); setPage(0) }}
               className={`${inputClass} text-[11px]`}
             >
               <option value="">Tất cả trạng thái</option>
@@ -559,7 +564,7 @@ export default function OrdersPage({ onToast }) {
                 type="date"
                 value={dateFrom}
                 max={dateTo || undefined}
-                onChange={(event) => setDateFrom(event.target.value)}
+                onChange={(event) => { setDateFrom(event.target.value); setPage(0) }}
                 className="min-w-0 flex-1 bg-transparent text-[10px] text-rosewood outline-none"
               />
             </label>
@@ -570,10 +575,20 @@ export default function OrdersPage({ onToast }) {
                 type="date"
                 value={dateTo}
                 min={dateFrom || undefined}
-                onChange={(event) => setDateTo(event.target.value)}
+                onChange={(event) => { setDateTo(event.target.value); setPage(0) }}
                 className="min-w-0 flex-1 bg-transparent text-[10px] text-rosewood outline-none"
               />
             </label>
+            <select aria-label="Sắp xếp đơn hàng theo" value={sort} onChange={(event) => { setSort(event.target.value); setPage(0) }} className={`${inputClass} text-[11px]`}>
+              <option value="orderDate">Ngày đặt</option>
+              <option value="orderCode">Mã đơn</option>
+              <option value="totalAmount">Tổng tiền</option>
+              <option value="status">Trạng thái</option>
+            </select>
+            <select aria-label="Chiều sắp xếp đơn hàng" value={direction} onChange={(event) => { setDirection(event.target.value); setPage(0) }} className={`${inputClass} text-[11px]`}>
+              <option value="ASC">Tăng dần</option>
+              <option value="DESC">Giảm dần</option>
+            </select>
           </div>
         </div>
         {loading
@@ -594,6 +609,16 @@ export default function OrdersPage({ onToast }) {
                 emptyDescription="Thử thay đổi bộ lọc hoặc tạo đơn hàng mới."
               />
             )}
+        {!loading && !loadError && (
+          <PaginationControls
+            page={page}
+            size={pageSize}
+            totalElements={pageInfo.totalElements}
+            totalPages={pageInfo.totalPages}
+            onPageChange={setPage}
+            onSizeChange={(value) => { setPageSize(value); setPage(0) }}
+          />
+        )}
       </section>
 
       <Modal

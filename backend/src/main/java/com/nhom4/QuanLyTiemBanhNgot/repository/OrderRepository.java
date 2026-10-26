@@ -4,12 +4,15 @@ import com.nhom4.QuanLyTiemBanhNgot.entity.Order;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 /**
  * Repository dùng để thao tác với bảng orders.
@@ -41,6 +44,26 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @EntityGraph(attributePaths = {"customer", "employee"})
     List<Order> findAllByOrderByOrderDateDesc();
+
+    @EntityGraph(attributePaths = {"customer", "employee", "promotion"})
+    @Query("""
+            select orderEntity from Order orderEntity
+            left join orderEntity.customer customer
+            where (:keyword is null
+                    or lower(orderEntity.orderCode) like lower(concat('%', :keyword, '%'))
+                    or lower(customer.fullName) like lower(concat('%', :keyword, '%'))
+                    or lower(customer.phone) like lower(concat('%', :keyword, '%')))
+              and (:status is null or lower(orderEntity.status) = lower(:status))
+              and (:dateFrom is null or orderEntity.orderDate >= :dateFrom)
+              and (:dateToExclusive is null or orderEntity.orderDate < :dateToExclusive)
+            """)
+    Page<Order> findPageByFilters(
+            @Param("keyword") String keyword,
+            @Param("status") String status,
+            @Param("dateFrom") LocalDateTime dateFrom,
+            @Param("dateToExclusive") LocalDateTime dateToExclusive,
+            Pageable pageable
+    );
 
     @EntityGraph(attributePaths = {"customer", "employee"})
     List<Order> findByCustomer_IdOrderByOrderDateDesc(Long customerId);

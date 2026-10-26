@@ -4,6 +4,8 @@ package com.nhom4.QuanLyTiemBanhNgot.repository;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Customer;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -36,4 +38,19 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
             String fullNameKeyword,
             String phoneKeyword
     );
+
+    Page<Customer> findByFullNameContainingIgnoreCaseOrPhoneContaining(
+            String fullNameKeyword,
+            String phoneKeyword,
+            Pageable pageable
+    );
+
+    @Query("""
+            select customer from Customer customer
+            where (:keyword is null
+                    or lower(customer.fullName) like lower(concat('%', :keyword, '%'))
+                    or lower(customer.phone) like lower(concat('%', :keyword, '%'))
+                    or lower(customer.email) like lower(concat('%', :keyword, '%')))
+            """)
+    Page<Customer> findPageByKeyword(@Param("keyword") String keyword, Pageable pageable);
 }

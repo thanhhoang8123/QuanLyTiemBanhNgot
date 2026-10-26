@@ -5,7 +5,10 @@ import com.nhom4.QuanLyTiemBanhNgot.dto.payment.PaymentResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.payment.SimulatePaymentRequest;
 import com.nhom4.QuanLyTiemBanhNgot.service.PaymentService;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -20,12 +23,16 @@ import java.util.List;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final boolean paymentSimulationEnabled;
 
     /**
      * Constructor Injection.
      */
-    public PaymentController(PaymentService paymentService) {
+    public PaymentController(
+            PaymentService paymentService,
+            @Value("${app.payment-simulation.enabled:false}") boolean paymentSimulationEnabled) {
         this.paymentService = paymentService;
+        this.paymentSimulationEnabled = paymentSimulationEnabled;
     }
 
     /**
@@ -68,6 +75,12 @@ public class PaymentController {
     public PaymentResponse simulatePayment(
             @PathVariable Long id,
             @Valid @RequestBody SimulatePaymentRequest request) {
+        if (!paymentSimulationEnabled) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Mô phỏng thanh toán chỉ được bật trong môi trường phát triển hoặc kiểm thử"
+            );
+        }
         return paymentService.simulate(id, request);
     }
 
