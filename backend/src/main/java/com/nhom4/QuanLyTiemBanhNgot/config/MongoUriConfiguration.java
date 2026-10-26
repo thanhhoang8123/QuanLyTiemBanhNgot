@@ -11,21 +11,32 @@ public class MongoUriConfiguration {
 
     @Bean
     static BeanFactoryPostProcessor validateMongoUri(Environment environment) {
-        return beanFactory -> requireValidMongoUri(environment.getProperty("MONGODB_URI"));
+        return beanFactory -> requireValidMongoUri(resolveMongoUri(environment));
+    }
+
+    static String resolveMongoUri(Environment environment) {
+        String uri = environment.getProperty("MONGODB_URI");
+        if (uri == null || uri.isBlank()) {
+            uri = environment.getProperty("spring.mongodb.uri");
+        }
+        if (uri == null || uri.isBlank()) {
+            uri = environment.getProperty("spring.data.mongodb.uri");
+        }
+        return uri;
     }
 
     static void requireValidMongoUri(String uri) {
         if (uri == null || uri.isBlank()) {
             throw new IllegalStateException(
-                    "MongoDB configuration is missing. Set the MONGODB_URI environment variable "
-                            + "to a valid mongodb:// or mongodb+srv:// connection string.");
+                    "MongoDB configuration is missing. Set MONGODB_URI or configure "
+                            + "spring.mongodb.uri with a valid mongodb:// or mongodb+srv:// connection string.");
         }
 
         try {
             new ConnectionString(uri);
         } catch (IllegalArgumentException exception) {
             throw new IllegalStateException(
-                    "MongoDB configuration is invalid. Check that MONGODB_URI is a valid "
+                    "MongoDB configuration is invalid. Check that MONGODB_URI or spring.mongodb.uri is a valid "
                             + "mongodb:// or mongodb+srv:// connection string; the URI value is not logged.");
         }
     }
