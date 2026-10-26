@@ -7,6 +7,7 @@ import {
   createCustomerOrderAttempt,
   readCustomerOrderAttempt,
   saveCustomerOrderAttempt,
+  updateCustomerOrderAttempt,
 } from './customerOrderAttempt.js'
 import { resolveCustomerOrderAttempt } from './customerOrderRecovery.js'
 
@@ -92,6 +93,36 @@ test('clears only the matching request key after a successful response', () => {
   assert.equal(readCustomerOrderAttempt(storage, 'customer-a').status, 'pending')
   assert.equal(clearCustomerOrderAttempt(storage, key), true)
   assert.deepEqual(readCustomerOrderAttempt(storage, 'customer-a'), { status: 'none' })
+})
+
+test('keeps VNPay order identity and initiation phase across checkout reload', () => {
+  const storage = createStorage()
+  const attempt = createCustomerOrderAttempt('customer-a', payload, key, 'VNPAY')
+  assert.equal(saveCustomerOrderAttempt(storage, attempt), true)
+
+  const paymentAttempt = {
+    ...attempt,
+    orderId: 101,
+    stage: 'PAYMENT_UNCERTAIN',
+  }
+  assert.equal(updateCustomerOrderAttempt(storage, paymentAttempt), true)
+  assert.deepEqual(readCustomerOrderAttempt(storage, 'customer-a'), {
+    status: 'pending',
+    attempt: paymentAttempt,
+  })
+})
+
+test('does not update a different checkout attempt', () => {
+  const storage = createStorage()
+  const attempt = createCustomerOrderAttempt('customer-a', payload, key, 'VNPAY')
+  saveCustomerOrderAttempt(storage, attempt)
+
+  assert.equal(updateCustomerOrderAttempt(storage, {
+    ...attempt,
+    key: '0c9a3dd8-e70c-4a5c-b2cd-1781c80b6650',
+    stage: 'PAYMENT_UNCERTAIN',
+  }), false)
+  assert.deepEqual(readCustomerOrderAttempt(storage, 'customer-a').attempt, attempt)
 })
 
 test('does not overwrite an unresolved attempt with a new request', () => {

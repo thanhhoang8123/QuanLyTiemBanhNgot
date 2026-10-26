@@ -88,8 +88,14 @@ public class SecurityConfig {
                     "/api/auth/resend-verification"
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**").permitAll()
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/api/payments/vnpay/ipn",
+                    "/api/payments/vnpay/return"
+                ).permitAll()
                 .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
                 .requestMatchers("/api/customer/orders/**").hasRole("CUSTOMER")
+                .requestMatchers("/api/customer/payments/**").hasRole("CUSTOMER")
                 .requestMatchers("/api/management/logs/**").hasAnyRole("ADMIN", "MANAGER")
                 .requestMatchers(HttpMethod.GET, "/api/employees/options")
                     .hasAnyRole("ADMIN", "MANAGER", "STAFF")

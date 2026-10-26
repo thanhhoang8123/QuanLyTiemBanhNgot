@@ -11,11 +11,18 @@ import {
   createCustomerOrderRequestKey,
   readCustomerOrderAttempt,
   saveCustomerOrderAttempt,
+  updateCustomerOrderAttempt,
 } from '../services/customerOrderAttempt.js'
+import {
+  getVnPayInitiationErrorMessage,
+  requireVnPayPaymentUrl,
+} from '../services/customerVnPayPayment.js'
 import { resolveCustomerOrderAttempt } from '../services/customerOrderRecovery.js'
 import {
   createCustomerOrder,
+  createCustomerVnPayPayment,
   getCustomerOrderByRequestKey,
+  getCustomerVnPayPaymentStatusByOrderId,
   quoteCustomerOrder,
 } from '../services/customerOrderService.js'
 
@@ -31,12 +38,16 @@ export default function ShopCheckoutPage() {
   const account = useContext(AuthContext)?.account
   const owner = account?.id == null ? null : String(account.id)
   const submitLock = useRef(false)
+  const paymentRetryLock = useRef(false)
   const [attemptState, setAttemptState] = useState(
     () => readCustomerOrderAttempt(window.sessionStorage, owner),
   )
   const pendingAttempt = attemptState.status === 'pending' ? attemptState.attempt : null
   const [deliveryAddress, setDeliveryAddress] = useState(
     () => pendingAttempt?.payload.deliveryAddress || '',
+  )
+  const [paymentMethod, setPaymentMethod] = useState(
+    () => pendingAttempt?.paymentMethod || 'CASH',
   )
   const [promotionCode, setPromotionCode] = useState(
     () => pendingAttempt?.payload.promotionCode || '',
@@ -51,6 +62,10 @@ export default function ShopCheckoutPage() {
   const [quoteVersion, setQuoteVersion] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [isCheckingPaymentStatus, setIsCheckingPaymentStatus] = useState(false)
+  const [isRetryingPayment, setIsRetryingPayment] = useState(false)
+  const [paymentStatus, setPaymentStatus] = useState(null)
+  const [paymentStatusError, setPaymentStatusError] = useState('')
 
   useEffect(() => {
     setAttemptState(readCustomerOrderAttempt(window.sessionStorage, owner))
@@ -157,37 +172,156 @@ export default function ShopCheckoutPage() {
     submitLock.current = true
     setIsSubmitting(true)
     setSubmitError('')
+    let order
+    let activeAttempt = pendingAttempt
+    let vnpayInitiationStarted = false
     try {
-      let attempt = pendingAttempt
-      if (!attempt) {
-        attempt = createCustomerOrderAttempt(owner, payload, createCustomerOrderRequestKey())
-        if (!saveCustomerOrderAttempt(window.sessionStorage, attempt)) {
+      if (!activeAttempt) {
+        activeAttempt = createCustomerOrderAttempt(
+          owner,
+          payload,
+          createCustomerOrderRequestKey(),
+          paymentMethod,
+        )
+        if (!saveCustomerOrderAttempt(window.sessionStorage, activeAttempt)) {
           setAttemptState({ status: 'unavailable' })
           setSubmitError('Không thể lưu yêu cầu an toàn trong phiên trình duyệt. Đơn chưa được gửi; hãy bật sessionStorage rồi thử lại.')
           return
         }
-        setAttemptState({ status: 'pending', attempt })
+        setAttemptState({ status: 'pending', attempt: activeAttempt })
       }
 
-      const order = await resolveCustomerOrderAttempt(attempt, {
+      order = await resolveCustomerOrderAttempt(activeAttempt, {
         findByRequestKey: getCustomerOrderByRequestKey,
         createOrder: createCustomerOrder,
       })
-      if (clearCustomerOrderAttempt(window.sessionStorage, attempt.key)) {
+      if (cartMatchesCustomerOrder(cart.items, activeAttempt.payload.items)) cart.clear()
+
+      if ((activeAttempt.paymentMethod || 'CASH') === 'VNPAY') {
+        activeAttempt = {
+          ...activeAttempt,
+          orderId: Number(order.id),
+          stage: 'PAYMENT_INITIATING',
+        }
+        if (!updateCustomerOrderAttempt(window.sessionStorage, activeAttempt)) {
+          setAttemptState({ status: 'unavailable' })
+          setSubmitError(
+            'Đơn đã được tạo nhưng không thể lưu trạng thái thanh toán an toàn. Chưa gửi yêu cầu VNPay; hãy kiểm tra đơn hàng trước khi tiếp tục.',
+          )
+          return
+        }
+        setAttemptState({ status: 'pending', attempt: activeAttempt })
+        vnpayInitiationStarted = true
+        const payment = await createCustomerVnPayPayment(order.id)
+        const paymentUrl = requireVnPayPaymentUrl(payment)
+        const redirectedAttempt = { ...activeAttempt, stage: 'PAYMENT_REDIRECTED' }
+        if (updateCustomerOrderAttempt(window.sessionStorage, redirectedAttempt)) {
+          setAttemptState({ status: 'pending', attempt: redirectedAttempt })
+        }
+        window.location.assign(paymentUrl)
+        return
+      }
+
+      if (clearCustomerOrderAttempt(window.sessionStorage, activeAttempt.key)) {
         setAttemptState({ status: 'none' })
       } else {
-        setAttemptState({ status: 'pending', attempt })
+        setAttemptState({ status: 'pending', attempt: activeAttempt })
         console.warn('Đơn đã được xác nhận nhưng chưa thể xóa yêu cầu đang chờ khỏi phiên trình duyệt.')
       }
-      if (cartMatchesCustomerOrder(cart.items, attempt.payload.items)) cart.clear()
       navigate('/shop/order-result', { replace: true, state: { order } })
     } catch (error) {
-      setSubmitError(
-        `Chưa xác định được kết quả đơn hàng. Hãy thử lại để gửi cùng yêu cầu an toàn; không tạo yêu cầu mới. ${error.message || ''}`.trim(),
-      )
+      if (vnpayInitiationStarted && activeAttempt && order) {
+        const uncertainAttempt = {
+          ...activeAttempt,
+          orderId: Number(order.id),
+          stage: 'PAYMENT_UNCERTAIN',
+        }
+        if (updateCustomerOrderAttempt(window.sessionStorage, uncertainAttempt)) {
+          setAttemptState({ status: 'pending', attempt: uncertainAttempt })
+        }
+        setSubmitError(getVnPayInitiationErrorMessage(error))
+      } else {
+        if (error.status === 401 || error.status === 403) {
+          setSubmitError(
+            `Phiên đăng nhập hoặc quyền truy cập không hợp lệ. Yêu cầu đơn hàng vẫn được giữ để khôi phục an toàn; hãy đăng nhập lại rồi kiểm tra cùng yêu cầu. ${error.message || ''}`.trim(),
+          )
+        } else if (error.status === 409) {
+          setSubmitError(
+            `Backend đang báo xung đột với yêu cầu trước. Không tạo đơn mới; hãy thử khôi phục bằng cùng khóa yêu cầu. ${error.message || ''}`.trim(),
+          )
+        } else {
+          setSubmitError(
+            `Chưa xác định được kết quả đơn hàng. Hãy thử lại để gửi cùng yêu cầu an toàn; không tạo yêu cầu mới. ${error.message || ''}`.trim(),
+          )
+        }
+      }
     } finally {
       submitLock.current = false
       setIsSubmitting(false)
+    }
+  }
+
+  const checkVnPayStatus = async () => {
+    if (!pendingAttempt?.orderId || isCheckingPaymentStatus) return
+
+    setIsCheckingPaymentStatus(true)
+    setPaymentStatusError('')
+    try {
+      const result = await getCustomerVnPayPaymentStatusByOrderId(pendingAttempt.orderId)
+      setPaymentStatus(result)
+      if (result?.paymentStatus === 'SUCCESS' && result?.attemptStatus === 'SUCCESS') {
+        if (clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)) {
+          setAttemptState({ status: 'none' })
+        } else {
+          setPaymentStatusError('Backend đã xác nhận thanh toán, nhưng trình duyệt chưa thể xóa yêu cầu checkout đang lưu. Hãy mở lịch sử đơn hàng và không thanh toán lại.')
+        }
+      }
+    } catch (error) {
+      setPaymentStatus(null)
+      if (error.status === 401) {
+        setPaymentStatusError('Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại rồi kiểm tra trạng thái đơn hàng.')
+      } else if (error.status === 403) {
+        setPaymentStatusError('Tài khoản hiện tại không có quyền tra cứu giao dịch này.')
+      } else if (error.status === 404) {
+        setPaymentStatusError('Backend chưa tìm thấy attempt VNPay đã lưu cho đơn này. Kết quả lần gửi trước vẫn chưa được xác định; không gửi lại yêu cầu thanh toán. Hãy kiểm tra lại sau hoặc liên hệ cửa hàng để đối soát.')
+      } else {
+        setPaymentStatusError(error.message || 'Chưa thể tra cứu trạng thái thanh toán. Không gửi lại yêu cầu thanh toán.')
+      }
+    } finally {
+      setIsCheckingPaymentStatus(false)
+    }
+  }
+
+  const retryVnPayForExistingOrder = async () => {
+    if (
+      paymentRetryLock.current
+      || !pendingAttempt?.orderId
+      || paymentStatus?.paymentStatus !== 'FAILED'
+      || paymentStatus?.attemptStatus !== 'FAILED'
+    ) return
+
+    paymentRetryLock.current = true
+    setIsRetryingPayment(true)
+    setPaymentStatus(null)
+    setPaymentStatusError('')
+    try {
+      const payment = await createCustomerVnPayPayment(pendingAttempt.orderId)
+      const paymentUrl = requireVnPayPaymentUrl(payment)
+      const redirectedAttempt = {
+        ...pendingAttempt,
+        stage: 'PAYMENT_REDIRECTED',
+      }
+      if (updateCustomerOrderAttempt(window.sessionStorage, redirectedAttempt)) {
+        setAttemptState({ status: 'pending', attempt: redirectedAttempt })
+      }
+      window.location.assign(paymentUrl)
+    } catch (error) {
+      setPaymentStatusError(
+        `${getVnPayInitiationErrorMessage(error)} Hãy kiểm tra trạng thái đơn trước khi thử lại.`,
+      )
+    } finally {
+      paymentRetryLock.current = false
+      setIsRetryingPayment(false)
     }
   }
 
@@ -214,14 +348,24 @@ export default function ShopCheckoutPage() {
   }
 
   if (pendingAttempt) {
+    const isVnPayAttempt = (pendingAttempt.paymentMethod || 'CASH') === 'VNPAY'
+    const paymentInitiationUncertain = isVnPayAttempt
+      && pendingAttempt.stage !== 'ORDER_PENDING'
     return (
       <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
         <div className="rounded-3xl border border-[#EAE3DA] bg-white p-6 shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-9">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Yêu cầu đang chờ xác nhận</p>
           <h1 className="font-display mt-2 text-2xl font-medium text-[#4A302B]">Chưa rõ lần gửi trước đã hoàn tất chưa</h1>
           <p className="mt-3 text-sm leading-6 text-[#806B65]">
-            Bấm nút bên dưới để tra cứu bằng khóa cũ. Nếu chưa có đơn, checkout mới gửi lại đúng payload với cùng khóa; lỗi mạng hoặc phiên hết hạn sẽ không tự tạo yêu cầu khác.
+            {paymentInitiationUncertain
+              ? 'Đơn đã được tạo và yêu cầu thanh toán đã bắt đầu. Bạn có thể tra cứu attempt đã lưu của đơn này; không gửi lại yêu cầu thanh toán khi kết quả lần trước chưa rõ.'
+              : 'Bấm nút bên dưới để tra cứu bằng khóa cũ. Nếu chưa có đơn, checkout mới gửi lại đúng payload với cùng khóa; lỗi mạng hoặc phiên hết hạn sẽ không tự tạo yêu cầu khác.'}
           </p>
+          {isVnPayAttempt && pendingAttempt.orderId && (
+            <p className="mt-3 rounded-xl bg-[#FCF9F3] p-3 text-xs text-[#675650]">
+              Mã đơn đã lưu: #{pendingAttempt.orderId}. Trạng thái thanh toán chưa được xác nhận.
+            </p>
+          )}
           <ul className="mt-5 space-y-2 rounded-2xl bg-[#FCF9F3] p-4 text-sm text-[#675650]">
             {pendingAttempt.payload.items.map((item) => (
               <li key={item.productId}>Sản phẩm #{item.productId} × {item.quantity}</li>
@@ -229,16 +373,79 @@ export default function ShopCheckoutPage() {
             {pendingAttempt.payload.deliveryAddress && <li>Địa chỉ giao hàng đã được lưu trong phiên.</li>}
             {pendingAttempt.payload.promotionCode && <li>Mã khuyến mãi: {pendingAttempt.payload.promotionCode}</li>}
           </ul>
+          {paymentInitiationUncertain && (
+            <>
+              <button
+                type="button"
+                onClick={checkVnPayStatus}
+                disabled={isCheckingPaymentStatus}
+                className="mt-5 flex h-11 w-full items-center justify-center rounded-full border border-[#DDCDB8] px-5 text-xs font-semibold text-[#76534D] hover:bg-[#FCF9F3] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isCheckingPaymentStatus ? 'Đang tra cứu...' : 'Kiểm tra trạng thái thanh toán'}
+              </button>
+              {paymentStatus && (
+                <p role="status" className="mt-3 rounded-xl bg-[#FCF9F3] p-3 text-xs leading-5 text-[#675650]">
+                  Trạng thái backend ghi nhận — thanh toán: {paymentStatus.paymentStatus}; attempt: {paymentStatus.attemptStatus}; đơn hàng: {paymentStatus.orderStatus}.
+                  {paymentStatus.paymentStatus === 'SUCCESS' && paymentStatus.attemptStatus === 'SUCCESS'
+                    ? ' Thanh toán đã được backend xác nhận.'
+                    : ' Chưa có xác nhận thanh toán thành công.'}
+                </p>
+              )}
+              {paymentStatus?.paymentStatus === 'FAILED'
+                && paymentStatus?.attemptStatus === 'FAILED' && (
+                  <button
+                    type="button"
+                    onClick={retryVnPayForExistingOrder}
+                    disabled={isRetryingPayment}
+                    className="mt-3 flex h-11 w-full items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isRetryingPayment ? 'Đang khởi tạo lại...' : 'Thử thanh toán lại cho đơn này'}
+                  </button>
+                )}
+              {paymentStatusError && (
+                <p role="alert" className="mt-3 rounded-xl bg-[#F6E9E6] p-3 text-xs leading-5 text-[#914E46]">
+                  {paymentStatusError}
+                </p>
+              )}
+            </>
+          )}
           {submitError && <p role="alert" className="mt-4 rounded-xl bg-[#F6E9E6] p-3 text-xs leading-5 text-[#914E46]">{submitError}</p>}
-          <button
-            type="button"
-            onClick={() => submitOrder()}
-            disabled={isSubmitting}
-            className="mt-6 flex h-11 w-full items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting ? 'Đang kiểm tra yêu cầu...' : 'Kiểm tra kết quả / tiếp tục cùng yêu cầu'}
-          </button>
+          {!paymentInitiationUncertain && (
+            <button
+              type="button"
+              onClick={() => submitOrder()}
+              disabled={isSubmitting}
+              className="mt-6 flex h-11 w-full items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting
+                ? 'Đang kiểm tra yêu cầu...'
+                : isVnPayAttempt
+                  ? 'Khôi phục cùng đơn và tiếp tục thanh toán'
+                  : 'Kiểm tra kết quả / tiếp tục cùng yêu cầu'}
+            </button>
+          )}
           <Link to="/shop/orders" className="mt-4 block text-center text-xs font-semibold text-[#76534D]">Mở lịch sử đơn hàng</Link>
+        </div>
+      </section>
+    )
+  }
+
+  if (
+    attemptState.status === 'none'
+    && paymentStatus?.paymentStatus === 'SUCCESS'
+    && paymentStatus?.attemptStatus === 'SUCCESS'
+  ) {
+    return (
+      <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
+        <div role="status" className="rounded-3xl border border-[#EAE3DA] bg-white p-7 text-center shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-10">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">VNPay Sandbox</p>
+          <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B]">Thanh toán đã được xác nhận</h1>
+          <p className="mt-3 text-sm leading-6 text-[#806B65]">
+            Backend xác nhận thanh toán cho đơn #{paymentStatus.orderId}. Không cần gửi lại yêu cầu thanh toán.
+          </p>
+          <Link to="/shop/orders" className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white hover:bg-[#4A302B]">
+            Mở lịch sử đơn hàng
+          </Link>
         </div>
       </section>
     )
@@ -257,7 +464,7 @@ export default function ShopCheckoutPage() {
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-7 sm:py-12 lg:px-10">
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Hoàn tất thông tin</p>
       <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B] sm:text-4xl">Đặt hàng</h1>
-      <p className="mt-2 text-sm text-[#806B65]">Đơn được tạo ở trạng thái chờ xử lý. Bước này chưa thực hiện thanh toán trực tuyến.</p>
+      <p className="mt-2 text-sm text-[#806B65]">Đơn được tạo ở trạng thái chờ xử lý. Chọn thanh toán theo hướng dẫn của cửa hàng hoặc chuyển tới VNPay Sandbox.</p>
 
       {catalogLoading ? (
         <p role="status" className="mt-6 rounded-2xl bg-white px-5 py-12 text-center text-sm text-[#806B65]">Đang kiểm tra tồn kho...</p>
@@ -305,6 +512,31 @@ export default function ShopCheckoutPage() {
                 placeholder="Ghi chú cho cửa hàng"
               />
             </label>
+            <fieldset className="grid gap-3 border-t border-[#EAE3DA] pt-5">
+              <legend className="font-display text-xl text-[#4A302B]">Phương thức thanh toán</legend>
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#EAE3DA] p-3 text-xs text-[#675650]">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="CASH"
+                  checked={paymentMethod === 'CASH'}
+                  onChange={() => setPaymentMethod('CASH')}
+                  className="mt-0.5 accent-[#76534D]"
+                />
+                <span><strong className="block text-[#4A302B]">Thanh toán theo hướng dẫn của cửa hàng</strong>Giữ nguyên luồng đặt hàng hiện tại.</span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#EAE3DA] p-3 text-xs text-[#675650]">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="VNPAY"
+                  checked={paymentMethod === 'VNPAY'}
+                  onChange={() => setPaymentMethod('VNPAY')}
+                  className="mt-0.5 accent-[#76534D]"
+                />
+                <span><strong className="block text-[#4A302B]">VNPay QR (Sandbox)</strong>Chuyển tới trang thanh toán thử nghiệm của VNPay. Không tạo QR từ URL tại cửa hàng.</span>
+              </label>
+            </fieldset>
             {quoteError && (
               <div role="alert" className="rounded-xl bg-[#F6E9E6] p-3 text-xs leading-5 text-[#914E46]">
                 <p>{quoteError}</p>
@@ -341,7 +573,9 @@ export default function ShopCheckoutPage() {
               disabled={isSubmitting || quoteLoading || !quote || Boolean(quoteError)}
               className="mt-5 flex h-11 w-full items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isSubmitting ? 'Đang gửi đơn...' : 'Xác nhận đặt hàng'}
+              {isSubmitting
+                ? paymentMethod === 'VNPAY' ? 'Đang tạo đơn và mở VNPay...' : 'Đang gửi đơn...'
+                : paymentMethod === 'VNPAY' ? 'Đặt hàng và thanh toán VNPay' : 'Xác nhận đặt hàng'}
             </button>
             <Link to="/shop/cart" className="mt-3 block text-center text-xs font-semibold text-[#76534D]">Quay lại giỏ hàng</Link>
           </aside>

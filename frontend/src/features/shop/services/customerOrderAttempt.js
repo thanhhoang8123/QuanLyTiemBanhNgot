@@ -1,4 +1,11 @@
 export const CUSTOMER_ORDER_ATTEMPT_STORAGE_KEY = 'wa-customer-order-request'
+export const CUSTOMER_ORDER_PAYMENT_METHODS = ['CASH', 'VNPAY']
+export const CUSTOMER_ORDER_ATTEMPT_STAGES = [
+  'ORDER_PENDING',
+  'PAYMENT_INITIATING',
+  'PAYMENT_UNCERTAIN',
+  'PAYMENT_REDIRECTED',
+]
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -39,6 +46,12 @@ export function readCustomerOrderAttempt(storage, owner) {
     || typeof attempt.owner !== 'string'
     || !uuidPattern.test(attempt.key || '')
     || !isValidPayload(attempt.payload)
+    || (attempt.paymentMethod != null
+      && !CUSTOMER_ORDER_PAYMENT_METHODS.includes(attempt.paymentMethod))
+    || (attempt.stage != null
+      && !CUSTOMER_ORDER_ATTEMPT_STAGES.includes(attempt.stage))
+    || (attempt.orderId != null
+      && (!Number.isInteger(attempt.orderId) || attempt.orderId <= 0))
   ) {
     return { status: 'invalid' }
   }
@@ -47,11 +60,21 @@ export function readCustomerOrderAttempt(storage, owner) {
   return { status: 'pending', attempt }
 }
 
-export function createCustomerOrderAttempt(owner, payload, key) {
+export function createCustomerOrderAttempt(owner, payload, key, paymentMethod = 'CASH') {
   if (!owner || !uuidPattern.test(key || '') || !isValidPayload(payload)) {
     throw new Error('Không thể lưu yêu cầu đặt hàng hợp lệ.')
   }
-  return { version: 1, owner, key, payload }
+  if (!CUSTOMER_ORDER_PAYMENT_METHODS.includes(paymentMethod)) {
+    throw new Error('Phương thức thanh toán không hợp lệ.')
+  }
+  return {
+    version: 1,
+    owner,
+    key,
+    payload,
+    paymentMethod,
+    stage: 'ORDER_PENDING',
+  }
 }
 
 export function saveCustomerOrderAttempt(storage, attempt) {
@@ -72,6 +95,19 @@ export function clearCustomerOrderAttempt(storage, key) {
       if (current?.key !== key) return false
     }
     storage.removeItem(CUSTOMER_ORDER_ATTEMPT_STORAGE_KEY)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function updateCustomerOrderAttempt(storage, attempt) {
+  try {
+    const stored = storage.getItem(CUSTOMER_ORDER_ATTEMPT_STORAGE_KEY)
+    if (stored === null) return false
+    const current = JSON.parse(stored)
+    if (current?.key !== attempt?.key || current?.owner !== attempt?.owner) return false
+    storage.setItem(CUSTOMER_ORDER_ATTEMPT_STORAGE_KEY, JSON.stringify(attempt))
     return true
   } catch {
     return false
