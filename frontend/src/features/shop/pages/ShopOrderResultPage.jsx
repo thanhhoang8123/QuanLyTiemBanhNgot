@@ -14,6 +14,22 @@ const moneyFormat = new Intl.NumberFormat('vi-VN', {
   currency: 'VND',
   maximumFractionDigits: 0,
 })
+const statusPollDelays = [1000, 2000, 4000]
+
+function getOrderStatusLabel(status) {
+  const labels = {
+    PENDING: 'Đang xử lý',
+    CONFIRMED: 'Đã xác nhận',
+    PROCESSING: 'Đang chuẩn bị',
+    PREPARING: 'Đang chuẩn bị',
+    READY: 'Sẵn sàng nhận',
+    COMPLETED: 'Hoàn tất',
+    DELIVERED: 'Đã giao',
+    CANCELLED: 'Đã hủy',
+    CANCELED: 'Đã hủy',
+  }
+  return labels[status] || 'Đang cập nhật'
+}
 
 export default function ShopOrderResultPage() {
   const location = useLocation()
@@ -50,18 +66,19 @@ export default function ShopOrderResultPage() {
         const terminal = result?.paymentStatus === 'SUCCESS'
           || result?.paymentStatus === 'FAILED'
           || result?.attemptStatus === 'RECONCILIATION_REQUIRED'
-        if (!terminal && pollCount < 6) {
+        if (!terminal && pollCount < statusPollDelays.length) {
+          const delay = statusPollDelays[pollCount]
           pollCount += 1
-          timerId = window.setTimeout(loadStatus, 4000)
+          timerId = window.setTimeout(loadStatus, delay)
         }
       } catch (error) {
         if (!active || error.name === 'AbortError') return
         if (error.status === 401) {
-          setStatusError('Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại rồi kiểm tra trạng thái giao dịch.')
+          setStatusError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để xem kết quả.')
         } else if (error.status === 404) {
-          setStatusError('Không tìm thấy giao dịch thuộc tài khoản này. Hãy kiểm tra lại lịch sử đơn hàng.')
+          setStatusError('Không tìm thấy giao dịch. Vui lòng kiểm tra lịch sử đơn hàng.')
         } else {
-          setStatusError(error.message || 'Chưa thể tải trạng thái thanh toán.')
+          setStatusError('Chưa thể kiểm tra thanh toán lúc này. Vui lòng thử lại sau.')
         }
       } finally {
         if (active) setStatusLoading(false)
@@ -92,17 +109,17 @@ export default function ShopOrderResultPage() {
       const result = await reconcileCustomerVnPayPayment(transactionReference)
       if (result?.payment) setPaymentStatus(result.payment)
       setReconciliationMessage(
-        result?.message || 'Đã gửi yêu cầu đối soát; trạng thái hiển thị lấy từ backend.',
+        result?.message || 'Đã kiểm tra giao dịch với VNPay.',
       )
     } catch (error) {
       if (error.status === 401) {
-        setReconciliationError('Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại rồi đối soát giao dịch.')
+        setReconciliationError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
       } else if (error.status === 403) {
-        setReconciliationError('Tài khoản hiện tại không có quyền đối soát giao dịch này.')
+        setReconciliationError('Bạn chưa thể kiểm tra giao dịch này. Vui lòng liên hệ cửa hàng.')
       } else if (error.status === 404) {
-        setReconciliationError('Không tìm thấy giao dịch thuộc tài khoản này.')
+        setReconciliationError('Không tìm thấy giao dịch. Vui lòng kiểm tra lịch sử đơn hàng.')
       } else {
-        setReconciliationError(error.message || 'Không thể đối soát với VNPay lúc này. Trạng thái đơn không thay đổi.')
+        setReconciliationError('Chưa thể kiểm tra giao dịch lúc này. Trạng thái đơn chưa thay đổi; vui lòng thử lại sau.')
       }
     } finally {
       setReconciliationLoading(false)
@@ -125,18 +142,18 @@ export default function ShopOrderResultPage() {
           </h1>
           <p className="mt-3 text-sm leading-6 text-[#806B65]">
             {verifiedSuccess
-              ? 'Backend đã xác nhận giao dịch qua quy trình IPN.'
+                ? 'Thanh toán đã được xác nhận. Cảm ơn bạn đã đặt hàng.'
               : verifiedFailure
-                ? 'Backend đã ghi nhận giao dịch thất bại. Bạn có thể kiểm tra đơn hàng hoặc liên hệ cửa hàng.'
+                  ? 'Giao dịch chưa thành công. Vui lòng kiểm tra đơn hàng trước khi thanh toán lại.'
                 : reconciliationRequired
-                  ? 'Backend đã nhận giao dịch nhưng cần cửa hàng đối soát trước khi xác nhận đơn.'
-                    : 'Thông tin trên đường dẫn quay về chưa xác nhận giao dịch. Chỉ trạng thái đã lưu và xác minh ở backend mới xác định kết quả.'}
+                  ? 'Giao dịch đang được cửa hàng kiểm tra. Đơn hàng chưa được xác nhận thanh toán.'
+                      : 'Đang kiểm tra kết quả thanh toán. Vui lòng không thanh toán lại trong lúc này.'}
           </p>
           {paymentStatus && (
             <dl className="mx-auto mt-5 grid max-w-md gap-2 rounded-2xl bg-[#FCF9F3] p-4 text-left text-xs text-[#675650]">
               <div className="flex justify-between gap-3"><dt>Mã đơn</dt><dd className="font-semibold">#{paymentStatus.orderId}</dd></div>
-              <div className="flex justify-between gap-3"><dt>Trạng thái đơn</dt><dd className="font-semibold">{paymentStatus.orderStatus}</dd></div>
-              <div className="flex justify-between gap-3"><dt>Thanh toán</dt><dd className="font-semibold">{paymentStatus.paymentStatus}</dd></div>
+              <div className="flex justify-between gap-3"><dt>Đơn hàng</dt><dd className="font-semibold">{getOrderStatusLabel(paymentStatus.orderStatus)}</dd></div>
+              <div className="flex justify-between gap-3"><dt>Thanh toán</dt><dd className="font-semibold">{paymentStatus.paymentStatus === 'SUCCESS' ? 'Đã thanh toán' : paymentStatus.paymentStatus === 'FAILED' ? 'Chưa thành công' : 'Đang xử lý'}</dd></div>
               {paymentStatus.paidAt && <div className="flex justify-between gap-3"><dt>Thời điểm thanh toán</dt><dd>{new Date(paymentStatus.paidAt).toLocaleString('vi-VN')}</dd></div>}
             </dl>
           )}
@@ -166,7 +183,7 @@ export default function ShopOrderResultPage() {
                 disabled={statusLoading || reconciliationLoading}
                 className="inline-flex h-10 items-center justify-center rounded-full border border-[#DDCDB8] px-5 text-xs font-semibold text-[#76534D] disabled:opacity-50"
               >
-                {statusLoading ? 'Đang kiểm tra...' : 'Tải lại trạng thái'}
+                {statusLoading ? 'Đang kiểm tra...' : 'Cập nhật trạng thái'}
               </button>
               {!verifiedSuccess && !verifiedFailure && !reconciliationRequired && (
                 <button
@@ -175,19 +192,19 @@ export default function ShopOrderResultPage() {
                   disabled={statusLoading || reconciliationLoading}
                   className="inline-flex h-10 items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:opacity-50"
                 >
-                  {reconciliationLoading ? 'Đang đối soát...' : 'Đối soát với VNPay'}
+                  {reconciliationLoading ? 'Đang kiểm tra...' : 'Kiểm tra thanh toán'}
                 </button>
               )}
             </div>
           )}
-          <Link to="/shop/orders" className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white hover:bg-[#4A302B]">Kiểm tra đơn hàng của tôi</Link>
+          <Link to="/shop/orders" className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white hover:bg-[#4A302B]">Xem đơn hàng</Link>
         </div>
       ) : order ? (
         <div className="rounded-3xl border border-[#EAE3DA] bg-white p-6 text-center shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-10">
           <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#EEF2E8] text-2xl text-[#536B50]" aria-hidden="true">✓</span>
           <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Đã tiếp nhận</p>
           <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B]">Cảm ơn bạn đã đặt hàng</h1>
-          <p className="mt-3 text-sm leading-6 text-[#806B65]">Đơn hàng đã được tạo thành công và đang chờ cửa hàng xử lý. Đây chưa phải xác nhận thanh toán.</p>
+          <p className="mt-3 text-sm leading-6 text-[#806B65]">Đơn hàng của bạn đã được gửi đến cửa hàng.</p>
           <dl className="mx-auto mt-7 grid max-w-md gap-3 rounded-2xl bg-[#FCF9F3] p-5 text-left text-sm sm:grid-cols-2">
             <div>
               <dt className="text-xs text-[#806B65]">Mã đơn</dt>
@@ -229,9 +246,9 @@ export default function ShopOrderResultPage() {
         </div>
       ) : (
         <div className="rounded-3xl border border-[#EAE3DA] bg-white p-7 text-center sm:p-10">
-          <h1 className="font-display text-2xl text-[#4A302B]">Không có thông tin kết quả trong phiên này</h1>
-          <p className="mt-3 text-sm leading-6 text-[#806B65]">Để tránh tạo đơn lần nữa khi tải lại trang, chúng tôi không tự gửi lại yêu cầu. Bạn có thể kiểm tra lịch sử đơn hàng.</p>
-          <Link to="/shop/orders" className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white">Mở lịch sử đơn hàng</Link>
+          <h1 className="font-display text-2xl text-[#4A302B]">Không tìm thấy kết quả đơn hàng</h1>
+          <p className="mt-3 text-sm leading-6 text-[#806B65]">Vui lòng xem lịch sử đơn hàng để kiểm tra.</p>
+          <Link to="/shop/orders" className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white">Xem đơn hàng</Link>
         </div>
       )}
     </section>

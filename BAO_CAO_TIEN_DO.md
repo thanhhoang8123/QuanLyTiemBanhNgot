@@ -86,3 +86,12 @@ Chi tiết:
 - Hãy đảm bảo chỉ chạy một instance Spring Boot trên port 8080. Nếu port đang bị chiếm, cần dừng tiến trình Java cũ hoặc đổi port.
 - Mật khẩu test chuẩn cho dev: `Banh@123`.
 - Tài khoản local dev nên được dùng trong môi trường local, không dùng như môi trường production.
+
+## Cập nhật tối ưu checkout VNPay
+
+- Checkout mới gọi thẳng API tạo đơn với idempotency key; chỉ tra cứu đơn theo key khi khôi phục/retry, giảm một lượt gọi API 404 không cần thiết.
+- Ghi lịch sử MongoDB được đưa vào executor nền sau khi MySQL commit để không giữ phản hồi tạo đơn chờ MongoDB. Executor có hàng đợi giới hạn; nếu quá tải, ghi log lỗi thay vì âm thầm bỏ qua.
+- Giảm thời gian tự kiểm tra trạng thái thanh toán tối đa từ khoảng 24 giây xuống khoảng 7 giây; khách vẫn có thể kiểm tra lại thủ công.
+- Tắt SQL echo trong profile dev để giảm log không cần thiết.
+- Kiểm thử: test frontend liên quan PASS (8/8), test backend Mongo after-commit PASS, production build PASS. Chưa đo thời gian thực tế sau khi khởi động lại các dịch vụ.
+- Lưu ý: ghi Mongo bất đồng bộ có thể chưa hoàn tất nếu ứng dụng bị dừng đột ngột; executor chờ tối đa 5 giây khi shutdown.
