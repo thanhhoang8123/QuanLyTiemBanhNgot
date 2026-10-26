@@ -12,7 +12,7 @@ import {
   createProduct,
   deactivateProduct,
   deleteProduct,
-  getProducts,
+  getProductPage,
   uploadProductImage,
   updateProduct,
 } from '../services/productService.js'
@@ -53,9 +53,33 @@ function getApiMessage(error) {
   return getUserFacingErrorMessage(error)
 }
 
-async function fetchCatalog() {
-  const [categoryData, productData] = await Promise.all([getCategories(), getProducts()])
-  if (!Array.isArray(categoryData) || !Array.isArray(productData)) {
+async function fetchCatalog({
+  page = 0,
+  size = 20,
+  query = '',
+  categoryId = '',
+  status = '',
+  sort = 'name',
+  direction = 'ASC',
+  signal,
+} = {}) {
+  const [categoryData, productData] = await Promise.all([
+    getCategories({ signal }),
+    getProductPage({
+      page,
+      size,
+      keyword: query,
+      categoryId,
+      status,
+      sort,
+      direction,
+      signal,
+    }),
+  ])
+  if (!Array.isArray(categoryData)
+      || !Array.isArray(productData?.content)
+      || typeof productData.totalElements !== 'number'
+      || typeof productData.totalPages !== 'number') {
     throw new Error('Chưa thể tải danh sách sản phẩm. Vui lòng thử lại.')
   }
 

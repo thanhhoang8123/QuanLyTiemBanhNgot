@@ -22,6 +22,11 @@ const categoryColors = [
   'var(--wa-sand)',
 ]
 const initialData = { orders: [], customers: [], products: [], ingredients: [] }
+const periodOptions = [
+  { value: 'Hôm nay', label: 'Hôm nay' },
+  { value: '7 ngày qua', label: '7 ngày qua' },
+  { value: 'Tháng này', label: 'Tháng này' },
+]
 
 function getErrorMessage(error) {
   return getUserFacingErrorMessage(error, 'Chưa thể tải số liệu. Vui lòng thử lại.')

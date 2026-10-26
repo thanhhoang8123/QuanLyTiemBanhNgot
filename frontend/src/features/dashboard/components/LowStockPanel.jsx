@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom'
 import Icon from '../../../components/Icon.jsx'
-import { Link } from 'react-router-dom'
 
 const quantityFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 })
 

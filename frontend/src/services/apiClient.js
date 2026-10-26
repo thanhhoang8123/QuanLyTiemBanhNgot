@@ -163,9 +163,13 @@ export async function apiRequest(
         : typeof data?.detail === 'string'
           ? data.detail
           : ''
+    const safeMessage =
+      normalizedPath === '/auth/login' && response.status === 401
+        ? 'Tên đăng nhập hoặc mật khẩu không đúng.'
+        : getSafeErrorMessage(serverMessage, response.status)
 
     throw new ApiError(
-      getSafeErrorMessage(serverMessage, response.status),
+      safeMessage,
       response.status,
     )
   }
