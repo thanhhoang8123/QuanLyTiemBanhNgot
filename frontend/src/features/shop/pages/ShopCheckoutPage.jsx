@@ -192,6 +192,7 @@ export default function ShopCheckoutPage() {
     setSubmitError('')
     let order
     let activeAttempt = pendingAttempt
+    const isNewAttempt = activeAttempt == null
     let vnpayInitiationStarted = false
     try {
       if (!activeAttempt) {
@@ -209,10 +210,12 @@ export default function ShopCheckoutPage() {
         setAttemptState({ status: 'pending', attempt: activeAttempt })
       }
 
-      order = await resolveCustomerOrderAttempt(activeAttempt, {
-        findByRequestKey: getCustomerOrderByRequestKey,
-        createOrder: createCustomerOrder,
-      })
+      order = isNewAttempt
+        ? await createCustomerOrder(activeAttempt.payload, activeAttempt.key)
+        : await resolveCustomerOrderAttempt(activeAttempt, {
+          findByRequestKey: getCustomerOrderByRequestKey,
+          createOrder: createCustomerOrder,
+        })
       if (cartMatchesCustomerOrder(cart.items, activeAttempt.payload.items)) cart.clear()
 
       if ((activeAttempt.paymentMethod || 'CASH') === 'VNPAY') {
@@ -283,6 +286,7 @@ export default function ShopCheckoutPage() {
     if (!pendingAttempt?.orderId || isCheckingPaymentStatus) return
 
     setIsCheckingPaymentStatus(true)
+    setSubmitError('')
     setPaymentStatusError('')
     try {
       const result = await getCustomerVnPayPaymentStatusByOrderId(pendingAttempt.orderId)
@@ -297,9 +301,9 @@ export default function ShopCheckoutPage() {
     } catch (error) {
       setPaymentStatus(null)
       if (error.status === 401) {
-        setPaymentStatusError('Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại rồi kiểm tra trạng thái đơn hàng.')
+        setPaymentStatusError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
       } else if (error.status === 403) {
-        setPaymentStatusError('Tài khoản hiện tại không có quyền tra cứu giao dịch này.')
+        setPaymentStatusError('Bạn chưa thể xem giao dịch này. Vui lòng liên hệ cửa hàng.')
       } else if (error.status === 404) {
         setPaymentStatusError('Chưa tìm thấy thông tin giao dịch của đơn này. Kết quả lần thanh toán trước chưa được xác định; vui lòng kiểm tra lại sau hoặc liên hệ cửa hàng. Không gửi lại yêu cầu thanh toán lúc này.')
       } else {
@@ -350,7 +354,7 @@ export default function ShopCheckoutPage() {
     return (
       <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
         <div role="alert" className="rounded-2xl border border-[#E2C5BF] bg-white p-6 text-sm leading-6 text-[#914E46]">
-          Trình duyệt đang giữ một yêu cầu đặt hàng chưa được xác nhận cho tài khoản khác. Hãy đăng nhập lại đúng tài khoản đó để kiểm tra hoặc tiếp tục yêu cầu; chưa thể bắt đầu đơn mới trong phiên này.
+          Có đơn hàng chưa hoàn tất trên trình duyệt này. Vui lòng đăng nhập tài khoản đã dùng để đặt đơn và kiểm tra trạng thái trước khi tạo đơn mới.
         </div>
       </section>
     )
@@ -384,16 +388,9 @@ export default function ShopCheckoutPage() {
           </p>
           {isVnPayAttempt && pendingAttempt.orderId && (
             <p className="mt-3 rounded-xl bg-[#FCF9F3] p-3 text-xs text-[#675650]">
-              Mã đơn đã lưu: #{pendingAttempt.orderId}. Trạng thái thanh toán chưa được xác nhận.
+              Mã đơn: #{pendingAttempt.orderId}
             </p>
           )}
-          <ul className="mt-5 space-y-2 rounded-2xl bg-[#FCF9F3] p-4 text-sm text-[#675650]">
-            {pendingAttempt.payload.items.map((item) => (
-              <li key={item.productId}>Sản phẩm #{item.productId} × {item.quantity}</li>
-            ))}
-            {pendingAttempt.payload.deliveryAddress && <li>Địa chỉ giao hàng đã được lưu trong phiên.</li>}
-            {pendingAttempt.payload.promotionCode && <li>Mã khuyến mãi: {pendingAttempt.payload.promotionCode}</li>}
-          </ul>
           {paymentInitiationUncertain && (
             <>
               <button
@@ -602,8 +599,8 @@ export default function ShopCheckoutPage() {
               className="mt-5 flex h-11 w-full items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting
-                ? paymentMethod === 'VNPAY' ? 'Đang tạo đơn và mở VNPay...' : 'Đang gửi đơn...'
-                : paymentMethod === 'VNPAY' ? 'Đặt hàng và thanh toán VNPay' : 'Xác nhận đặt hàng'}
+                ? paymentMethod === 'VNPAY' ? 'Đang chuyển tới VNPay...' : 'Đang đặt hàng...'
+                : paymentMethod === 'VNPAY' ? 'Đặt hàng và thanh toán' : 'Đặt hàng'}
             </button>
             <Link to="/shop/cart" className="mt-3 block text-center text-xs font-semibold text-[#76534D]">Quay lại giỏ hàng</Link>
           </aside>

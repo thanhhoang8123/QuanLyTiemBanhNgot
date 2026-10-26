@@ -26,13 +26,13 @@ export default function OrdersTable({ orders, totalOrders, period, error }) {
         <Link to="/admin/orders" className="shrink-0 rounded-lg px-2 py-2 text-[11px] font-bold text-rosewood transition hover:bg-petal">Xem tất cả</Link>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[590px] text-left">
+        <table className="w-full min-w-[650px] text-left">
           <thead>
             <tr className="bg-petal text-[10px] font-bold uppercase tracking-wide text-rosewood">
               <th className="px-5 py-3 font-medium sm:px-6">Mã đơn</th>
               <th className="px-4 py-3 font-medium">Khách hàng</th>
               <th className="px-4 py-3 font-medium">Thời gian</th>
-              <th className="px-4 py-3 font-medium">Tổng tiền</th>
+              <th className="px-4 py-3 font-medium">Thành tiền</th>
               <th className="px-5 py-3 font-medium sm:px-6">Trạng thái</th>
             </tr>
           </thead>

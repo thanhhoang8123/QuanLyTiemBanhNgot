@@ -8,6 +8,7 @@ import com.nhom4.QuanLyTiemBanhNgot.dto.order.PosOrderQuoteRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.PosOrderQuoteResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderUpdateRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.PageResponse;
 import com.nhom4.QuanLyTiemBanhNgot.service.OrderService;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
@@ -15,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.time.LocalDate;
 
 /**
  * REST Controller xử lý API cho bảng orders.
@@ -47,6 +49,20 @@ public class OrderController {
     @GetMapping
     public List<OrderResponse> getAllOrders() {
         return orderService.findAll();
+    }
+
+    @GetMapping("/page")
+    public PageResponse<OrderResponse> getOrderPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) LocalDate dateFrom,
+            @RequestParam(required = false) LocalDate dateTo,
+            @RequestParam(defaultValue = "orderDate") String sort,
+            @RequestParam(defaultValue = "DESC") String direction) {
+        return PageResponse.from(orderService.findPage(
+                page, size, keyword, status, dateFrom, dateTo, sort, direction));
     }
 
     /**

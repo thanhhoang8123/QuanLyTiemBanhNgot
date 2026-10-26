@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import Icon from '../../../components/Icon.jsx'
 import { Link } from 'react-router-dom'
 
@@ -9,7 +10,7 @@ export default function LowStockPanel({ items, error }) {
       <div className="flex items-start justify-between gap-2">
         <div>
           <h2 className="font-display text-lg font-semibold text-rosewood">Nguyên liệu sắp hết</h2>
-          <p className="mt-1 text-[11px] text-muted">Cần chú ý nhập thêm</p>
+          <p className="mt-1 text-[11px] text-muted">Theo ngưỡng tồn kho đã cấu hình</p>
         </div>
         <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-caramel-soft text-rosewood">
           <Icon name="package" size={16} />

@@ -13,8 +13,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Service xử lý logic liên quan đến Customer.
@@ -67,6 +70,17 @@ public class CustomerService {
                 .stream()
                 .map(customerMapper::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CustomerResponse> findPage(
+            int page, int size, String keyword, String sort, String direction) {
+        Pageable pageable = PaginationSupport.pageRequest(
+                page, size, sort, direction, "fullName",
+                Set.of("id", "fullName", "phone", "email", "loyaltyPoints", "status"));
+        String value = keyword == null || keyword.isBlank() ? null : keyword.trim();
+        return customerRepository.findPageByKeyword(value, pageable)
+                .map(customerMapper::toResponse);
     }
 
     /**

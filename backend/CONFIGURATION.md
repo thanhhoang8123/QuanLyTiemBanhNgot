@@ -71,10 +71,14 @@ tài khoản test; chỉ dùng cho máy phát triển, không dùng profile này
 trường công khai.
 
 MySQL local trong `application.properties` tiếp tục là database nghiệp vụ.
-MongoDB của profile `dev` kết nối Atlas thông qua `MONGODB_URI`; nếu thiếu biến
-này, ứng dụng báo lỗi cấu hình và không tự chuyển về MongoDB local. SMTP không
-bắt buộc để khởi động, nhưng cần `MAIL_USERNAME` và `MAIL_PASSWORD` để gửi email
-xác minh.
+MongoDB của profile `dev` kết nối Atlas thông qua biến môi trường `MONGODB_URI`,
+được tham chiếu bởi `spring.mongodb.uri` trong cấu hình chung. Profile `dev`
+không ghi đè URI này. Nếu biến thiếu, rỗng hoặc sai định dạng, ứng dụng dừng
+sớm với thông báo hướng dẫn; URI không được ghi vào log. Cấu hình không tự
+chuyển sang MongoDB local. SMTP không bắt buộc để khởi động, nhưng cần
+`MAIL_USERNAME` và `MAIL_PASSWORD` để gửi email xác minh. Mô phỏng thanh toán
+mặc định tắt ở mọi profile; dev chỉ bật khi chủ động đặt
+`PAYMENT_SIMULATION_ENABLED=true`.
 
 ### Chuẩn bị Atlas một lần
 
@@ -103,8 +107,29 @@ URI thật vào tài liệu, script hoặc Git. Các biến đặt bằng `$env:
 trình backend khởi chạy từ terminal này kế thừa. Muốn chạy từ một terminal mới,
 cần đặt lại biến hoặc cấu hình biến môi trường cá nhân trên Windows.
 
+### Khởi chạy bằng VS Code Java debugger
+
+Workspace có cấu hình **WA Patisserie (dev)** trong `.vscode/launch.json`;
+cấu hình này nạp biến từ `backend/.env` và chọn profile `dev`. Tạo file
+`backend/.env` trên máy cá nhân (file này được Git bỏ qua), với nội dung theo
+dạng sau, thay bằng URI thật lấy từ Atlas:
+
+```dotenv
+MONGODB_URI=mongodb+srv://<database-user>:<url-encoded-password>@<cluster-host>/quanlytiembanh_logs?retryWrites=true&w=majority
+```
+
+Không thêm dấu nháy quanh giá trị, không để nguyên dấu `<...>`, và không chia sẻ
+file này. Nếu dùng MongoDB không phải Atlas, URI cần có scheme `mongodb://`.
+Sau đó mở **Run and Debug**, chọn **WA Patisserie (dev)** và khởi chạy. Biến
+đặt trong một terminal PowerShell riêng không tự được truyền vào VS Code đã
+đang chạy; hãy dùng file env cục bộ nói trên hoặc mở VS Code từ chính terminal
+đã đặt biến môi trường.
+
 Nếu cần gửi email xác minh, đặt thêm `MAIL_USERNAME` và `MAIL_PASSWORD` trong
 terminal đó. Dùng Gmail App Password, không dùng mật khẩu Gmail thông thường.
+API mô phỏng thanh toán mặc định vẫn tắt trong profile `dev`; chỉ bật tạm thời
+cho kiểm thử thủ công bằng `$env:PAYMENT_SIMULATION_ENABLED = "true"`. Không
+đặt biến này trong môi trường production.
 
 ## Theo dõi collection MongoDB bằng Compass
 
@@ -143,6 +168,20 @@ localhost hoặc credential trống:
 | `MAIL_USERNAME` | Tài khoản SMTP gửi email xác minh |
 | `MAIL_PASSWORD` | SMTP password/App Password |
 | `FRONTEND_URL` | Origin frontend production dùng trong email xác minh |
+| `VNPAY_TMN_CODE` | Mã merchant VNPay production |
+| `VNPAY_HASH_SECRET` | Khóa ký callback VNPay production |
+| `VNPAY_PAYMENT_URL` | URL thanh toán do VNPay production cung cấp |
+| `VNPAY_QUERY_URL` | URL truy vấn giao dịch do VNPay production cung cấp |
+| `VNPAY_RETURN_URL` | Return URL HTTPS của backend production |
+| `VNPAY_IPN_URL` | IPN URL HTTPS của backend production |
+
+Profile production không bật API mô phỏng thanh toán. Ngay cả khi deployment
+quên đặt `SPRING_PROFILES_ACTIVE=prod`, profile mặc định `dev` cũng không bật
+mô phỏng nếu không có biến `PAYMENT_SIMULATION_ENABLED=true`. Đảm bảo file
+`application-prod.properties` được đưa vào artifact phát hành và luôn đặt profile
+production rõ ràng. Không dùng thông tin sandbox, URL ngrok hoặc secret dev
+trong production. Cấu hình VNPAY phải lấy từ merchant production đã được cấp;
+nếu chưa có, chưa nên mở thanh toán VNPay thật.
 
 Ví dụ PowerShell (thay giá trị mẫu bằng cấu hình từ secret manager của môi
 trường deploy, không lưu các giá trị này vào repository):
@@ -156,6 +195,12 @@ $env:MONGODB_URI = "mongodb+srv://user:password@cluster.example.invalid/quanlyti
 $env:MAIL_USERNAME = "your-email@example.com"
 $env:MAIL_PASSWORD = "set-from-secret-manager"
 $env:FRONTEND_URL = "https://shop.example.invalid"
+$env:VNPAY_TMN_CODE = "set-from-secret-manager"
+$env:VNPAY_HASH_SECRET = "set-from-secret-manager"
+$env:VNPAY_PAYMENT_URL = "https://provider-production.example.invalid/payment"
+$env:VNPAY_QUERY_URL = "https://provider-production.example.invalid/query"
+$env:VNPAY_RETURN_URL = "https://api.example.invalid/api/payments/vnpay/return"
+$env:VNPAY_IPN_URL = "https://api.example.invalid/api/payments/vnpay/ipn"
 .\mvnw.cmd spring-boot:run
 ```
 

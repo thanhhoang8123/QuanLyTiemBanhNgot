@@ -19,6 +19,28 @@ export function getProducts({ signal } = {}) {
   return apiRequest('/products', { signal })
 }
 
+export function getProductPage({
+  page = 0,
+  size = 20,
+  keyword = '',
+  categoryId = '',
+  status = '',
+  sort = 'name',
+  direction = 'ASC',
+  signal,
+} = {}) {
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+    sort,
+    direction,
+  })
+  if (keyword.trim()) params.set('keyword', keyword.trim())
+  if (categoryId) params.set('categoryId', categoryId)
+  if (status !== '') params.set('status', status)
+  return apiRequest(`/products/page?${params}`, { signal })
+}
+
 export function getProductById(id, { signal } = {}) {
   return apiRequest(`/products/${encodeURIComponent(id)}`, { signal })
 }

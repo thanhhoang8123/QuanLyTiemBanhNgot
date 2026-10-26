@@ -1,6 +1,8 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 import com.nhom4.QuanLyTiemBanhNgot.dto.employee.EmployeeOptionResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.employee.EmployeeListResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.PageResponse;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Employee;
 import com.nhom4.QuanLyTiemBanhNgot.service.EmployeeService;
 import org.springframework.http.ResponseEntity;
@@ -28,24 +30,36 @@ public class EmployeeController {
     }
 
     @GetMapping
-    public List<Employee> getAll() {
-        return employeeService.getAll();
+    public List<EmployeeListResponse> getAll() {
+        return employeeService.getAll().stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @GetMapping("/page")
+    public PageResponse<EmployeeListResponse> getPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "fullName") String sort,
+            @RequestParam(defaultValue = "ASC") String direction) {
+        return PageResponse.from(employeeService.getPage(page, size, keyword, sort, direction));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Employee> getById(@PathVariable Long id) {
+    public ResponseEntity<EmployeeListResponse> getById(@PathVariable Long id) {
         return employeeService.getById(id)
-                .map(ResponseEntity::ok)
+                .map(employee -> ResponseEntity.ok(toResponse(employee)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public Employee create(@RequestBody Employee employee) {
-        return employeeService.save(employee);
+    public EmployeeListResponse create(@RequestBody Employee employee) {
+        return toResponse(employeeService.save(employee));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Employee> update(
+    public ResponseEntity<EmployeeListResponse> update(
             @PathVariable Long id,
             @RequestBody Employee employee) {
 
@@ -58,9 +72,7 @@ public class EmployeeController {
                     existingEmployee.setSalary(employee.getSalary());
                     existingEmployee.setStatus(employee.getStatus());
 
-                    return ResponseEntity.ok(
-                            employeeService.save(existingEmployee)
-                    );
+                    return ResponseEntity.ok(toResponse(employeeService.save(existingEmployee)));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -73,5 +85,15 @@ public class EmployeeController {
 
         employeeService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    private EmployeeListResponse toResponse(Employee employee) {
+        return new EmployeeListResponse(
+                employee.getId(),
+                employee.getFullName(),
+                employee.getPhone(),
+                employee.getEmail(),
+                employee.getSalary(),
+                employee.getStatus());
     }
 }

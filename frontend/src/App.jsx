@@ -1,37 +1,38 @@
-import { useContext, useEffect, useState } from 'react'
+import { lazy, Suspense, useContext, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AppLayout from './layouts/AppLayout.jsx'
-import DashboardPage from './features/dashboard/pages/DashboardPage.jsx'
-import PosPage from './features/pos/pages/PosPage.jsx'
-import ProductsPage from './features/products/pages/ProductsPage.jsx'
-import InventoryPage from './features/inventory/pages/InventoryPage.jsx'
-import SuppliersPage from './features/suppliers/pages/SuppliersPage.jsx'
-import PurchaseOrdersPage from './features/purchase-orders/pages/PurchaseOrdersPage.jsx'
-import OrdersPage from './features/orders/pages/OrdersPage.jsx'
-import CustomersPage from './features/customers/pages/CustomersPage.jsx'
-import PromotionsPage from './features/promotions/pages/PromotionsPage.jsx'
-import PromotionProductsPage from './features/promotion-products/pages/PromotionProductsPage.jsx'
-import CustomOrdersPage from './features/custom-orders/pages/CustomOrdersPage.jsx'
-import PaymentsPage from './features/payments/pages/PaymentsPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
 import ShopLayout from './layouts/ShopLayout.jsx'
-import ShopHomePage from './features/shop/pages/ShopHomePage.jsx'
-import ShopProductsPage from './features/shop/pages/ShopProductsPage.jsx'
-import ShopProductDetailPage from './features/shop/pages/ShopProductDetailPage.jsx'
-import ShopCartPage from './features/shop/pages/ShopCartPage.jsx'
-import ShopCheckoutPage from './features/shop/pages/ShopCheckoutPage.jsx'
-import ShopOrderResultPage from './features/shop/pages/ShopOrderResultPage.jsx'
-import ShopOrdersPage from './features/shop/pages/ShopOrdersPage.jsx'
-import ShopOrderDetailPage from './features/shop/pages/ShopOrderDetailPage.jsx'
-import RegisterPage from './features/auth/pages/RegisterPage.jsx'
-import VerifyEmailPage from './features/auth/pages/VerifyEmailPage.jsx'
-import LoginPage from './features/auth/pages/LoginPage.jsx'
-import AccountsPage from './features/accounts/pages/AccountsPage.jsx'
-import ManagementLogsPage from './features/activity-logs/pages/ManagementLogsPage.jsx'
 import Icon from './components/Icon.jsx'
 import { apiRequest } from './services/apiClient.js'
 import { ADMIN_ROLES, MANAGER_ROLES, STAFF_ROLES } from './features/auth/permissions.js'
 import { AuthContext } from './features/auth/AuthContext.js'
+
+const DashboardPage = lazy(() => import('./features/dashboard/pages/DashboardPage.jsx'))
+const PosPage = lazy(() => import('./features/pos/pages/PosPage.jsx'))
+const ProductsPage = lazy(() => import('./features/products/pages/ProductsPage.jsx'))
+const InventoryPage = lazy(() => import('./features/inventory/pages/InventoryPage.jsx'))
+const SuppliersPage = lazy(() => import('./features/suppliers/pages/SuppliersPage.jsx'))
+const PurchaseOrdersPage = lazy(() => import('./features/purchase-orders/pages/PurchaseOrdersPage.jsx'))
+const OrdersPage = lazy(() => import('./features/orders/pages/OrdersPage.jsx'))
+const CustomersPage = lazy(() => import('./features/customers/pages/CustomersPage.jsx'))
+const PromotionsPage = lazy(() => import('./features/promotions/pages/PromotionsPage.jsx'))
+const PromotionProductsPage = lazy(() => import('./features/promotion-products/pages/PromotionProductsPage.jsx'))
+const CustomOrdersPage = lazy(() => import('./features/custom-orders/pages/CustomOrdersPage.jsx'))
+const PaymentsPage = lazy(() => import('./features/payments/pages/PaymentsPage.jsx'))
+const ShopHomePage = lazy(() => import('./features/shop/pages/ShopHomePage.jsx'))
+const ShopProductsPage = lazy(() => import('./features/shop/pages/ShopProductsPage.jsx'))
+const ShopProductDetailPage = lazy(() => import('./features/shop/pages/ShopProductDetailPage.jsx'))
+const ShopCartPage = lazy(() => import('./features/shop/pages/ShopCartPage.jsx'))
+const ShopCheckoutPage = lazy(() => import('./features/shop/pages/ShopCheckoutPage.jsx'))
+const ShopOrderResultPage = lazy(() => import('./features/shop/pages/ShopOrderResultPage.jsx'))
+const ShopOrdersPage = lazy(() => import('./features/shop/pages/ShopOrdersPage.jsx'))
+const ShopOrderDetailPage = lazy(() => import('./features/shop/pages/ShopOrderDetailPage.jsx'))
+const RegisterPage = lazy(() => import('./features/auth/pages/RegisterPage.jsx'))
+const VerifyEmailPage = lazy(() => import('./features/auth/pages/VerifyEmailPage.jsx'))
+const LoginPage = lazy(() => import('./features/auth/pages/LoginPage.jsx'))
+const AccountsPage = lazy(() => import('./features/accounts/pages/AccountsPage.jsx'))
+const ManagementLogsPage = lazy(() => import('./features/activity-logs/pages/ManagementLogsPage.jsx'))
 
 function RequireAuth({ children, allowedRoles = STAFF_ROLES }) {
   const location = useLocation()
@@ -108,6 +109,11 @@ export default function App() {
 
   return (
     <>
+      <Suspense fallback={(
+        <div role="status" className="flex min-h-screen items-center justify-center bg-[#FCF9F3] text-sm font-semibold text-[#76534D]">
+          Đang tải trang...
+        </div>
+      )}>
       <Routes>
         <Route path="shop" element={<ShopLayout />}>
           <Route path="login" element={<LoginPage />} />
@@ -157,6 +163,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      </Suspense>
       {toast && (
         <div role="status" className="fixed bottom-5 left-1/2 z-[60] flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-xl bg-rosewood px-4 py-3 text-xs text-white shadow-xl">
           <Icon name="check" size={16} className="shrink-0 text-caramel" />

@@ -3,6 +3,8 @@ package com.nhom4.QuanLyTiemBanhNgot.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -10,6 +12,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class MongoAfterCommitWriter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MongoAfterCommitWriter.class);
+
+    private final TaskExecutor mongoAuditTaskExecutor;
+
+    public MongoAfterCommitWriter(TaskExecutor mongoAuditTaskExecutor) {
+        this.mongoAuditTaskExecutor = mongoAuditTaskExecutor;
+    }
 
     public void execute(String operation, Runnable write) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()

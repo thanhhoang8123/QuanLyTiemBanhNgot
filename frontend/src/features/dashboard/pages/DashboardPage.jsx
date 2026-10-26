@@ -249,9 +249,9 @@ export default function DashboardPage() {
             onChange={(event) => setPeriod(event.target.value)}
             className="h-10 rounded-xl border border-border bg-paper px-3 text-xs font-medium text-rosewood outline-none transition hover:border-caramel-hover focus:border-caramel-hover"
           >
-            <option>Hôm nay</option>
-            <option>7 ngày qua</option>
-            <option>Tháng này</option>
+            {periodOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
           </select>
           <Link to="/pos" className="flex h-10 items-center gap-2 rounded-xl bg-caramel px-4 text-xs font-semibold text-action-ink shadow-sm transition hover:bg-caramel-hover">
             <Icon name="plus" size={15} /> Tạo đơn hàng

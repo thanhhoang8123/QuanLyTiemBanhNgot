@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "WA Patisserie (dev)",
+      "request": "launch",
+      "mainClass": "com.nhom4.QuanLyTiemBanhNgot.QuanLyTiemBanhNgotApplication",
+      "projectName": "QuanLyTiemBanhNgot",
+      "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/backend/.env",
+      "vmArgs": "-Dspring.profiles.active=dev"
+    }
+  ]
+}

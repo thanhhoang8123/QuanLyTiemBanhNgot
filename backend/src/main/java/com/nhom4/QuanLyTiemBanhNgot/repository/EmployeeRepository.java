@@ -3,6 +3,8 @@ package com.nhom4.QuanLyTiemBanhNgot.repository;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Employee;
 import com.nhom4.QuanLyTiemBanhNgot.dto.employee.EmployeeOptionResponse;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,6 +24,13 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
             where employee.status = true
             """)
     List<EmployeeOptionResponse> findActiveOptions(@Param("username") String username);
+
+    Page<Employee> findByFullNameContainingIgnoreCaseOrPhoneContainingIgnoreCaseOrEmailContainingIgnoreCase(
+            String fullName,
+            String phone,
+            String email,
+            Pageable pageable
+    );
 
     Optional<Employee> findByAccount_UsernameAndStatusTrue(String username);
 }

@@ -7,9 +7,12 @@ import com.nhom4.QuanLyTiemBanhNgot.repository.ProductRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class CategoryService {
@@ -26,6 +29,14 @@ public class CategoryService {
 
     public List<Category> getAll() {
         return categoryRepository.findAll();
+    }
+
+    public Page<Category> getPage(
+            int page, int size, String keyword, String sort, String direction) {
+        Pageable pageable = PaginationSupport.pageRequest(
+                page, size, sort, direction, "name", Set.of("id", "name", "status"));
+        return categoryRepository.findByNameContainingIgnoreCase(
+                keyword == null ? "" : keyword.trim(), pageable);
     }
 
     public Optional<Category> getById(Long id) {

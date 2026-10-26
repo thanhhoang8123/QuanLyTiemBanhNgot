@@ -4,6 +4,30 @@ export function getOrders({ signal } = {}) {
   return apiRequest('/orders', { signal })
 }
 
+export function getOrderPage({
+  page = 0,
+  size = 20,
+  keyword = '',
+  status = '',
+  dateFrom = '',
+  dateTo = '',
+  sort = 'orderDate',
+  direction = 'DESC',
+  signal,
+} = {}) {
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+    sort,
+    direction,
+  })
+  if (keyword.trim()) params.set('keyword', keyword.trim())
+  if (status) params.set('status', status)
+  if (dateFrom) params.set('dateFrom', dateFrom)
+  if (dateTo) params.set('dateTo', dateTo)
+  return apiRequest(`/orders/page?${params}`, { signal })
+}
+
 export function getOrderById(id, { signal } = {}) {
   return apiRequest(`/orders/${encodeURIComponent(id)}`, { signal })
 }
