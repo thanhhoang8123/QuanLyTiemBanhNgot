@@ -1,5 +1,6 @@
 package com.nhom4.QuanLyTiemBanhNgot.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -20,6 +21,7 @@ public class Account {
     private String username;
 
     @Column(name = "password_hash", length = 255)
+    @JsonIgnore
     private String passwordHash;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -33,9 +35,11 @@ public class Account {
     private Boolean emailVerified = false;
 
     @Column(name = "email_verification_token_hash", length = 64, unique = true)
+    @JsonIgnore
     private String emailVerificationTokenHash;
 
     @Column(name = "email_verification_token_expires_at")
+    @JsonIgnore
     private LocalDateTime emailVerificationTokenExpiresAt;
 
     @ManyToOne(fetch = FetchType.LAZY)

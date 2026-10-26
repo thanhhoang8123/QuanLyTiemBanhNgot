@@ -3,6 +3,7 @@ package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 import com.nhom4.QuanLyTiemBanhNgot.dto.customer.CustomerRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.customer.CustomerResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.PageResponse;
 import com.nhom4.QuanLyTiemBanhNgot.service.CustomerService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,6 +36,16 @@ public class CustomerController {
     @GetMapping
     public List<CustomerResponse> getAllCustomers() {
         return customerService.findAll();
+    }
+
+    @GetMapping("/page")
+    public PageResponse<CustomerResponse> getCustomerPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "fullName") String sort,
+            @RequestParam(defaultValue = "ASC") String direction) {
+        return PageResponse.from(customerService.findPage(page, size, keyword, sort, direction));
     }
 
     /**

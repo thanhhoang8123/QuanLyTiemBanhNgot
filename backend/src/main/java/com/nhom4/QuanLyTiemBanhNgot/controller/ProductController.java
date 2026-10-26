@@ -2,6 +2,7 @@
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 import com.nhom4.QuanLyTiemBanhNgot.entity.Product;
+import com.nhom4.QuanLyTiemBanhNgot.dto.PageResponse;
 import com.nhom4.QuanLyTiemBanhNgot.service.ProductService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,19 @@ public class ProductController {
     @GetMapping
     public List<Product> getAll() {
         return productService.getAll();
+    }
+
+    @GetMapping("/page")
+    public PageResponse<Product> getPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Boolean status,
+            @RequestParam(defaultValue = "name") String sort,
+            @RequestParam(defaultValue = "ASC") String direction) {
+        return PageResponse.from(productService.getPage(
+                page, size, keyword, categoryId, status, sort, direction));
     }
 
     // Tìm kiếm theo tên hoặc mã sản phẩm
