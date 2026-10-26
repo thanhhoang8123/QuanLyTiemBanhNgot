@@ -19,12 +19,14 @@ export function getVnPayReturnTransactionReference(search) {
 
 export function getVnPayInitiationErrorMessage(error) {
   if (error?.status === 409) {
-    return 'Đơn đã tồn tại và backend báo giao dịch trước đó đang chờ/đối soát. Không thử tạo giao dịch mới; hãy kiểm tra đơn hàng của bạn.'
+    return 'Đơn hàng đang có giao dịch cần kiểm tra. Vui lòng xem trạng thái đơn trước khi thanh toán lại.'
   }
   if (error?.status === 401 || error?.status === 403) {
-    return `Không thể khởi tạo thanh toán do phiên đăng nhập hoặc quyền truy cập. Đơn vẫn được giữ để đối soát. ${error.message || ''}`.trim()
+    return error.status === 401
+      ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại rồi kiểm tra đơn hàng.'
+      : 'Tài khoản chưa thể tiếp tục thanh toán. Vui lòng liên hệ cửa hàng.'
   }
-  return 'Chưa rõ backend đã tạo giao dịch VNPay hay chưa. Đơn hàng được giữ lại; không tự gửi lại để tránh tạo lần thanh toán khác. Hãy kiểm tra đơn hàng của bạn.'
+  return 'Chưa thể mở trang thanh toán. Đơn hàng vẫn được lưu; vui lòng kiểm tra trạng thái trước khi thử lại.'
 }
 
 export function requireVnPayPaymentUrl(response) {

@@ -71,13 +71,13 @@ public class VnPayReconciliationService {
                 && "SUCCESS".equalsIgnoreCase(attempt.getPayment().getStatus())) {
             return new VnPayReconciliationResponse(
                     statusOf(attempt),
-                    "Giao dịch đã được xác nhận; không gửi truy vấn mới."
+                    "Thanh toán đã được xác nhận."
             );
         }
         if (!claimQuerySlot(transactionReference)) {
             return new VnPayReconciliationResponse(
                     statusOf(attempt),
-                    "Vừa có yêu cầu đối soát. Vui lòng chờ một chút trước khi thử lại."
+                    "Vừa kiểm tra giao dịch. Vui lòng chờ một chút rồi thử lại."
             );
         }
 
@@ -86,13 +86,13 @@ public class VnPayReconciliationService {
         if (!"00".equals(response.get("vnp_ResponseCode"))) {
             return new VnPayReconciliationResponse(
                     statusOf(attempt),
-                    "VNPay chưa thể xác nhận giao dịch; trạng thái đơn không thay đổi."
+                    "Chưa thể xác nhận giao dịch. Trạng thái đơn hàng chưa thay đổi."
             );
         }
         if (!"00".equals(response.get("vnp_TransactionStatus"))) {
             return new VnPayReconciliationResponse(
                     statusOf(attempt),
-                    "VNPay chưa xác nhận giao dịch thành công; trạng thái đơn không thay đổi."
+                    "Giao dịch chưa thành công. Trạng thái đơn hàng chưa thay đổi."
             );
         }
 
@@ -103,7 +103,7 @@ public class VnPayReconciliationService {
         );
         return new VnPayReconciliationResponse(
                 updated,
-                "Đã nhận và xác minh kết quả giao dịch từ VNPay."
+                "Thanh toán đã được xác nhận."
         );
     }
 

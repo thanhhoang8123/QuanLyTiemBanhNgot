@@ -174,6 +174,7 @@ export default function ShopCheckoutPage() {
     setSubmitError('')
     let order
     let activeAttempt = pendingAttempt
+    const isNewAttempt = activeAttempt == null
     let vnpayInitiationStarted = false
     try {
       if (!activeAttempt) {
@@ -185,16 +186,18 @@ export default function ShopCheckoutPage() {
         )
         if (!saveCustomerOrderAttempt(window.sessionStorage, activeAttempt)) {
           setAttemptState({ status: 'unavailable' })
-          setSubmitError('Không thể lưu yêu cầu an toàn trong phiên trình duyệt. Đơn chưa được gửi; hãy bật sessionStorage rồi thử lại.')
+          setSubmitError('Không thể lưu yêu cầu đặt hàng trên trình duyệt. Vui lòng thử lại.')
           return
         }
         setAttemptState({ status: 'pending', attempt: activeAttempt })
       }
 
-      order = await resolveCustomerOrderAttempt(activeAttempt, {
-        findByRequestKey: getCustomerOrderByRequestKey,
-        createOrder: createCustomerOrder,
-      })
+      order = isNewAttempt
+        ? await createCustomerOrder(activeAttempt.payload, activeAttempt.key)
+        : await resolveCustomerOrderAttempt(activeAttempt, {
+          findByRequestKey: getCustomerOrderByRequestKey,
+          createOrder: createCustomerOrder,
+        })
       if (cartMatchesCustomerOrder(cart.items, activeAttempt.payload.items)) cart.clear()
 
       if ((activeAttempt.paymentMethod || 'CASH') === 'VNPAY') {
@@ -206,7 +209,7 @@ export default function ShopCheckoutPage() {
         if (!updateCustomerOrderAttempt(window.sessionStorage, activeAttempt)) {
           setAttemptState({ status: 'unavailable' })
           setSubmitError(
-            'Đơn đã được tạo nhưng không thể lưu trạng thái thanh toán an toàn. Chưa gửi yêu cầu VNPay; hãy kiểm tra đơn hàng trước khi tiếp tục.',
+            'Đơn hàng đã được lưu nhưng chưa thể bắt đầu thanh toán. Vui lòng kiểm tra đơn hàng trước khi thử lại.',
           )
           return
         }
@@ -243,15 +246,15 @@ export default function ShopCheckoutPage() {
       } else {
         if (error.status === 401 || error.status === 403) {
           setSubmitError(
-            `Phiên đăng nhập hoặc quyền truy cập không hợp lệ. Yêu cầu đơn hàng vẫn được giữ để khôi phục an toàn; hãy đăng nhập lại rồi kiểm tra cùng yêu cầu. ${error.message || ''}`.trim(),
+            'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại rồi kiểm tra đơn hàng.',
           )
         } else if (error.status === 409) {
           setSubmitError(
-            `Backend đang báo xung đột với yêu cầu trước. Không tạo đơn mới; hãy thử khôi phục bằng cùng khóa yêu cầu. ${error.message || ''}`.trim(),
+            'Đơn hàng đang được xử lý. Vui lòng kiểm tra lịch sử đơn hàng trước khi thử lại.',
           )
         } else {
           setSubmitError(
-            `Chưa xác định được kết quả đơn hàng. Hãy thử lại để gửi cùng yêu cầu an toàn; không tạo yêu cầu mới. ${error.message || ''}`.trim(),
+            'Chưa thể xác nhận đơn hàng. Vui lòng kiểm tra lịch sử đơn hàng trước khi thử lại.',
           )
         }
       }
@@ -265,6 +268,7 @@ export default function ShopCheckoutPage() {
     if (!pendingAttempt?.orderId || isCheckingPaymentStatus) return
 
     setIsCheckingPaymentStatus(true)
+    setSubmitError('')
     setPaymentStatusError('')
     try {
       const result = await getCustomerVnPayPaymentStatusByOrderId(pendingAttempt.orderId)
@@ -273,19 +277,19 @@ export default function ShopCheckoutPage() {
         if (clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)) {
           setAttemptState({ status: 'none' })
         } else {
-          setPaymentStatusError('Backend đã xác nhận thanh toán, nhưng trình duyệt chưa thể xóa yêu cầu checkout đang lưu. Hãy mở lịch sử đơn hàng và không thanh toán lại.')
+          setPaymentStatusError('Thanh toán đã được xác nhận. Vui lòng xem đơn hàng trong lịch sử; không cần thanh toán lại.')
         }
       }
     } catch (error) {
       setPaymentStatus(null)
       if (error.status === 401) {
-        setPaymentStatusError('Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại rồi kiểm tra trạng thái đơn hàng.')
+        setPaymentStatusError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
       } else if (error.status === 403) {
-        setPaymentStatusError('Tài khoản hiện tại không có quyền tra cứu giao dịch này.')
+        setPaymentStatusError('Bạn chưa thể xem giao dịch này. Vui lòng liên hệ cửa hàng.')
       } else if (error.status === 404) {
-        setPaymentStatusError('Backend chưa tìm thấy attempt VNPay đã lưu cho đơn này. Kết quả lần gửi trước vẫn chưa được xác định; không gửi lại yêu cầu thanh toán. Hãy kiểm tra lại sau hoặc liên hệ cửa hàng để đối soát.')
+        setPaymentStatusError('Chưa tìm thấy thông tin thanh toán của đơn này. Vui lòng liên hệ cửa hàng trước khi thanh toán lại.')
       } else {
-        setPaymentStatusError(error.message || 'Chưa thể tra cứu trạng thái thanh toán. Không gửi lại yêu cầu thanh toán.')
+        setPaymentStatusError('Chưa thể kiểm tra thanh toán lúc này. Vui lòng thử lại sau; đừng thanh toán lại khi chưa rõ kết quả.')
       }
     } finally {
       setIsCheckingPaymentStatus(false)
@@ -329,7 +333,7 @@ export default function ShopCheckoutPage() {
     return (
       <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
         <div role="alert" className="rounded-2xl border border-[#E2C5BF] bg-white p-6 text-sm leading-6 text-[#914E46]">
-          Trình duyệt đang giữ một yêu cầu đặt hàng chưa được xác nhận cho tài khoản khác. Hãy đăng nhập lại đúng tài khoản đó để kiểm tra hoặc tiếp tục yêu cầu; chưa thể bắt đầu đơn mới trong phiên này.
+          Có đơn hàng chưa hoàn tất trên trình duyệt này. Vui lòng đăng nhập tài khoản đã dùng để đặt đơn và kiểm tra trạng thái trước khi tạo đơn mới.
         </div>
       </section>
     )
@@ -340,8 +344,8 @@ export default function ShopCheckoutPage() {
       <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
         <div role="alert" className="rounded-2xl border border-[#E2C5BF] bg-white p-6 text-sm leading-6 text-[#914E46]">
           {attemptState.status === 'invalid'
-            ? 'Không thể đọc an toàn yêu cầu đặt hàng đang lưu. Để tránh tạo đơn trùng, chưa thể gửi một yêu cầu mới từ checkout.'
-            : 'Không thể truy cập sessionStorage. Checkout bị tạm dừng để bảo đảm retry không tạo đơn trùng.'}
+            ? 'Không thể khôi phục đơn hàng đang chờ. Vui lòng kiểm tra lịch sử đơn hàng trước khi đặt lại.'
+            : 'Không thể lưu trạng thái đơn hàng trên trình duyệt. Vui lòng thử lại sau.'}
         </div>
       </section>
     )
@@ -354,25 +358,18 @@ export default function ShopCheckoutPage() {
     return (
       <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
         <div className="rounded-3xl border border-[#EAE3DA] bg-white p-6 shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-9">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Yêu cầu đang chờ xác nhận</p>
-          <h1 className="font-display mt-2 text-2xl font-medium text-[#4A302B]">Chưa rõ lần gửi trước đã hoàn tất chưa</h1>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Đơn hàng</p>
+          <h1 className="font-display mt-2 text-2xl font-medium text-[#4A302B]">Đơn hàng đang chờ xác nhận</h1>
           <p className="mt-3 text-sm leading-6 text-[#806B65]">
             {paymentInitiationUncertain
-              ? 'Đơn đã được tạo và yêu cầu thanh toán đã bắt đầu. Bạn có thể tra cứu attempt đã lưu của đơn này; không gửi lại yêu cầu thanh toán khi kết quả lần trước chưa rõ.'
-              : 'Bấm nút bên dưới để tra cứu bằng khóa cũ. Nếu chưa có đơn, checkout mới gửi lại đúng payload với cùng khóa; lỗi mạng hoặc phiên hết hạn sẽ không tự tạo yêu cầu khác.'}
+              ? 'Đơn đã được lưu. Vui lòng kiểm tra trạng thái thanh toán trước khi thử lại.'
+              : 'Vui lòng kiểm tra trạng thái đơn hàng trước khi tiếp tục.'}
           </p>
           {isVnPayAttempt && pendingAttempt.orderId && (
             <p className="mt-3 rounded-xl bg-[#FCF9F3] p-3 text-xs text-[#675650]">
-              Mã đơn đã lưu: #{pendingAttempt.orderId}. Trạng thái thanh toán chưa được xác nhận.
+              Mã đơn: #{pendingAttempt.orderId}
             </p>
           )}
-          <ul className="mt-5 space-y-2 rounded-2xl bg-[#FCF9F3] p-4 text-sm text-[#675650]">
-            {pendingAttempt.payload.items.map((item) => (
-              <li key={item.productId}>Sản phẩm #{item.productId} × {item.quantity}</li>
-            ))}
-            {pendingAttempt.payload.deliveryAddress && <li>Địa chỉ giao hàng đã được lưu trong phiên.</li>}
-            {pendingAttempt.payload.promotionCode && <li>Mã khuyến mãi: {pendingAttempt.payload.promotionCode}</li>}
-          </ul>
           {paymentInitiationUncertain && (
             <>
               <button
@@ -381,14 +378,15 @@ export default function ShopCheckoutPage() {
                 disabled={isCheckingPaymentStatus}
                 className="mt-5 flex h-11 w-full items-center justify-center rounded-full border border-[#DDCDB8] px-5 text-xs font-semibold text-[#76534D] hover:bg-[#FCF9F3] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isCheckingPaymentStatus ? 'Đang tra cứu...' : 'Kiểm tra trạng thái thanh toán'}
+                {isCheckingPaymentStatus ? 'Đang kiểm tra...' : 'Kiểm tra thanh toán'}
               </button>
               {paymentStatus && (
                 <p role="status" className="mt-3 rounded-xl bg-[#FCF9F3] p-3 text-xs leading-5 text-[#675650]">
-                  Trạng thái backend ghi nhận — thanh toán: {paymentStatus.paymentStatus}; attempt: {paymentStatus.attemptStatus}; đơn hàng: {paymentStatus.orderStatus}.
                   {paymentStatus.paymentStatus === 'SUCCESS' && paymentStatus.attemptStatus === 'SUCCESS'
-                    ? ' Thanh toán đã được backend xác nhận.'
-                    : ' Chưa có xác nhận thanh toán thành công.'}
+                    ? 'Thanh toán đã được xác nhận.'
+                    : paymentStatus.paymentStatus === 'FAILED' && paymentStatus.attemptStatus === 'FAILED'
+                      ? 'Giao dịch chưa thành công. Bạn có thể thử thanh toán lại cho đơn này.'
+                      : 'Đang chờ xác nhận thanh toán. Vui lòng không thanh toán lại lúc này.'}
                 </p>
               )}
               {paymentStatus?.paymentStatus === 'FAILED'
@@ -418,7 +416,7 @@ export default function ShopCheckoutPage() {
               className="mt-6 flex h-11 w-full items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting
-                ? 'Đang kiểm tra yêu cầu...'
+                ? 'Đang kiểm tra đơn hàng...'
                 : isVnPayAttempt
                   ? 'Khôi phục cùng đơn và tiếp tục thanh toán'
                   : 'Kiểm tra kết quả / tiếp tục cùng yêu cầu'}
@@ -464,7 +462,7 @@ export default function ShopCheckoutPage() {
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-7 sm:py-12 lg:px-10">
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Hoàn tất thông tin</p>
       <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B] sm:text-4xl">Đặt hàng</h1>
-      <p className="mt-2 text-sm text-[#806B65]">Đơn được tạo ở trạng thái chờ xử lý. Chọn thanh toán theo hướng dẫn của cửa hàng hoặc chuyển tới VNPay Sandbox.</p>
+      <p className="mt-2 text-sm text-[#806B65]">Nhập thông tin nhận hàng và chọn phương thức thanh toán.</p>
 
       {catalogLoading ? (
         <p role="status" className="mt-6 rounded-2xl bg-white px-5 py-12 text-center text-sm text-[#806B65]">Đang kiểm tra tồn kho...</p>
@@ -534,7 +532,7 @@ export default function ShopCheckoutPage() {
                   onChange={() => setPaymentMethod('VNPAY')}
                   className="mt-0.5 accent-[#76534D]"
                 />
-                <span><strong className="block text-[#4A302B]">VNPay QR (Sandbox)</strong>Chuyển tới trang thanh toán thử nghiệm của VNPay. Không tạo QR từ URL tại cửa hàng.</span>
+                <span><strong className="block text-[#4A302B]">VNPay</strong>Thanh toán trực tuyến qua VNPay.</span>
               </label>
             </fieldset>
             {quoteError && (
@@ -574,8 +572,8 @@ export default function ShopCheckoutPage() {
               className="mt-5 flex h-11 w-full items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting
-                ? paymentMethod === 'VNPAY' ? 'Đang tạo đơn và mở VNPay...' : 'Đang gửi đơn...'
-                : paymentMethod === 'VNPAY' ? 'Đặt hàng và thanh toán VNPay' : 'Xác nhận đặt hàng'}
+                ? paymentMethod === 'VNPAY' ? 'Đang chuyển tới VNPay...' : 'Đang đặt hàng...'
+                : paymentMethod === 'VNPAY' ? 'Đặt hàng và thanh toán' : 'Đặt hàng'}
             </button>
             <Link to="/shop/cart" className="mt-3 block text-center text-xs font-semibold text-[#76534D]">Quay lại giỏ hàng</Link>
           </aside>
