@@ -81,7 +81,7 @@ public class DashboardService {
                 .getResultList();
         return rows.stream()
                 .map(row -> new DashboardSummaryResponse.SalesPoint(
-                        ((Date) row[0]).toLocalDate(),
+                        toLocalDate(row[0]),
                         money(row[1])
                 ))
                 .toList();
@@ -194,6 +194,12 @@ public class DashboardService {
         if (value instanceof java.sql.Timestamp timestamp) return timestamp.toLocalDateTime();
         if (value instanceof LocalDateTime dateTime) return dateTime;
         return LocalDateTime.parse(value.toString().replace(' ', 'T'));
+    }
+
+    static LocalDate toLocalDate(Object value) {
+        if (value instanceof LocalDate date) return date;
+        if (value instanceof Date date) return date.toLocalDate();
+        throw new IllegalStateException("Dashboard query returned a non-date value");
     }
 
     record DateRange(LocalDate start, LocalDate endExclusive, String label) {
