@@ -18,6 +18,7 @@ import {
   searchPromotions,
   updatePromotion,
 } from '../services/promotionService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const emptyForm = {
   promotionCode: '',
@@ -37,7 +38,7 @@ const percentFormat = new Intl.NumberFormat('vi-VN', {
 })
 
 function getErrorMessage(error) {
-  return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
+  return getUserFacingErrorMessage(error)
 }
 
 function toPromotionRequest(form) {
@@ -136,7 +137,7 @@ export default function PromotionsPage({ onToast }) {
           ? await searchPromotions(query.trim(), { signal: controller.signal })
           : await getPromotions({ signal: controller.signal })
         if (!Array.isArray(result)) {
-          throw new Error('API không trả về danh sách khuyến mãi hợp lệ.')
+          throw new Error('Chưa thể tải danh sách khuyến mãi. Vui lòng thử lại.')
         }
         setPromotions(result)
       } catch (error) {
@@ -636,7 +637,7 @@ export default function PromotionsPage({ onToast }) {
         open={Boolean(promotionToDelete)}
         title="Xóa chương trình khuyến mãi?"
         description={promotionToDelete
-          ? `Bạn có chắc muốn xóa ${promotionToDelete.promotionCode}? Chương trình đang liên kết với sản phẩm sẽ bị backend từ chối xóa.`
+          ? `Bạn có chắc muốn xóa ${promotionToDelete.promotionCode}? Không thể xóa chương trình khi vẫn còn liên kết với sản phẩm.`
           : ''}
         confirmLabel="Xóa khuyến mãi"
         onConfirm={confirmDelete}

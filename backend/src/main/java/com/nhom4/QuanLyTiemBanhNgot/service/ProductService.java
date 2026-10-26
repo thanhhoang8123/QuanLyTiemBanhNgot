@@ -3,8 +3,12 @@ package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import com.nhom4.QuanLyTiemBanhNgot.entity.Category;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Product;
+import com.nhom4.QuanLyTiemBanhNgot.exception.BadRequestException;
+import com.nhom4.QuanLyTiemBanhNgot.exception.ConflictException;
 import com.nhom4.QuanLyTiemBanhNgot.repository.CategoryRepository;
+import com.nhom4.QuanLyTiemBanhNgot.repository.OrderItemRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.ProductRepository;
+import com.nhom4.QuanLyTiemBanhNgot.repository.PromotionProductRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,13 +25,19 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final PromotionProductRepository promotionProductRepository;
 
     public ProductService(
             ProductRepository productRepository,
-            CategoryRepository categoryRepository
+            CategoryRepository categoryRepository,
+            OrderItemRepository orderItemRepository,
+            PromotionProductRepository promotionProductRepository
     ) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.orderItemRepository = orderItemRepository;
+        this.promotionProductRepository = promotionProductRepository;
     }
 
     public List<Product> getAll() {
@@ -72,11 +82,20 @@ public class ProductService {
     }
 
     @Transactional
-    public Product update(Long id, Product product) {
+    public Product update(Long id, Product product, Integer expectedQuantity) {
         Product existing = productRepository.findByIdForUpdate(id)
             .orElseThrow(() -> new ResourceNotFoundException(
                     "Không tìm thấy sản phẩm"
             ));
+
+        if (expectedQuantity == null || expectedQuantity < 0) {
+            throw new BadRequestException("Số lượng tồn kho đối chiếu không hợp lệ");
+        }
+        if (!Integer.valueOf(expectedQuantity).equals(existing.getQuantity())) {
+            throw new ConflictException(
+                    "Tồn kho đã thay đổi trong lúc bạn chỉnh sửa. Hãy tải lại danh sách trước khi lưu."
+            );
+        }
 
         validateProduct(product);
 
@@ -115,6 +134,28 @@ public class ProductService {
         return productRepository.save(product);
     }
 
+    @Transactional
+    public void delete(Long id) {
+        if (id == null || id <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "ID sản phẩm không hợp lệ");
+        }
+
+        Product product = productRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy sản phẩm"));
+
+        if (orderItemRepository.existsByProduct_Id(id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Không thể xóa sản phẩm vì sản phẩm đã có trong đơn hàng.");
+        }
+
+        promotionProductRepository.deleteAll(
+                promotionProductRepository.findByProduct_Id(id));
+        productRepository.delete(product);
+    }
+
     private void validateProduct(Product product) {
         if (product == null) {
             throw new ResponseStatusException(
@@ -138,11 +179,24 @@ public class ProductService {
             );
         }
 
+        validateLength(product.getProductCode(), 30, "Mã sản phẩm");
+        validateLength(product.getName(), 150, "Tên sản phẩm");
+        validateLength(product.getImageUrl(), 500, "URL hình ảnh");
+        validateLength(product.getUnit(), 30, "Đơn vị");
+
         if (product.getPrice() == null
                 || product.getPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Giá sản phẩm phải lớn hơn hoặc bằng 0"
+            );
+        }
+        if (product.getPrice().stripTrailingZeros().scale() > 2
+                || product.getPrice().compareTo(
+                        new BigDecimal("9999999999999.99")) > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Giá sản phẩm vượt quá giới hạn lưu trữ (tối đa 2 chữ số thập phân)"
             );
         }
 
@@ -157,6 +211,15 @@ public class ProductService {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Trạng thái sản phẩm không được để trống"
+            );
+        }
+    }
+
+    private void validateLength(String value, int maxLength, String field) {
+        if (value != null && value.trim().length() > maxLength) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    field + " không được vượt quá " + maxLength + " ký tự"
             );
         }
     }

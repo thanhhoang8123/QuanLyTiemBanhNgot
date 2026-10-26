@@ -20,4 +20,6 @@ public interface OrderItemRepository
     List<OrderItem> findByOrder_Id(Long orderId);
 
     List<OrderItem> findByOrder_IdIn(List<Long> orderIds);
+
+    boolean existsByProduct_Id(Long productId);
 }

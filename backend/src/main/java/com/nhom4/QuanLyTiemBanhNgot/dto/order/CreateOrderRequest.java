@@ -27,13 +27,28 @@ public record CreateOrderRequest(
         String promotionCode,
 
         @Size(max = 500, message = "Ghi chú đơn hàng không được vượt quá 500 ký tự")
-        String note
+        String note,
+
+        Boolean applyProductPromotions,
+
+        @jakarta.validation.constraints.PositiveOrZero(message = "Số điểm sử dụng không được âm")
+        Integer loyaltyPointsToRedeem
 ) {
     public CreateOrderRequest(
             Long customerId,
             Long employeeId,
             String deliveryAddress,
+            List<CreateOrderItemRequest> items,
+            String promotionCode,
+            String note) {
+        this(customerId, employeeId, deliveryAddress, items, promotionCode, note, false, 0);
+    }
+
+    public CreateOrderRequest(
+            Long customerId,
+            Long employeeId,
+            String deliveryAddress,
             List<CreateOrderItemRequest> items) {
-        this(customerId, employeeId, deliveryAddress, items, null, null);
+        this(customerId, employeeId, deliveryAddress, items, null, null, false, 0);
     }
 }

@@ -59,7 +59,7 @@ test('reads only the backend redirect reference as a status lookup key', () => {
 
 test('provides safe guidance for authorization, conflict, and uncertain network errors', () => {
   assert.match(getVnPayInitiationErrorMessage({ status: 409 }), /không thử tạo giao dịch mới/i)
-  assert.match(getVnPayInitiationErrorMessage({ status: 401 }), /phiên đăng nhập/)
-  assert.match(getVnPayInitiationErrorMessage({ status: 403 }), /quyền truy cập/)
-  assert.match(getVnPayInitiationErrorMessage(new Error('network failure')), /không tự gửi lại/)
+  assert.match(getVnPayInitiationErrorMessage({ status: 401 }), /phiên đăng nhập/i)
+  assert.match(getVnPayInitiationErrorMessage({ status: 403 }), /quyền truy cập/i)
+  assert.match(getVnPayInitiationErrorMessage(new Error('network failure')), /không tự gửi lại/i)
 })

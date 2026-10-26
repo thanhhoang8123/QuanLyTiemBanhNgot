@@ -19,12 +19,14 @@ export function getVnPayReturnTransactionReference(search) {
 
 export function getVnPayInitiationErrorMessage(error) {
   if (error?.status === 409) {
-    return 'Đơn đã tồn tại và backend báo giao dịch trước đó đang chờ/đối soát. Không thử tạo giao dịch mới; hãy kiểm tra đơn hàng của bạn.'
+    return 'Đơn hàng đã có giao dịch đang chờ xác minh. Vui lòng kiểm tra trạng thái; không thử tạo giao dịch mới trước khi có kết quả.'
   }
   if (error?.status === 401 || error?.status === 403) {
-    return `Không thể khởi tạo thanh toán do phiên đăng nhập hoặc quyền truy cập. Đơn vẫn được giữ để đối soát. ${error.message || ''}`.trim()
+    return error.status === 401
+      ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại rồi kiểm tra đơn hàng.'
+      : 'Bạn không có quyền truy cập chức năng thanh toán này.'
   }
-  return 'Chưa rõ backend đã tạo giao dịch VNPay hay chưa. Đơn hàng được giữ lại; không tự gửi lại để tránh tạo lần thanh toán khác. Hãy kiểm tra đơn hàng của bạn.'
+  return 'Chưa xác định được trạng thái thanh toán. Đơn hàng vẫn được giữ; vui lòng kiểm tra trạng thái trước, không tự gửi lại yêu cầu.'
 }
 
 export function requireVnPayPaymentUrl(response) {
@@ -36,14 +38,14 @@ export function requireVnPayPaymentUrl(response) {
     || !response.transactionReference.trim()
     || typeof response.paymentUrl !== 'string'
   ) {
-    throw new Error('Backend không trả về thông tin khởi tạo thanh toán hợp lệ.')
+    throw new Error('Chưa thể bắt đầu thanh toán. Vui lòng kiểm tra đơn hàng và thử lại.')
   }
 
   let paymentUrl
   try {
     paymentUrl = new URL(response.paymentUrl)
   } catch {
-    throw new Error('Backend trả về URL thanh toán không hợp lệ.')
+    throw new Error('Chưa thể mở trang thanh toán. Vui lòng thử lại sau.')
   }
   if (
     paymentUrl.protocol !== 'https:'
@@ -52,7 +54,7 @@ export function requireVnPayPaymentUrl(response) {
     || paymentUrl.password
     || paymentUrl.port
   ) {
-    throw new Error('URL thanh toán không thuộc VNPay Sandbox an toàn.')
+    throw new Error('Không thể mở trang thanh toán an toàn. Vui lòng liên hệ cửa hàng.')
   }
   return paymentUrl.href
 }

@@ -20,6 +20,7 @@ import {
   updateCustomOrder,
   updateCustomOrderStatus,
 } from '../services/customOrderService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 text-sm text-rosewood outline-none transition placeholder:text-muted/70 focus:border-caramel'
 const moneyFormat = new Intl.NumberFormat('vi-VN')
@@ -49,7 +50,7 @@ const emptyForm = {
 }
 
 function getErrorMessage(error) {
-  return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
+  return getUserFacingErrorMessage(error)
 }
 
 function formatMoney(value) {
@@ -171,7 +172,7 @@ export default function CustomOrdersPage({ onToast }) {
         if (!Array.isArray(loadedOrders)
           || !Array.isArray(loadedCustomers)
           || !Array.isArray(loadedEmployees)) {
-          throw new Error('API không trả về danh sách đơn, khách hàng hoặc nhân viên hợp lệ.')
+          throw new Error('Chưa thể tải dữ liệu đơn đặt bánh. Vui lòng thử lại.')
         }
         setOrders(loadedOrders)
         setCustomers(loadedCustomers)
@@ -663,7 +664,7 @@ export default function CustomOrdersPage({ onToast }) {
           </FormField>
 
           <p className="text-xs leading-5 text-muted">
-            Thời điểm tạo đơn và trạng thái ban đầu PENDING do backend quản lý. Giá dự kiến và tiền cọc là thông tin báo giá/ghi nhận cho đơn bánh thiết kế riêng.
+            Thời điểm tạo đơn và trạng thái ban đầu được hệ thống ghi nhận tự động. Giá dự kiến và tiền cọc là thông tin báo giá/ghi nhận cho đơn bánh thiết kế riêng.
           </p>
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">

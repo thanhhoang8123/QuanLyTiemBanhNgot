@@ -2,7 +2,7 @@ import Button from './Button.jsx'
 
 export default function ErrorState({
   title = 'Không thể tải dữ liệu',
-  description = 'Đã xảy ra lỗi khi xử lý yêu cầu.',
+  description = 'Chưa thể hoàn tất thao tác. Vui lòng thử lại.',
   onRetry,
   retryLabel = 'Thử lại',
   className = '',

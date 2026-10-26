@@ -3,6 +3,9 @@ package com.nhom4.QuanLyTiemBanhNgot.controller;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.CreateOrderRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderPromotionSuggestionResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.PosOrderQuoteRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.PosOrderQuoteResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderUpdateRequest;
 import com.nhom4.QuanLyTiemBanhNgot.service.OrderService;
@@ -64,6 +67,18 @@ public class OrderController {
     @PostMapping("/quote")
     public OrderQuoteResponse quoteOrder(@Valid @RequestBody OrderQuoteRequest request) {
         return orderService.quote(request);
+    }
+
+    @PostMapping("/promotion-suggestions")
+    public List<OrderPromotionSuggestionResponse> getPromotionSuggestions(
+            @Valid @RequestBody OrderQuoteRequest request) {
+        return orderService.promotionSuggestions(request);
+    }
+
+    @PostMapping("/pos-quote")
+    public PosOrderQuoteResponse quotePosOrder(
+            @Valid @RequestBody PosOrderQuoteRequest request) {
+        return orderService.quotePos(request);
     }
 
     /**

@@ -28,7 +28,7 @@ export default function ShopProductCard({ product, onAddToCart }) {
         </div>
         <div className="px-4 pt-1 sm:px-5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9A7972]">
-            {product.category || 'WA Pâtisserie'}
+            {product.category || 'Daily Fresh'}
           </p>
           <h3 className="font-display mt-2 line-clamp-2 min-h-12 text-lg font-medium leading-6 text-[#4A302B]">
             {product.name}

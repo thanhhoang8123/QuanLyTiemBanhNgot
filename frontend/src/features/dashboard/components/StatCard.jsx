@@ -20,13 +20,7 @@ export default function StatCard({ stat }) {
       <p className={`font-display mt-3 truncate text-[24px] text-rosewood sm:text-[27px] ${stat.label === 'Bán chạy nhất' ? 'text-[21px] sm:text-[23px]' : ''}`}>
         {stat.value}
       </p>
-      <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] sm:text-[11px]">
-        <span className="inline-flex items-center gap-0.5 font-bold text-success">
-          <Icon name="arrowUp" size={13} />
-          {stat.change}
-        </span>
-        <span className="text-muted">{stat.note}</span>
-      </div>
+      <p className="mt-3 text-[10px] text-muted sm:text-[11px]">{stat.note}</p>
     </article>
   )
 }

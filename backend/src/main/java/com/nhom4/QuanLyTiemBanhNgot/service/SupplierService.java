@@ -2,6 +2,7 @@
 package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import com.nhom4.QuanLyTiemBanhNgot.entity.Supplier;
+import com.nhom4.QuanLyTiemBanhNgot.repository.PurchaseOrderRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.SupplierRepository;
 import com.nhom4.QuanLyTiemBanhNgot.validation.TV2ValidationUtils;
 import org.springframework.http.HttpStatus;
@@ -15,9 +16,13 @@ import java.util.List;
 public class SupplierService {
 
     private final SupplierRepository repository;
+    private final PurchaseOrderRepository purchaseOrderRepository;
 
-    public SupplierService(SupplierRepository repository) {
+    public SupplierService(
+            SupplierRepository repository,
+            PurchaseOrderRepository purchaseOrderRepository) {
         this.repository = repository;
+        this.purchaseOrderRepository = purchaseOrderRepository;
     }
 
     public List<Supplier> findAll() {
@@ -40,7 +45,9 @@ public class SupplierService {
         TV2ValidationUtils.validateSupplier(supplier);
 
         if (supplier.getId() != null) {
-            findById(supplier.getId());
+            repository.findByIdForUpdate(supplier.getId())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND, "Không tìm thấy nhà cung cấp"));
         }
 
         supplier.setSupplierCode(supplier.getSupplierCode().trim());
@@ -70,7 +77,18 @@ public class SupplierService {
 
     @Transactional
     public void deleteById(Long id) {
-        Supplier supplier = findById(id);
+        if (id == null || id <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "ID nhà cung cấp không hợp lệ");
+        }
+        Supplier supplier = repository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Không tìm thấy nhà cung cấp"));
+        if (purchaseOrderRepository.existsBySupplier_Id(id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Không thể xóa nhà cung cấp đã có phiếu nhập tham chiếu; hãy ngừng hoạt động thay thế");
+        }
         repository.delete(supplier);
     }
 }

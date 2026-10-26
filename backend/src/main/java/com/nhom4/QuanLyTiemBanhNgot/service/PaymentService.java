@@ -31,6 +31,7 @@ public class PaymentService {
 
     private static final String WALK_IN_CUSTOMER_EMAIL = "pos.walkin@example.invalid";
     private static final BigDecimal AMOUNT_PER_LOYALTY_POINT = new BigDecimal("10000");
+    private static final BigDecimal DISCOUNT_PER_REDEEMED_POINT = new BigDecimal("1000.00");
 
     private final PaymentRepository paymentRepository;
     private final PaymentTransactionAttemptRepository paymentTransactionAttemptRepository;
@@ -90,7 +91,7 @@ public class PaymentService {
         payment.setPaidAt(LocalDateTime.now(ZoneOffset.UTC));
         payment.setTransactionId(transactionNo);
         paymentRepository.save(payment);
-        awardLoyaltyPoints(order.getCustomer(), payment.getAmount());
+        settleLoyaltyPoints(order, payment.getAmount());
         if ("PENDING".equals(order.getStatus())) {
             String oldStatus = order.getStatus();
             order.setStatus("CONFIRMED");
@@ -208,7 +209,7 @@ public class PaymentService {
         if ("SUCCESS".equals(request.result())) {
             payment.setStatus("SUCCESS");
             payment.setPaidAt(LocalDateTime.now(ZoneOffset.UTC));
-            awardLoyaltyPoints(order.getCustomer(), payment.getAmount());
+            settleLoyaltyPoints(order, payment.getAmount());
             if ("PENDING".equals(order.getStatus())) {
                 String oldStatus = order.getStatus();
                 order.setStatus("CONFIRMED");
@@ -224,18 +225,21 @@ public class PaymentService {
         return paymentMapper.toResponse(paymentRepository.save(payment));
     }
 
-    private void awardLoyaltyPoints(Customer orderCustomer, BigDecimal paidAmount) {
+    private void settleLoyaltyPoints(Order order, BigDecimal paidAmount) {
+        Customer orderCustomer = order.getCustomer();
+        int pointsToRedeem = redeemedPoints(order);
+        int pointsToAward = pointsToAward(paidAmount);
+        if (pointsToRedeem > 0
+                && orderCustomer != null
+                && WALK_IN_CUSTOMER_EMAIL.equalsIgnoreCase(orderCustomer.getEmail())) {
+            throw new ConflictException("Khách vãng lai không thể sử dụng điểm");
+        }
         if (orderCustomer == null
-                || WALK_IN_CUSTOMER_EMAIL.equalsIgnoreCase(orderCustomer.getEmail())
-                || paidAmount == null
-                || paidAmount.signum() <= 0) {
+                || (pointsToRedeem == 0
+                && (WALK_IN_CUSTOMER_EMAIL.equalsIgnoreCase(orderCustomer.getEmail())
+                || pointsToAward == 0))) {
             return;
         }
-
-        int pointsToAward = paidAmount
-                .divideToIntegralValue(AMOUNT_PER_LOYALTY_POINT)
-                .intValueExact();
-        if (pointsToAward == 0) return;
 
         Customer customer = customerRepository.findByIdForUpdate(orderCustomer.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -244,12 +248,52 @@ public class PaymentService {
         int currentPoints = customer.getLoyaltyPoints() == null
                 ? 0
                 : customer.getLoyaltyPoints();
+        if (pointsToRedeem > currentPoints) {
+            throw new ConflictException(
+                    "Khách hàng không còn đủ điểm để thanh toán đơn này"
+            );
+        }
         try {
-            customer.setLoyaltyPoints(Math.addExact(currentPoints, pointsToAward));
+            int updatedPoints = Math.subtractExact(currentPoints, pointsToRedeem);
+            if (!WALK_IN_CUSTOMER_EMAIL.equalsIgnoreCase(customer.getEmail())) {
+                updatedPoints = Math.addExact(updatedPoints, pointsToAward);
+            }
+            customer.setLoyaltyPoints(updatedPoints);
         } catch (ArithmeticException exception) {
             throw new ConflictException("Điểm tích lũy của khách hàng đã vượt giới hạn");
         }
         customerRepository.save(customer);
+    }
+
+    private int redeemedPoints(Order order) {
+        if (order.getPromotion() != null
+                || order.getDiscountAmount() == null
+                || order.getDiscountAmount().signum() == 0) {
+            return 0;
+        }
+        BigDecimal[] pointAmount = order.getDiscountAmount()
+                .divideAndRemainder(DISCOUNT_PER_REDEEMED_POINT);
+        if (pointAmount[1].signum() != 0) {
+            throw new ConflictException(
+                    "Tiền giảm giá đổi điểm của đơn hàng không hợp lệ"
+            );
+        }
+        try {
+            return pointAmount[0].intValueExact();
+        } catch (ArithmeticException exception) {
+            throw new ConflictException("Số điểm đổi của đơn hàng vượt giới hạn");
+        }
+    }
+
+    private int pointsToAward(BigDecimal paidAmount) {
+        if (paidAmount == null || paidAmount.signum() <= 0) return 0;
+        try {
+            return paidAmount
+                    .divideToIntegralValue(AMOUNT_PER_LOYALTY_POINT)
+                    .intValueExact();
+        } catch (ArithmeticException exception) {
+            throw new ConflictException("Số điểm tích lũy của đơn hàng vượt giới hạn");
+        }
     }
 
     /**

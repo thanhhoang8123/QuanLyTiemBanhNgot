@@ -22,6 +22,8 @@ public interface PromotionProductRepository
 
     boolean existsByIdPromotionId(Long promotionId);
 
+    List<PromotionProduct> findByProduct_Id(Long productId);
+
     List<PromotionProduct> findByPromotion_IdAndProduct_IdIn(
             Long promotionId,
             Collection<Long> productIds

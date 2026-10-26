@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { getCategories } from '../../categories/services/categoryService.js'
 import { toProductViewModel } from '../../products/adapters/productAdapter.js'
 import { getProducts } from '../../products/services/productService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 function getErrorMessage(error) {
-  return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
+  return getUserFacingErrorMessage(error, 'Chưa thể tải danh sách sản phẩm. Vui lòng thử lại.')
 }
 
 export default function useShopCatalog() {
@@ -30,7 +31,7 @@ export default function useShopCatalog() {
         ])
 
         if (!Array.isArray(categoryData) || !Array.isArray(productData)) {
-          throw new Error('API trả về danh sách danh mục hoặc sản phẩm không hợp lệ.')
+          throw new Error('Chưa thể tải danh sách sản phẩm. Vui lòng thử lại.')
         }
 
         setCategories(categoryData)

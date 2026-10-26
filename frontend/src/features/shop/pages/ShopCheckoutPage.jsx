@@ -3,7 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AuthContext } from '../../auth/AuthContext.js'
 import { toProductViewModel } from '../../products/adapters/productAdapter.js'
 import { getProducts } from '../../products/services/productService.js'
+import Pagination, { usePagination } from '../../../components/Pagination.jsx'
 import { useShopCart } from '../ShopCartContext.jsx'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 import {
   cartMatchesCustomerOrder,
   clearCustomerOrderAttempt,
@@ -31,9 +33,21 @@ const moneyFormat = new Intl.NumberFormat('vi-VN', {
   currency: 'VND',
   maximumFractionDigits: 0,
 })
+const paymentStatusLabels = {
+  PENDING: 'Đang chờ xác nhận',
+  SUCCESS: 'Đã xác nhận',
+  FAILED: 'Chưa thành công',
+}
+const orderStatusLabels = {
+  PENDING: 'Chờ xác nhận',
+  CONFIRMED: 'Đã xác nhận',
+  COMPLETED: 'Hoàn tất',
+  CANCELLED: 'Đã hủy',
+}
 
 export default function ShopCheckoutPage() {
   const cart = useShopCart()
+  const cartPagination = usePagination(cart.items)
   const navigate = useNavigate()
   const account = useContext(AuthContext)?.account
   const owner = account?.id == null ? null : String(account.id)
@@ -75,11 +89,13 @@ export default function ShopCheckoutPage() {
     const controller = new AbortController()
     getProducts({ signal: controller.signal })
       .then((result) => {
-        if (!Array.isArray(result)) throw new Error('API sản phẩm trả về dữ liệu không hợp lệ.')
+        if (!Array.isArray(result)) throw new Error('Chưa thể tải danh sách sản phẩm. Vui lòng thử lại.')
         setProducts(result.map(toProductViewModel))
       })
       .catch((error) => {
-        if (error.name !== 'AbortError') setCatalogError(error.message)
+        if (error.name !== 'AbortError') {
+          setCatalogError(getUserFacingErrorMessage(error, 'Chưa thể tải danh sách sản phẩm. Vui lòng thử lại.'))
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setCatalogLoading(false)
@@ -127,12 +143,14 @@ export default function ShopCheckoutPage() {
         .then((result) => {
           const amounts = [result?.totalAmount, result?.discountAmount, result?.finalAmount]
           if (amounts.some((amount) => !Number.isFinite(Number(amount)))) {
-            throw new Error('API báo giá trả về số tiền không hợp lệ.')
+            throw new Error('Chưa thể xác nhận báo giá. Vui lòng kiểm tra giỏ hàng và thử lại.')
           }
           setQuote(result)
         })
         .catch((error) => {
-          if (!controller.signal.aborted && error.name !== 'AbortError') setQuoteError(error.message)
+          if (!controller.signal.aborted && error.name !== 'AbortError') {
+            setQuoteError(getUserFacingErrorMessage(error, 'Chưa thể xác nhận báo giá. Vui lòng thử lại.'))
+          }
         })
         .finally(() => {
           if (!controller.signal.aborted) setQuoteLoading(false)
@@ -164,7 +182,7 @@ export default function ShopCheckoutPage() {
         return
       }
       if (!quote || quoteLoading || quoteError) {
-        setSubmitError('Chưa có báo giá hợp lệ từ máy chủ. Hãy thử tải lại báo giá.')
+        setSubmitError('Chưa thể xác nhận báo giá. Vui lòng tải lại báo giá rồi thử lại.')
         return
       }
     }
@@ -185,7 +203,7 @@ export default function ShopCheckoutPage() {
         )
         if (!saveCustomerOrderAttempt(window.sessionStorage, activeAttempt)) {
           setAttemptState({ status: 'unavailable' })
-          setSubmitError('Không thể lưu yêu cầu an toàn trong phiên trình duyệt. Đơn chưa được gửi; hãy bật sessionStorage rồi thử lại.')
+          setSubmitError('Chưa thể lưu yêu cầu đặt hàng trên thiết bị. Đơn chưa được gửi; vui lòng tải lại trang và thử lại.')
           return
         }
         setAttemptState({ status: 'pending', attempt: activeAttempt })
@@ -206,7 +224,7 @@ export default function ShopCheckoutPage() {
         if (!updateCustomerOrderAttempt(window.sessionStorage, activeAttempt)) {
           setAttemptState({ status: 'unavailable' })
           setSubmitError(
-            'Đơn đã được tạo nhưng không thể lưu trạng thái thanh toán an toàn. Chưa gửi yêu cầu VNPay; hãy kiểm tra đơn hàng trước khi tiếp tục.',
+            'Đơn đã được tạo nhưng chưa thể lưu trạng thái thanh toán an toàn. Chưa gửi yêu cầu thanh toán; vui lòng kiểm tra đơn hàng trước khi tiếp tục.',
           )
           return
         }
@@ -243,15 +261,15 @@ export default function ShopCheckoutPage() {
       } else {
         if (error.status === 401 || error.status === 403) {
           setSubmitError(
-            `Phiên đăng nhập hoặc quyền truy cập không hợp lệ. Yêu cầu đơn hàng vẫn được giữ để khôi phục an toàn; hãy đăng nhập lại rồi kiểm tra cùng yêu cầu. ${error.message || ''}`.trim(),
+            `Không thể tiếp tục với phiên đăng nhập hiện tại. Đơn hàng vẫn được giữ; vui lòng đăng nhập lại rồi kiểm tra đơn hàng. ${getUserFacingErrorMessage(error)}`.trim(),
           )
         } else if (error.status === 409) {
           setSubmitError(
-            `Backend đang báo xung đột với yêu cầu trước. Không tạo đơn mới; hãy thử khôi phục bằng cùng khóa yêu cầu. ${error.message || ''}`.trim(),
+            `Đơn hàng đã được gửi trước đó. Để tránh tạo đơn trùng, vui lòng kiểm tra lịch sử đơn hàng. ${getUserFacingErrorMessage(error)}`.trim(),
           )
         } else {
           setSubmitError(
-            `Chưa xác định được kết quả đơn hàng. Hãy thử lại để gửi cùng yêu cầu an toàn; không tạo yêu cầu mới. ${error.message || ''}`.trim(),
+            `Chưa xác định được kết quả đơn hàng. Vui lòng kiểm tra lịch sử đơn hàng trước khi thử lại. ${getUserFacingErrorMessage(error)}`.trim(),
           )
         }
       }
@@ -273,7 +291,7 @@ export default function ShopCheckoutPage() {
         if (clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)) {
           setAttemptState({ status: 'none' })
         } else {
-          setPaymentStatusError('Backend đã xác nhận thanh toán, nhưng trình duyệt chưa thể xóa yêu cầu checkout đang lưu. Hãy mở lịch sử đơn hàng và không thanh toán lại.')
+          setPaymentStatusError('Thanh toán đã được xác nhận nhưng chưa thể cập nhật trạng thái trên thiết bị. Vui lòng kiểm tra lịch sử đơn hàng và không thanh toán lại.')
         }
       }
     } catch (error) {
@@ -283,9 +301,12 @@ export default function ShopCheckoutPage() {
       } else if (error.status === 403) {
         setPaymentStatusError('Tài khoản hiện tại không có quyền tra cứu giao dịch này.')
       } else if (error.status === 404) {
-        setPaymentStatusError('Backend chưa tìm thấy attempt VNPay đã lưu cho đơn này. Kết quả lần gửi trước vẫn chưa được xác định; không gửi lại yêu cầu thanh toán. Hãy kiểm tra lại sau hoặc liên hệ cửa hàng để đối soát.')
+        setPaymentStatusError('Chưa tìm thấy thông tin giao dịch của đơn này. Kết quả lần thanh toán trước chưa được xác định; vui lòng kiểm tra lại sau hoặc liên hệ cửa hàng. Không gửi lại yêu cầu thanh toán lúc này.')
       } else {
-        setPaymentStatusError(error.message || 'Chưa thể tra cứu trạng thái thanh toán. Không gửi lại yêu cầu thanh toán.')
+        setPaymentStatusError(getUserFacingErrorMessage(
+          error,
+          'Chưa thể tra cứu trạng thái thanh toán. Không gửi lại yêu cầu thanh toán.',
+        ))
       }
     } finally {
       setIsCheckingPaymentStatus(false)
@@ -340,8 +361,8 @@ export default function ShopCheckoutPage() {
       <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
         <div role="alert" className="rounded-2xl border border-[#E2C5BF] bg-white p-6 text-sm leading-6 text-[#914E46]">
           {attemptState.status === 'invalid'
-            ? 'Không thể đọc an toàn yêu cầu đặt hàng đang lưu. Để tránh tạo đơn trùng, chưa thể gửi một yêu cầu mới từ checkout.'
-            : 'Không thể truy cập sessionStorage. Checkout bị tạm dừng để bảo đảm retry không tạo đơn trùng.'}
+            ? 'Không thể xác nhận yêu cầu đặt hàng đã lưu. Để tránh tạo đơn trùng, vui lòng kiểm tra lịch sử đơn hàng trước khi đặt lại.'
+            : 'Chưa thể lưu yêu cầu đặt hàng trên thiết bị. Để tránh tạo đơn trùng, vui lòng thử lại sau hoặc dùng trình duyệt khác.'}
         </div>
       </section>
     )
@@ -354,12 +375,12 @@ export default function ShopCheckoutPage() {
     return (
       <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
         <div className="rounded-3xl border border-[#EAE3DA] bg-white p-6 shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-9">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Yêu cầu đang chờ xác nhận</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Đơn hàng cần được xác nhận</p>
           <h1 className="font-display mt-2 text-2xl font-medium text-[#4A302B]">Chưa rõ lần gửi trước đã hoàn tất chưa</h1>
           <p className="mt-3 text-sm leading-6 text-[#806B65]">
             {paymentInitiationUncertain
-              ? 'Đơn đã được tạo và yêu cầu thanh toán đã bắt đầu. Bạn có thể tra cứu attempt đã lưu của đơn này; không gửi lại yêu cầu thanh toán khi kết quả lần trước chưa rõ.'
-              : 'Bấm nút bên dưới để tra cứu bằng khóa cũ. Nếu chưa có đơn, checkout mới gửi lại đúng payload với cùng khóa; lỗi mạng hoặc phiên hết hạn sẽ không tự tạo yêu cầu khác.'}
+              ? 'Đơn hàng đã được tạo và yêu cầu thanh toán đã bắt đầu. Vui lòng kiểm tra trạng thái đơn; không gửi lại yêu cầu thanh toán khi kết quả lần trước chưa rõ.'
+              : 'Chọn nút bên dưới để kiểm tra kết quả. Nếu đơn chưa được tạo, yêu cầu sẽ được gửi lại an toàn để tránh tạo đơn trùng.'}
           </p>
           {isVnPayAttempt && pendingAttempt.orderId && (
             <p className="mt-3 rounded-xl bg-[#FCF9F3] p-3 text-xs text-[#675650]">
@@ -381,13 +402,13 @@ export default function ShopCheckoutPage() {
                 disabled={isCheckingPaymentStatus}
                 className="mt-5 flex h-11 w-full items-center justify-center rounded-full border border-[#DDCDB8] px-5 text-xs font-semibold text-[#76534D] hover:bg-[#FCF9F3] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isCheckingPaymentStatus ? 'Đang tra cứu...' : 'Kiểm tra trạng thái thanh toán'}
+                {isCheckingPaymentStatus ? 'Đang kiểm tra...' : 'Kiểm tra trạng thái thanh toán'}
               </button>
               {paymentStatus && (
                 <p role="status" className="mt-3 rounded-xl bg-[#FCF9F3] p-3 text-xs leading-5 text-[#675650]">
-                  Trạng thái backend ghi nhận — thanh toán: {paymentStatus.paymentStatus}; attempt: {paymentStatus.attemptStatus}; đơn hàng: {paymentStatus.orderStatus}.
+                  Thanh toán: {paymentStatusLabels[paymentStatus.paymentStatus] ?? 'Đang cập nhật'} · Đơn hàng: {orderStatusLabels[paymentStatus.orderStatus] ?? 'Đang cập nhật'}.
                   {paymentStatus.paymentStatus === 'SUCCESS' && paymentStatus.attemptStatus === 'SUCCESS'
-                    ? ' Thanh toán đã được backend xác nhận.'
+                    ? ' Giao dịch đã được xác nhận.'
                     : ' Chưa có xác nhận thanh toán thành công.'}
                 </p>
               )}
@@ -418,10 +439,10 @@ export default function ShopCheckoutPage() {
               className="mt-6 flex h-11 w-full items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting
-                ? 'Đang kiểm tra yêu cầu...'
+                ? 'Đang kiểm tra đơn hàng...'
                 : isVnPayAttempt
-                  ? 'Khôi phục cùng đơn và tiếp tục thanh toán'
-                  : 'Kiểm tra kết quả / tiếp tục cùng yêu cầu'}
+                  ? 'Kiểm tra đơn và tiếp tục thanh toán'
+                  : 'Kiểm tra kết quả đơn hàng'}
             </button>
           )}
           <Link to="/shop/orders" className="mt-4 block text-center text-xs font-semibold text-[#76534D]">Mở lịch sử đơn hàng</Link>
@@ -438,10 +459,10 @@ export default function ShopCheckoutPage() {
     return (
       <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
         <div role="status" className="rounded-3xl border border-[#EAE3DA] bg-white p-7 text-center shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-10">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">VNPay Sandbox</p>
-          <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B]">Thanh toán đã được xác nhận</h1>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Thanh toán thử nghiệm VNPay</p>
+          <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B]">Giao dịch thử nghiệm đã được xác nhận</h1>
           <p className="mt-3 text-sm leading-6 text-[#806B65]">
-            Backend xác nhận thanh toán cho đơn #{paymentStatus.orderId}. Không cần gửi lại yêu cầu thanh toán.
+            Kết quả thử nghiệm của đơn #{paymentStatus.orderId} đã được xác nhận. Giao dịch này không phát sinh thanh toán thật.
           </p>
           <Link to="/shop/orders" className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white hover:bg-[#4A302B]">
             Mở lịch sử đơn hàng
@@ -464,7 +485,7 @@ export default function ShopCheckoutPage() {
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-7 sm:py-12 lg:px-10">
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Hoàn tất thông tin</p>
       <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B] sm:text-4xl">Đặt hàng</h1>
-      <p className="mt-2 text-sm text-[#806B65]">Đơn được tạo ở trạng thái chờ xử lý. Chọn thanh toán theo hướng dẫn của cửa hàng hoặc chuyển tới VNPay Sandbox.</p>
+      <p className="mt-2 text-sm text-[#806B65]">Đơn sẽ được tạo ở trạng thái chờ xác nhận. Bạn có thể thanh toán theo hướng dẫn của cửa hàng hoặc chọn VNPay trong môi trường thử nghiệm.</p>
 
       {catalogLoading ? (
         <p role="status" className="mt-6 rounded-2xl bg-white px-5 py-12 text-center text-sm text-[#806B65]">Đang kiểm tra tồn kho...</p>
@@ -534,7 +555,7 @@ export default function ShopCheckoutPage() {
                   onChange={() => setPaymentMethod('VNPAY')}
                   className="mt-0.5 accent-[#76534D]"
                 />
-                <span><strong className="block text-[#4A302B]">VNPay QR (Sandbox)</strong>Chuyển tới trang thanh toán thử nghiệm của VNPay. Không tạo QR từ URL tại cửa hàng.</span>
+                <span><strong className="block text-[#4A302B]">VNPay QR (thử nghiệm)</strong>Chuyển đến trang thanh toán thử nghiệm của VNPay; giao dịch không phát sinh thanh toán thật.</span>
               </label>
             </fieldset>
             {quoteError && (
@@ -549,7 +570,7 @@ export default function ShopCheckoutPage() {
           <aside className="rounded-2xl border border-[#EAE3DA] bg-white p-5">
             <h2 className="font-display text-lg text-[#4A302B]">Đơn hàng của bạn</h2>
             <div className="mt-4 space-y-3 border-b border-[#EAE3DA] pb-4">
-              {cart.items.map((item) => {
+              {cartPagination.pageItems.map((item) => {
                 const product = productById.get(item.productId)
                 return (
                   <div key={item.productId} className="flex justify-between gap-3 text-xs">
@@ -559,15 +580,22 @@ export default function ShopCheckoutPage() {
                 )
               })}
             </div>
+            <Pagination
+              currentPage={cartPagination.currentPage}
+              pageSize={cartPagination.pageSize}
+              totalItems={cartPagination.totalItems}
+              onPageChange={cartPagination.setCurrentPage}
+              onPageSizeChange={cartPagination.setPageSize}
+            />
             {quoteLoading ? (
-              <p role="status" className="py-4 text-xs text-[#806B65]">Đang lấy báo giá từ máy chủ...</p>
+              <p role="status" className="py-4 text-xs text-[#806B65]">Đang tính tổng đơn hàng...</p>
             ) : quote ? (
               <div className="mt-4 space-y-2 text-xs">
                 <div className="flex justify-between gap-3"><span className="text-[#806B65]">Tạm tính</span><span>{moneyFormat.format(Number(quote.totalAmount))}</span></div>
                 <div className="flex justify-between gap-3"><span className="text-[#806B65]">Giảm giá</span><span>{moneyFormat.format(Number(quote.discountAmount))}</span></div>
                 <div className="flex justify-between gap-3 border-t border-[#EAE3DA] pt-3 text-sm font-bold text-[#76534D]"><span>Cần thanh toán</span><span>{moneyFormat.format(Number(quote.finalAmount))}</span></div>
               </div>
-            ) : !quoteError && <p className="mt-4 text-xs text-[#806B65]">Báo giá sẽ hiển thị sau khi máy chủ kiểm tra giỏ hàng.</p>}
+            ) : !quoteError && <p className="mt-4 text-xs text-[#806B65]">Tổng tiền và ưu đãi sẽ được xác nhận khi đặt hàng.</p>}
             <button
               type="submit"
               disabled={isSubmitting || quoteLoading || !quote || Boolean(quoteError)}

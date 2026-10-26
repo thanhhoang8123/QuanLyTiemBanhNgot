@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../../../components/Icon.jsx'
+import Pagination, { usePagination } from '../../../components/Pagination.jsx'
 import { getProducts } from '../../products/services/productService.js'
 import { toProductViewModel } from '../../products/adapters/productAdapter.js'
 import { useShopCart } from '../ShopCartContext.jsx'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const currency = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -23,11 +25,13 @@ export default function ShopCartPage() {
     setError('')
     getProducts({ signal: controller.signal })
       .then((result) => {
-        if (!Array.isArray(result)) throw new Error('API sản phẩm trả về dữ liệu không hợp lệ.')
+        if (!Array.isArray(result)) throw new Error('Chưa thể tải danh sách sản phẩm. Vui lòng thử lại.')
         setProducts(result.map(toProductViewModel))
       })
       .catch((loadError) => {
-        if (loadError.name !== 'AbortError') setError(loadError.message)
+        if (loadError.name !== 'AbortError') {
+          setError(getUserFacingErrorMessage(loadError, 'Chưa thể tải danh sách sản phẩm. Vui lòng thử lại.'))
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setIsLoading(false)
@@ -39,7 +43,7 @@ export default function ShopCartPage() {
     () => new Map(products.map((product) => [Number(product.id), product])),
     [products],
   )
-  const lines = cart.items.map((item) => {
+  const lines = useMemo(() => cart.items.map((item) => {
     const product = productById.get(item.productId)
     const issue = !product
       ? 'Sản phẩm không còn tồn tại'
@@ -51,7 +55,8 @@ export default function ShopCartPage() {
             ? `Chỉ còn ${product.stock} sản phẩm`
             : ''
     return { ...item, product, issue }
-  })
+  }), [cart.items, productById])
+  const linePagination = usePagination(lines)
   const cartTotal = lines.reduce((sum, line) => (
     line.product ? sum + line.product.price * line.quantity : sum
   ), 0)
@@ -59,7 +64,7 @@ export default function ShopCartPage() {
 
   return (
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-7 sm:py-12 lg:px-10">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">WA Pâtisserie</p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Daily Fresh</p>
       <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B] sm:text-4xl">Giỏ hàng</h1>
       <p className="mt-2 text-sm text-[#806B65]">Giá và tồn kho được tải lại từ hệ thống trước khi đặt hàng.</p>
 
@@ -80,7 +85,7 @@ export default function ShopCartPage() {
       ) : (
         <div className="mt-7 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="space-y-3">
-            {lines.map((line) => (
+            {linePagination.pageItems.map((line) => (
               <article key={line.productId} className="rounded-2xl border border-[#EAE3DA] bg-white p-4 sm:p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
@@ -115,6 +120,13 @@ export default function ShopCartPage() {
                 </div>
               </article>
             ))}
+            <Pagination
+              currentPage={linePagination.currentPage}
+              pageSize={linePagination.pageSize}
+              totalItems={linePagination.totalItems}
+              onPageChange={linePagination.setCurrentPage}
+              onPageSizeChange={linePagination.setPageSize}
+            />
             <Link to="/shop/products" className="inline-flex items-center gap-2 py-2 text-xs font-semibold text-[#76534D]">
               <Icon name="arrowUpRight" size={14} className="rotate-180" /> Tiếp tục xem bánh
             </Link>
@@ -126,7 +138,7 @@ export default function ShopCartPage() {
               <span className="text-[#806B65]">Tạm tính</span>
               <strong className="text-[#76534D]">{currency.format(cartTotal)}</strong>
             </div>
-            <p className="mt-3 text-[11px] leading-5 text-[#806B65]">Giá cuối cùng và khuyến mãi (nếu có) sẽ do máy chủ tính lại khi checkout.</p>
+            <p className="mt-3 text-[11px] leading-5 text-[#806B65]">Giá cuối cùng và ưu đãi (nếu có) sẽ được xác nhận khi đặt hàng.</p>
             {hasInvalidLine && <p role="alert" className="mt-4 rounded-xl bg-[#F6E9E6] p-3 text-xs leading-5 text-[#914E46]">Giỏ có sản phẩm không hợp lệ hoặc vượt tồn kho. Vui lòng sửa trước khi tiếp tục.</p>}
             <Link
               to="/shop/checkout"

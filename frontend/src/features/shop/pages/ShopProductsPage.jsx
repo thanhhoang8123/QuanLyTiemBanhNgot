@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
 import Icon from '../../../components/Icon.jsx'
+import Pagination, { usePagination } from '../../../components/Pagination.jsx'
 import ShopProductCard from '../components/ShopProductCard.jsx'
 import useShopCatalog from '../hooks/useShopCatalog.js'
 
@@ -35,6 +36,7 @@ export default function ShopProductsPage() {
     if (sort === 'price-desc') return filtered.sort((a, b) => b.price - a.price)
     return filtered
   }, [products, query, selectedCategory, sort])
+  const productPagination = usePagination(visibleProducts)
 
   const updateCategory = (value) => {
     const nextParams = new URLSearchParams(searchParams)
@@ -50,7 +52,7 @@ export default function ShopProductsPage() {
           <Link to="/shop" className="mb-4 inline-flex items-center gap-2 text-[11px] font-semibold text-[#9A7972] transition hover:text-[#4A302B]">
             <span className="rotate-180"><Icon name="arrowUpRight" size={14} /></span> Về trang chủ
           </Link>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#A97668]">Bộ sưu tập WA Pâtisserie</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#A97668]">Bộ sưu tập Daily Fresh</p>
           <h1 className="font-display mt-2 text-4xl font-medium text-[#4A302B] sm:text-5xl">Những chiếc bánh ngọt</h1>
           <p className="mt-3 max-w-2xl text-xs leading-6 text-[#806B65] sm:text-sm">Tìm món bánh phù hợp cho buổi trà chiều, ngày đặc biệt hay một chút tự thưởng cho riêng mình.</p>
         </div>
@@ -133,9 +135,18 @@ export default function ShopProductsPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
-          {visibleProducts.map((product) => <ShopProductCard key={product.id} product={product} onAddToCart={addToCart} />)}
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
+            {productPagination.pageItems.map((product) => <ShopProductCard key={product.id} product={product} onAddToCart={addToCart} />)}
+          </div>
+          <Pagination
+            currentPage={productPagination.currentPage}
+            pageSize={productPagination.pageSize}
+            totalItems={productPagination.totalItems}
+            onPageChange={productPagination.setCurrentPage}
+            onPageSizeChange={productPagination.setPageSize}
+          />
+        </>
       )}
     </div>
   )
