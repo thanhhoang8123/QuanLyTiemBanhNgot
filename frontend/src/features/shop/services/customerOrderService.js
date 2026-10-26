@@ -1,4 +1,5 @@
 import { apiRequest } from '../../../services/apiClient.js'
+import { buildCustomerVnPayPaymentRequest } from './customerVnPayPaymentRequest.js'
 
 export function quoteCustomerOrder(order, { signal } = {}) {
   return apiRequest('/customer/orders/quote', {
@@ -14,6 +15,35 @@ export function createCustomerOrder(order, idempotencyKey) {
     body: order,
     headers: { 'Idempotency-Key': idempotencyKey },
   })
+}
+
+export function createCustomerVnPayPayment(orderId) {
+  const body = buildCustomerVnPayPaymentRequest(orderId)
+  return apiRequest('/customer/payments/vnpay', {
+    method: 'POST',
+    body,
+  })
+}
+
+export function getCustomerVnPayPaymentStatus(transactionReference, { signal } = {}) {
+  return apiRequest(
+    `/customer/payments/vnpay/${encodeURIComponent(transactionReference)}`,
+    { signal },
+  )
+}
+
+export function reconcileCustomerVnPayPayment(transactionReference) {
+  return apiRequest(
+    `/customer/payments/vnpay/${encodeURIComponent(transactionReference)}/reconcile`,
+    { method: 'POST' },
+  )
+}
+
+export function getCustomerVnPayPaymentStatusByOrderId(orderId, { signal } = {}) {
+  return apiRequest(
+    `/customer/payments/vnpay/by-order/${encodeURIComponent(orderId)}`,
+    { signal },
+  )
 }
 
 export function getCustomerOrders({ signal } = {}) {

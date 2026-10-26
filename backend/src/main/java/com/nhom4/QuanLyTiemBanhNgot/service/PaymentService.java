@@ -13,6 +13,7 @@ import com.nhom4.QuanLyTiemBanhNgot.mapper.PaymentMapper;
 import com.nhom4.QuanLyTiemBanhNgot.repository.CustomerRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.OrderRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PaymentRepository;
+import com.nhom4.QuanLyTiemBanhNgot.repository.PaymentTransactionAttemptRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,7 @@ public class PaymentService {
     private static final BigDecimal AMOUNT_PER_LOYALTY_POINT = new BigDecimal("10000");
 
     private final PaymentRepository paymentRepository;
+    private final PaymentTransactionAttemptRepository paymentTransactionAttemptRepository;
     private final OrderRepository orderRepository;
     private final CustomerRepository customerRepository;
     private final PaymentMapper paymentMapper;
@@ -43,11 +45,13 @@ public class PaymentService {
     public PaymentService(
             PaymentRepository paymentRepository,
             OrderRepository orderRepository,
+            PaymentTransactionAttemptRepository paymentTransactionAttemptRepository,
             CustomerRepository customerRepository,
             PaymentMapper paymentMapper,
             OrderStatusHistoryService orderStatusHistoryService) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
+        this.paymentTransactionAttemptRepository = paymentTransactionAttemptRepository;
         this.customerRepository = customerRepository;
         this.paymentMapper = paymentMapper;
         this.orderStatusHistoryService = orderStatusHistoryService;
@@ -79,6 +83,21 @@ public class PaymentService {
      */
     public Payment save(Payment payment) {
         return paymentRepository.save(payment);
+    }
+
+    void completeVnPayPayment(Payment payment, Order order, String transactionNo) {
+        payment.setStatus("SUCCESS");
+        payment.setPaidAt(LocalDateTime.now(ZoneOffset.UTC));
+        payment.setTransactionId(transactionNo);
+        paymentRepository.save(payment);
+        awardLoyaltyPoints(order.getCustomer(), payment.getAmount());
+        if ("PENDING".equals(order.getStatus())) {
+            String oldStatus = order.getStatus();
+            order.setStatus("CONFIRMED");
+            orderRepository.save(order);
+            orderStatusHistoryService.recordStatusChangeAfterCommit(
+                    order.getId(), oldStatus, order.getStatus(), "Thanh toán VNPay thành công");
+        }
     }
 
     /**
@@ -163,6 +182,11 @@ public class PaymentService {
                         "Không tìm thấy thanh toán với ID: " + id
                 ));
 
+        if ("VNPAY".equalsIgnoreCase(payment.getPaymentMethod())) {
+            throw new ConflictException(
+                    "Không thể mô phỏng kết quả cho giao dịch VNPay"
+            );
+        }
         if ("SUCCESS".equals(payment.getStatus())) {
             throw new ConflictException(
                     "Payment đã thành công và không thể xử lý lại"
@@ -256,6 +280,11 @@ public class PaymentService {
         if ("SUCCESS".equalsIgnoreCase(payment.getStatus())) {
             throw new ConflictException(
                     "Không thể xóa Payment đã thanh toán thành công"
+            );
+        }
+        if (paymentTransactionAttemptRepository.existsByPayment_Id(payment.getId())) {
+            throw new ConflictException(
+                    "Không thể xóa Payment đã có lịch sử giao dịch"
             );
         }
 

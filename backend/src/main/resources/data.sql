@@ -1,9 +1,30 @@
 -- =========================================================
 -- DATA MẪU - HỆ THỐNG QUẢN LÝ TIỆM BÁNH NGỌT
--- Theo ERD chính thức gồm 16 bảng
--- Có thể chạy nhiều lần: dùng INSERT IGNORE để tránh lỗi
--- trùng khóa chính khi Spring Boot chạy lại data.sql.
+-- Dữ liệu cho các bảng nghiệp vụ trong ERD và bảng payment attempts.
+-- CHỈ chạy thủ công trên database thử nghiệm: script xóa dữ liệu
+-- hiện có trong các bảng nghiệp vụ bên dưới trước khi nạp lại mẫu.
+-- Không xóa schema hoặc lịch sử Flyway. Spring SQL init hiện đang tắt.
 -- =========================================================
+
+START TRANSACTION;
+
+DELETE FROM payment_transaction_attempts;
+DELETE FROM payments;
+DELETE FROM order_items;
+DELETE FROM orders;
+DELETE FROM custom_orders;
+DELETE FROM purchase_order_items;
+DELETE FROM purchase_orders;
+DELETE FROM promotion_products;
+DELETE FROM products;
+DELETE FROM categories;
+DELETE FROM ingredients;
+DELETE FROM suppliers;
+DELETE FROM employees;
+DELETE FROM accounts;
+DELETE FROM customers;
+DELETE FROM promotions;
+DELETE FROM roles;
 
 -- =========================================================
 -- 1. ROLES
@@ -11,7 +32,8 @@
 INSERT IGNORE INTO roles (id, role_code, name, description) VALUES
 (1, 'ADMIN', 'Quản trị viên', 'Quản lý toàn bộ hệ thống'),
 (2, 'MANAGER', 'Quản lý', 'Quản lý hoạt động cửa hàng'),
-(3, 'STAFF', 'Nhân viên bán hàng', 'Tiếp nhận và xử lý đơn hàng');
+(3, 'STAFF', 'Nhân viên bán hàng', 'Tiếp nhận và xử lý đơn hàng'),
+(4, 'CUSTOMER', 'Khách hàng', 'Tài khoản khách hàng của cửa hàng');
 
 -- =========================================================
 -- 2. ACCOUNTS
@@ -41,7 +63,8 @@ INSERT IGNORE INTO customers
 (2, 'Trần Quốc Bảo', '0922222222', 'quocbao@gmail.com', 'Quận 3, TP.HCM', 80, TRUE),
 (3, 'Lê Ngọc Hân', '0933333333', 'ngochan@gmail.com', 'Quận 10, TP.HCM', 250, TRUE),
 (4, 'Phạm Gia Huy', '0944444444', 'giahuy@gmail.com', 'Thủ Đức, TP.HCM', 40, TRUE),
-(5, 'Hoàng Thu Trang', '0955555555', 'thutrang@gmail.com', 'Quận 7, TP.HCM', 0, TRUE);
+(5, 'Hoàng Thu Trang', '0955555555', 'thutrang@gmail.com', 'Quận 7, TP.HCM', 0, TRUE),
+(6, 'Khách vãng lai', NULL, 'pos.walkin@example.invalid', NULL, 0, TRUE);
 
 -- =========================================================
 -- 5. CATEGORIES
@@ -227,3 +250,5 @@ INSERT IGNORE INTO promotion_products
 -- SELECT COUNT(*) FROM custom_orders;
 -- SELECT COUNT(*) FROM promotions;
 -- SELECT COUNT(*) FROM promotion_products;
+
+COMMIT;

@@ -14,6 +14,7 @@ import com.nhom4.QuanLyTiemBanhNgot.entity.Customer;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Employee;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Order;
 import com.nhom4.QuanLyTiemBanhNgot.entity.OrderItem;
+import com.nhom4.QuanLyTiemBanhNgot.entity.PaymentTransactionAttempt;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Product;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Promotion;
 import com.nhom4.QuanLyTiemBanhNgot.entity.PromotionProduct;
@@ -23,6 +24,7 @@ import com.nhom4.QuanLyTiemBanhNgot.repository.EmployeeRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.OrderItemRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.OrderRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PaymentRepository;
+import com.nhom4.QuanLyTiemBanhNgot.repository.PaymentTransactionAttemptRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.ProductRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PromotionProductRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PromotionRepository;
@@ -68,6 +70,7 @@ public class OrderService {
     private final EmployeeRepository employeeRepository;
     private final ProductRepository productRepository;
     private final PaymentRepository paymentRepository;
+    private final PaymentTransactionAttemptRepository paymentTransactionAttemptRepository;
     private final PromotionRepository promotionRepository;
     private final PromotionProductRepository promotionProductRepository;
     private final OrderMapper orderMapper;
@@ -81,6 +84,7 @@ public class OrderService {
             EmployeeRepository employeeRepository,
             ProductRepository productRepository,
             PaymentRepository paymentRepository,
+            PaymentTransactionAttemptRepository paymentTransactionAttemptRepository,
             PromotionRepository promotionRepository,
             PromotionProductRepository promotionProductRepository,
             OrderMapper orderMapper,
@@ -92,6 +96,7 @@ public class OrderService {
         this.employeeRepository = employeeRepository;
         this.productRepository = productRepository;
         this.paymentRepository = paymentRepository;
+        this.paymentTransactionAttemptRepository = paymentTransactionAttemptRepository;
         this.promotionRepository = promotionRepository;
         this.promotionProductRepository = promotionProductRepository;
         this.orderMapper = orderMapper;
@@ -357,6 +362,24 @@ public class OrderService {
                         HttpStatus.CONFLICT,
                         "Không thể hủy đơn hàng đã thanh toán thành công"
                 );
+            }
+            if ("VNPAY".equalsIgnoreCase(payment.getPaymentMethod())) {
+                List<PaymentTransactionAttempt> attempts =
+                        paymentTransactionAttemptRepository
+                                .findByPayment_IdOrderByCreatedAtDesc(payment.getId());
+                boolean hasUnresolvedAttempt = attempts.stream().anyMatch(attempt ->
+                        !"FAILED".equalsIgnoreCase(attempt.getStatus())
+                                && !"EXPIRED".equalsIgnoreCase(attempt.getStatus()));
+                if (hasUnresolvedAttempt) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Không thể hủy đơn hàng khi giao dịch VNPay đang cần đối soát"
+                    );
+                }
+                if (attempts.isEmpty()) {
+                    paymentRepository.delete(payment);
+                }
+                return;
             }
             paymentRepository.delete(payment);
         });
