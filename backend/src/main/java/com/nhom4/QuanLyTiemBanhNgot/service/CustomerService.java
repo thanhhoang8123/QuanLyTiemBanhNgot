@@ -5,6 +5,7 @@ import com.nhom4.QuanLyTiemBanhNgot.dto.customer.CustomerRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.customer.CustomerResponse;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Customer;
 import com.nhom4.QuanLyTiemBanhNgot.mapper.CustomerMapper;
+import com.nhom4.QuanLyTiemBanhNgot.repository.AccountRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.CustomerRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.CustomOrderRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.OrderRepository;
@@ -34,6 +35,7 @@ import java.util.List;
 public class CustomerService {
 
     private final CustomerRepository customerRepository;
+    private final AccountRepository accountRepository;
     private final OrderRepository orderRepository;
     private final CustomOrderRepository customOrderRepository;
     private final CustomerMapper customerMapper;
@@ -46,10 +48,12 @@ public class CustomerService {
      */
     public CustomerService(
             CustomerRepository customerRepository,
+            AccountRepository accountRepository,
             OrderRepository orderRepository,
             CustomOrderRepository customOrderRepository,
             CustomerMapper customerMapper) {
         this.customerRepository = customerRepository;
+        this.accountRepository = accountRepository;
         this.orderRepository = orderRepository;
         this.customOrderRepository = customOrderRepository;
         this.customerMapper = customerMapper;
@@ -120,6 +124,12 @@ public class CustomerService {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Không thể xóa khách hàng đang có đơn hàng hoặc đơn đặt bánh riêng"
+            );
+        }
+        if (accountRepository.existsByCustomer_Id(id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Không thể xóa hồ sơ khách hàng đang liên kết với tài khoản đăng nhập"
             );
         }
 

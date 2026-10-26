@@ -3,12 +3,14 @@ package com.nhom4.QuanLyTiemBanhNgot.controller;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Role;
 import com.nhom4.QuanLyTiemBanhNgot.service.RoleService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/roles")
+@PreAuthorize("hasRole('ADMIN')")
 public class RoleController {
 
     private final RoleService roleService;

@@ -45,7 +45,12 @@ Tài khoản đăng nhập hệ thống.
 | username | VARCHAR(50) | Duy nhất |
 | password_hash | VARCHAR(255) | Mật khẩu đã mã hóa |
 | role_id | BIGINT | FK → `roles.id` |
-| status | VARCHAR(20) | ACTIVE / LOCKED |
+| email | VARCHAR(100) | Email đăng nhập, duy nhất, cho phép NULL với tài khoản cũ |
+| email_verified | BOOLEAN | Đã xác minh email; mặc định `false` |
+| customer_id | BIGINT | FK → `customers.id`, cho phép NULL |
+| email_verification_token_hash | VARCHAR(64) | Hash SHA-256 của token xác minh; duy nhất, cho phép NULL |
+| email_verification_token_expires_at | DATETIME | Thời hạn token xác minh |
+| status | VARCHAR(20) | PENDING_VERIFICATION / ACTIVE / LOCKED |
 | created_at | TIMESTAMP | |
 | updated_at | TIMESTAMP | |
 
@@ -62,7 +67,8 @@ Hồ sơ nhân sự, gắn 1-1 với tài khoản đăng nhập.
 | salary | DECIMAL(15,2) | |
 | status | BOOLEAN | Đang làm việc / đã nghỉ |
 
-**Quan hệ:** `roles` (1) — (N) `accounts` — (1) — (1) `employees`
+**Quan hệ:** `roles` (1) — (N) `accounts`; `customers` (1) — (N) `accounts` (liên kết tùy chọn); `accounts` (1) — (1) `employees`.
+Token xác minh chỉ lưu hash và thời hạn trong `accounts`, không tạo thêm bảng.
 
 ---
 

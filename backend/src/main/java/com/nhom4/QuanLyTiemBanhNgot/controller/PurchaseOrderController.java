@@ -3,6 +3,7 @@ package com.nhom4.QuanLyTiemBanhNgot.controller;
 import com.nhom4.QuanLyTiemBanhNgot.dto.PurchaseOrderCreateRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.PurchaseOrderResponse;
 import com.nhom4.QuanLyTiemBanhNgot.service.PurchaseOrderService;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,8 +29,10 @@ public class PurchaseOrderController {
     }
 
     @PostMapping
-    public PurchaseOrderResponse create(@RequestBody PurchaseOrderCreateRequest request) {
-        return service.create(request);
+    public PurchaseOrderResponse create(
+            @RequestBody PurchaseOrderCreateRequest request,
+            Authentication authentication) {
+        return service.createForAuthenticatedEmployee(request, authentication.getName());
     }
 
     @PostMapping("/{id}/receive")

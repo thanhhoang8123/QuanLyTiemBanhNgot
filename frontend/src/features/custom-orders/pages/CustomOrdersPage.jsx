@@ -221,6 +221,10 @@ export default function CustomOrdersPage({ onToast }) {
     () => employees.filter((employee) => employee.status === true),
     [employees],
   )
+  const currentEmployee = useMemo(
+    () => activeEmployees.find((employee) => employee.currentUser === true),
+    [activeEmployees],
+  )
   const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase('vi')
     return orders.filter((order) => {
@@ -244,7 +248,10 @@ export default function CustomOrdersPage({ onToast }) {
 
   const openCreateForm = () => {
     setEditingOrder(null)
-    setForm({ ...emptyForm })
+    setForm({
+      ...emptyForm,
+      employeeId: currentEmployee ? String(currentEmployee.id) : '',
+    })
     setFormError('')
     setFormOpen(true)
   }
@@ -449,7 +456,7 @@ export default function CustomOrdersPage({ onToast }) {
         actions={(
           <Button
             onClick={openCreateForm}
-            disabled={isLoading || Boolean(loadError) || activeCustomers.length === 0 || activeEmployees.length === 0}
+            disabled={isLoading || Boolean(loadError) || activeCustomers.length === 0 || !currentEmployee}
           >
             <Icon name="plus" size={16} /> Tạo đơn đặt bánh
           </Button>
@@ -547,22 +554,36 @@ export default function CustomOrdersPage({ onToast }) {
                 </select>
               )}
             </FormField>
-            <FormField id="custom-order-employee" label="Nhân viên tiếp nhận đang hoạt động" required>
+            <FormField id="custom-order-employee" label={editingOrder ? 'Nhân viên tiếp nhận' : 'Người tiếp nhận (tài khoản đang đăng nhập)'} required>
               {(fieldProps) => (
-                <select
-                  {...fieldProps}
-                  value={form.employeeId}
-                  onChange={(event) => setForm((current) => ({ ...current, employeeId: event.target.value }))}
-                  className={inputClass}
-                >
-                  <option value="">Chọn nhân viên</option>
-                  {activeEmployees.map((employee) => (
-                    <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>
-                  ))}
-                </select>
+                editingOrder
+                  ? <select
+                      {...fieldProps}
+                      value={form.employeeId}
+                      disabled
+                      className={inputClass}
+                    >
+                      {activeEmployees
+                        .filter((employee) => String(employee.id) === form.employeeId)
+                        .map((employee) => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}
+                    </select>
+                  : <input
+                      {...fieldProps}
+                      type="text"
+                      readOnly
+                      value={currentEmployee ? `${employeeLabel(currentEmployee)} (Đang đăng nhập)` : ''}
+                      placeholder="Tài khoản chưa có hồ sơ nhân viên"
+                      disabled={!currentEmployee}
+                      className={inputClass}
+                    />
               )}
             </FormField>
           </div>
+          {!editingOrder && !currentEmployee && (
+            <p role="alert" className="text-xs text-danger">
+              Tài khoản chưa được liên kết với hồ sơ nhân viên đang hoạt động. Vui lòng nhờ quản trị viên liên kết trước khi tạo đơn.
+            </p>
+          )}
 
           <FormField id="custom-order-cake-name" label="Tên bánh" required>
             {(fieldProps) => (
@@ -647,7 +668,7 @@ export default function CustomOrdersPage({ onToast }) {
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="secondary" disabled={isSaving} onClick={closeForm}>Hủy</Button>
-            <Button type="submit" disabled={isSaving}>
+            <Button type="submit" disabled={isSaving || (!editingOrder && !currentEmployee)}>
               {isSaving ? 'Đang lưu...' : editingOrder ? 'Lưu thay đổi' : 'Tạo đơn'}
             </Button>
           </div>

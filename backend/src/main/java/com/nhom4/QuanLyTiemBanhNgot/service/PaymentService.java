@@ -3,14 +3,17 @@ package com.nhom4.QuanLyTiemBanhNgot.service;
 import com.nhom4.QuanLyTiemBanhNgot.dto.payment.CreatePaymentRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.payment.PaymentResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.payment.SimulatePaymentRequest;
+import com.nhom4.QuanLyTiemBanhNgot.entity.Customer;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Payment;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Order;
 import com.nhom4.QuanLyTiemBanhNgot.exception.BadRequestException;
 import com.nhom4.QuanLyTiemBanhNgot.exception.ConflictException;
 import com.nhom4.QuanLyTiemBanhNgot.exception.ResourceNotFoundException;
 import com.nhom4.QuanLyTiemBanhNgot.mapper.PaymentMapper;
+import com.nhom4.QuanLyTiemBanhNgot.repository.CustomerRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.OrderRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PaymentRepository;
+import com.nhom4.QuanLyTiemBanhNgot.repository.PaymentTransactionAttemptRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,9 +29,15 @@ import java.util.List;
 @Service
 public class PaymentService {
 
+    private static final String WALK_IN_CUSTOMER_EMAIL = "pos.walkin@example.invalid";
+    private static final BigDecimal AMOUNT_PER_LOYALTY_POINT = new BigDecimal("10000");
+
     private final PaymentRepository paymentRepository;
+    private final PaymentTransactionAttemptRepository paymentTransactionAttemptRepository;
     private final OrderRepository orderRepository;
+    private final CustomerRepository customerRepository;
     private final PaymentMapper paymentMapper;
+    private final OrderStatusHistoryService orderStatusHistoryService;
 
     /**
      * Constructor Injection.
@@ -36,10 +45,16 @@ public class PaymentService {
     public PaymentService(
             PaymentRepository paymentRepository,
             OrderRepository orderRepository,
-            PaymentMapper paymentMapper) {
+            PaymentTransactionAttemptRepository paymentTransactionAttemptRepository,
+            CustomerRepository customerRepository,
+            PaymentMapper paymentMapper,
+            OrderStatusHistoryService orderStatusHistoryService) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
+        this.paymentTransactionAttemptRepository = paymentTransactionAttemptRepository;
+        this.customerRepository = customerRepository;
         this.paymentMapper = paymentMapper;
+        this.orderStatusHistoryService = orderStatusHistoryService;
     }
 
     /**
@@ -68,6 +83,21 @@ public class PaymentService {
      */
     public Payment save(Payment payment) {
         return paymentRepository.save(payment);
+    }
+
+    void completeVnPayPayment(Payment payment, Order order, String transactionNo) {
+        payment.setStatus("SUCCESS");
+        payment.setPaidAt(LocalDateTime.now(ZoneOffset.UTC));
+        payment.setTransactionId(transactionNo);
+        paymentRepository.save(payment);
+        awardLoyaltyPoints(order.getCustomer(), payment.getAmount());
+        if ("PENDING".equals(order.getStatus())) {
+            String oldStatus = order.getStatus();
+            order.setStatus("CONFIRMED");
+            orderRepository.save(order);
+            orderStatusHistoryService.recordStatusChangeAfterCommit(
+                    order.getId(), oldStatus, order.getStatus(), "Thanh toán VNPay thành công");
+        }
     }
 
     /**
@@ -152,6 +182,11 @@ public class PaymentService {
                         "Không tìm thấy thanh toán với ID: " + id
                 ));
 
+        if ("VNPAY".equalsIgnoreCase(payment.getPaymentMethod())) {
+            throw new ConflictException(
+                    "Không thể mô phỏng kết quả cho giao dịch VNPay"
+            );
+        }
         if ("SUCCESS".equals(payment.getStatus())) {
             throw new ConflictException(
                     "Payment đã thành công và không thể xử lý lại"
@@ -173,9 +208,13 @@ public class PaymentService {
         if ("SUCCESS".equals(request.result())) {
             payment.setStatus("SUCCESS");
             payment.setPaidAt(LocalDateTime.now(ZoneOffset.UTC));
+            awardLoyaltyPoints(order.getCustomer(), payment.getAmount());
             if ("PENDING".equals(order.getStatus())) {
+                String oldStatus = order.getStatus();
                 order.setStatus("CONFIRMED");
                 orderRepository.save(order);
+                orderStatusHistoryService.recordStatusChangeAfterCommit(
+                        order.getId(), oldStatus, order.getStatus(), "Thanh toán thành công");
             }
         } else {
             payment.setStatus("FAILED");
@@ -183,6 +222,34 @@ public class PaymentService {
         }
 
         return paymentMapper.toResponse(paymentRepository.save(payment));
+    }
+
+    private void awardLoyaltyPoints(Customer orderCustomer, BigDecimal paidAmount) {
+        if (orderCustomer == null
+                || WALK_IN_CUSTOMER_EMAIL.equalsIgnoreCase(orderCustomer.getEmail())
+                || paidAmount == null
+                || paidAmount.signum() <= 0) {
+            return;
+        }
+
+        int pointsToAward = paidAmount
+                .divideToIntegralValue(AMOUNT_PER_LOYALTY_POINT)
+                .intValueExact();
+        if (pointsToAward == 0) return;
+
+        Customer customer = customerRepository.findByIdForUpdate(orderCustomer.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy khách hàng của đơn hàng"
+                ));
+        int currentPoints = customer.getLoyaltyPoints() == null
+                ? 0
+                : customer.getLoyaltyPoints();
+        try {
+            customer.setLoyaltyPoints(Math.addExact(currentPoints, pointsToAward));
+        } catch (ArithmeticException exception) {
+            throw new ConflictException("Điểm tích lũy của khách hàng đã vượt giới hạn");
+        }
+        customerRepository.save(customer);
     }
 
     /**
@@ -198,11 +265,26 @@ public class PaymentService {
     /**
      * Chỉ cho phép xóa Payment chưa thành công.
      */
+    @Transactional
     public void deleteById(Long id) {
-        Payment payment = findPaymentById(id);
+        Payment existingPayment = findPaymentById(id);
+        Long orderId = existingPayment.getOrder().getId();
+        orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy đơn hàng của thanh toán với ID: " + id
+                ));
+        Payment payment = paymentRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy thanh toán với ID: " + id
+                ));
         if ("SUCCESS".equalsIgnoreCase(payment.getStatus())) {
             throw new ConflictException(
                     "Không thể xóa Payment đã thanh toán thành công"
+            );
+        }
+        if (paymentTransactionAttemptRepository.existsByPayment_Id(payment.getId())) {
+            throw new ConflictException(
+                    "Không thể xóa Payment đã có lịch sử giao dịch"
             );
         }
 

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { useContext, useEffect, useState } from 'react'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import AppLayout from './layouts/AppLayout.jsx'
 import DashboardPage from './features/dashboard/pages/DashboardPage.jsx'
 import PosPage from './features/pos/pages/PosPage.jsx'
@@ -17,7 +17,78 @@ import NotFoundPage from './pages/NotFoundPage.jsx'
 import ShopLayout from './layouts/ShopLayout.jsx'
 import ShopHomePage from './features/shop/pages/ShopHomePage.jsx'
 import ShopProductsPage from './features/shop/pages/ShopProductsPage.jsx'
+import ShopProductDetailPage from './features/shop/pages/ShopProductDetailPage.jsx'
+import ShopCartPage from './features/shop/pages/ShopCartPage.jsx'
+import ShopCheckoutPage from './features/shop/pages/ShopCheckoutPage.jsx'
+import ShopOrderResultPage from './features/shop/pages/ShopOrderResultPage.jsx'
+import ShopOrdersPage from './features/shop/pages/ShopOrdersPage.jsx'
+import ShopOrderDetailPage from './features/shop/pages/ShopOrderDetailPage.jsx'
+import RegisterPage from './features/auth/pages/RegisterPage.jsx'
+import VerifyEmailPage from './features/auth/pages/VerifyEmailPage.jsx'
+import LoginPage from './features/auth/pages/LoginPage.jsx'
+import AccountsPage from './features/accounts/pages/AccountsPage.jsx'
+import ManagementLogsPage from './features/activity-logs/pages/ManagementLogsPage.jsx'
 import Icon from './components/Icon.jsx'
+import { apiRequest } from './services/apiClient.js'
+import { ADMIN_ROLES, MANAGER_ROLES, STAFF_ROLES } from './features/auth/permissions.js'
+import { AuthContext } from './features/auth/AuthContext.js'
+
+function RequireAuth({ children, allowedRoles = STAFF_ROLES }) {
+  const location = useLocation()
+  const inheritedAuth = useContext(AuthContext)
+  const [account, setAccount] = useState(null)
+  const [status, setStatus] = useState('checking')
+
+  useEffect(() => {
+    if (inheritedAuth) return undefined
+    let active = true
+
+    apiRequest('/auth/me')
+      .then((currentAccount) => {
+        if (!active) return
+        setAccount(currentAccount)
+        setStatus('authorized')
+      })
+      .catch(() => {
+        if (!active) return
+        setStatus('unauthenticated')
+      })
+
+    return () => {
+      active = false
+    }
+  }, [inheritedAuth])
+
+  if (inheritedAuth) {
+    const roleCode = (inheritedAuth.account?.roleCode || '').toUpperCase()
+    return allowedRoles.includes(roleCode)
+      ? children
+      : <Navigate to="/shop" replace />
+  }
+
+  if (status === 'checking') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#FCF9F3] text-sm font-semibold text-[#76534D]">
+        Đang xác thực phiên đăng nhập...
+      </div>
+    )
+  }
+
+  if (status === 'unauthenticated') {
+    return <Navigate to="/shop/login" replace state={{ from: location }} />
+  }
+
+  const roleCode = (account?.roleCode || '').toUpperCase()
+  if (!allowedRoles.includes(roleCode)) {
+    return <Navigate to="/shop" replace />
+  }
+
+  return (
+    <AuthContext.Provider value={{ account, setAccount }}>
+      {children}
+    </AuthContext.Provider>
+  )
+}
 
 export default function App() {
   const [toast, setToast] = useState('')
@@ -40,33 +111,49 @@ export default function App() {
     <>
       <Routes>
         <Route path="shop" element={<ShopLayout />}>
+          <Route path="login" element={<LoginPage />} />
           <Route index element={<ShopHomePage />} />
           <Route path="products" element={<ShopProductsPage />} />
+          <Route path="products/:productId" element={<ShopProductDetailPage />} />
+          <Route path="cart" element={<ShopCartPage />} />
+          <Route path="checkout" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopCheckoutPage /></RequireAuth>} />
+          <Route path="order-result" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopOrderResultPage /></RequireAuth>} />
+          <Route path="orders" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopOrdersPage /></RequireAuth>} />
+          <Route path="orders/:orderId" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopOrderDetailPage /></RequireAuth>} />
+          <Route path="register" element={<RegisterPage />} />
+          <Route path="verify-email" element={<VerifyEmailPage />} />
         </Route>
-        <Route element={<AppLayout />}>
+        <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
           <Route path="admin" element={<DashboardPage onToast={showToast} />} />
-          <Route path="admin/products" element={<ProductsPage onToast={showToast} />} />
-          <Route path="admin/inventory" element={<InventoryPage onToast={showToast} />} />
-          <Route path="admin/suppliers" element={<SuppliersPage onToast={showToast} />} />
-          <Route path="admin/purchase-orders" element={<PurchaseOrdersPage onToast={showToast} />} />
-          <Route path="admin/orders" element={<OrdersPage onToast={showToast} />} />
-          <Route path="admin/customers" element={<CustomersPage onToast={showToast} />} />
-          <Route path="admin/custom-orders" element={<CustomOrdersPage onToast={showToast} />} />
-          <Route path="admin/payments" element={<PaymentsPage onToast={showToast} />} />
-          <Route path="admin/promotions" element={<PromotionsPage onToast={showToast} />} />
-          <Route path="admin/promotion-products" element={<PromotionProductsPage onToast={showToast} />} />
+          <Route
+            path="admin/accounts"
+            element={<RequireAuth allowedRoles={ADMIN_ROLES}><AccountsPage onToast={showToast} /></RequireAuth>}
+          />
+          <Route path="admin/products" element={<RequireAuth allowedRoles={MANAGER_ROLES}><ProductsPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/inventory" element={<RequireAuth allowedRoles={MANAGER_ROLES}><InventoryPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/suppliers" element={<RequireAuth allowedRoles={MANAGER_ROLES}><SuppliersPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/purchase-orders" element={<RequireAuth allowedRoles={MANAGER_ROLES}><PurchaseOrdersPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/orders" element={<RequireAuth allowedRoles={STAFF_ROLES}><OrdersPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/customers" element={<RequireAuth allowedRoles={STAFF_ROLES}><CustomersPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/custom-orders" element={<RequireAuth allowedRoles={STAFF_ROLES}><CustomOrdersPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/payments" element={<RequireAuth allowedRoles={STAFF_ROLES}><PaymentsPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/promotions" element={<RequireAuth allowedRoles={MANAGER_ROLES}><PromotionsPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/promotion-products" element={<RequireAuth allowedRoles={MANAGER_ROLES}><PromotionProductsPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/logs" element={<RequireAuth allowedRoles={MANAGER_ROLES}><ManagementLogsPage /></RequireAuth>} />
           <Route
             path="pos"
             element={(
-              <PosPage
-                onToast={showToast}
-                cart={posCart}
-                onCartChange={setPosCart}
-                promotionCode={posPromotionCode}
-                onPromotionCodeChange={setPosPromotionCode}
-                note={posNote}
-                onNoteChange={setPosNote}
-              />
+              <RequireAuth allowedRoles={STAFF_ROLES}>
+                <PosPage
+                  onToast={showToast}
+                  cart={posCart}
+                  onCartChange={setPosCart}
+                  promotionCode={posPromotionCode}
+                  onPromotionCodeChange={setPosPromotionCode}
+                  note={posNote}
+                  onNoteChange={setPosNote}
+                />
+              </RequireAuth>
             )}
           />
         </Route>

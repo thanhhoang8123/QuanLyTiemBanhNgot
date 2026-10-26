@@ -10,6 +10,7 @@ import com.nhom4.QuanLyTiemBanhNgot.repository.IngredientRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PurchaseOrderItemRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PurchaseOrderRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.SupplierRepository;
+import com.nhom4.QuanLyTiemBanhNgot.repository.EmployeeRepository;
 import com.nhom4.QuanLyTiemBanhNgot.validation.TV2ValidationUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -20,7 +21,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
 
 @Service
 public class PurchaseOrderService {
@@ -29,19 +34,22 @@ public class PurchaseOrderService {
     private final PurchaseOrderItemRepository itemRepository;
     private final IngredientRepository ingredientRepository;
     private final SupplierRepository supplierRepository;
-    private final OrderStatusHistoryService historyService;
+    private final EmployeeRepository employeeRepository;
+    private final ActivityLogService activityLogService;
 
     public PurchaseOrderService(
             PurchaseOrderRepository repository,
             PurchaseOrderItemRepository itemRepository,
             IngredientRepository ingredientRepository,
             SupplierRepository supplierRepository,
-            OrderStatusHistoryService historyService) {
+            EmployeeRepository employeeRepository,
+            ActivityLogService activityLogService) {
         this.repository = repository;
         this.itemRepository = itemRepository;
         this.ingredientRepository = ingredientRepository;
         this.supplierRepository = supplierRepository;
-        this.historyService = historyService;
+        this.employeeRepository = employeeRepository;
+        this.activityLogService = activityLogService;
     }
 
     @Transactional(readOnly = true)
@@ -126,11 +134,26 @@ public class PurchaseOrderService {
         order.setTotalAmount(total.setScale(2, RoundingMode.HALF_UP));
         repository.save(order);
 
-        historyService.recordStatusChange(
-                order.getId(), null, "PENDING",
-                order.getEmployeeId(), "Tạo phiếu nhập hàng");
+        activityLogService.recordPurchaseOrderStatusAfterCommit(
+                order.getId(), null, "PENDING", "Tạo phiếu nhập hàng");
 
         return toResponse(order);
+    }
+
+    @Transactional
+    public PurchaseOrderResponse createForAuthenticatedEmployee(
+            PurchaseOrderCreateRequest request,
+            String username) {
+        var currentEmployee = employeeRepository.findByAccount_UsernameAndStatusTrue(username)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Tài khoản đăng nhập chưa được liên kết với hồ sơ nhân viên đang hoạt động"));
+        if (request == null || !currentEmployee.getId().equals(request.employeeId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Chỉ được tạo phiếu nhập bằng hồ sơ nhân viên của tài khoản đang đăng nhập");
+        }
+        return create(request);
     }
 
     @Transactional
@@ -151,33 +174,55 @@ public class PurchaseOrderService {
                     HttpStatus.BAD_REQUEST, "Phiếu nhập chưa có nguyên liệu");
         }
 
-        // Kiểm tra toàn bộ chi tiết trước khi cập nhật tồn kho.
+        TreeSet<Long> ingredientIds = new TreeSet<>();
         for (PurchaseOrderItem item : items) {
-            Ingredient ingredient = item.getIngredient();
-            TV2ValidationUtils.validateReceiveItem(
-                    ingredient, item.getQuantity());
+            if (item.getIngredient() == null || item.getIngredient().getId() == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Chi tiết phiếu nhập không liên kết với nguyên liệu hợp lệ");
+            }
+            ingredientIds.add(item.getIngredient().getId());
         }
 
-        for (PurchaseOrderItem item : items) {
-            Ingredient ingredient = item.getIngredient();
+        List<Ingredient> lockedIngredients = ingredientRepository.findAllByIdForUpdate(
+                new ArrayList<>(ingredientIds));
+        Map<Long, Ingredient> ingredientsById = new HashMap<>();
+        lockedIngredients.forEach(ingredient ->
+                ingredientsById.put(ingredient.getId(), ingredient));
 
+        Map<Long, BigDecimal> quantitiesByIngredient = new HashMap<>();
+        for (PurchaseOrderItem item : items) {
+            Long ingredientId = item.getIngredient().getId();
+            Ingredient ingredient = ingredientsById.get(ingredientId);
+            if (ingredient == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Không tìm thấy nguyên liệu khi nhận hàng");
+            }
+            TV2ValidationUtils.validateReceiveItem(
+                    ingredient, item.getQuantity());
+            quantitiesByIngredient.merge(
+                    ingredientId, item.getQuantity(), BigDecimal::add);
+        }
+
+        for (Ingredient ingredient : lockedIngredients) {
+            BigDecimal receivedQuantity = quantitiesByIngredient.get(ingredient.getId());
+            TV2ValidationUtils.validateReceiveItem(ingredient, receivedQuantity);
             BigDecimal currentStock = ingredient.getStockQuantity() == null
                     ? BigDecimal.ZERO
                     : ingredient.getStockQuantity();
 
             ingredient.setStockQuantity(
-                    currentStock.add(item.getQuantity()));
-
-            ingredientRepository.save(ingredient);
+                    currentStock.add(receivedQuantity));
         }
+        ingredientRepository.saveAll(lockedIngredients);
 
         String oldStatus = order.getStatus();
         order.setStatus("RECEIVED");
         repository.save(order);
 
-        historyService.recordStatusChange(
+        activityLogService.recordPurchaseOrderStatusAfterCommit(
                 order.getId(), oldStatus, "RECEIVED",
-                order.getEmployeeId(),
                 "Đã nhận hàng và cập nhật tồn kho");
 
         return toResponse(order);
@@ -197,9 +242,8 @@ public class PurchaseOrderService {
         order.setStatus("CANCELLED");
         repository.save(order);
 
-        historyService.recordStatusChange(
-                order.getId(), oldStatus, "CANCELLED",
-                order.getEmployeeId(), "Hủy phiếu nhập hàng");
+        activityLogService.recordPurchaseOrderStatusAfterCommit(
+                order.getId(), oldStatus, "CANCELLED", "Hủy phiếu nhập hàng");
 
         return toResponse(order);
     }

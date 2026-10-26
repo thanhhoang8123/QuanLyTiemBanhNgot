@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Icon from '../../components/Icon.jsx'
 import { NavLink, useLocation } from 'react-router-dom'
+import { canAccessPath } from '../../features/auth/permissions.js'
 
 const navigationGroups = [
   {
@@ -35,9 +36,17 @@ const navigationGroups = [
       { path: '/admin/promotion-products', label: 'Sản phẩm áp dụng', icon: 'package' },
     ],
   },
+  {
+    id: 'logs',
+    label: 'Nhật ký & lịch sử',
+    icon: 'receipt',
+    items: [
+      { path: '/admin/logs', label: 'Nhật ký NoSQL', icon: 'receipt' },
+    ],
+  },
 ]
 
-export default function Sidebar({ open, onClose }) {
+export default function Sidebar({ account, open, onClose }) {
   const { pathname } = useLocation()
   const [expandedGroup, setExpandedGroup] = useState(null)
 
@@ -96,7 +105,12 @@ export default function Sidebar({ open, onClose }) {
           </NavLink>
 
           {navigationGroups.map((group) => {
-            const groupIsActive = group.items.some((item) => item.path === pathname)
+            const permittedItems = group.items.filter((item) => (
+              canAccessPath(account?.roleCode, item.path)
+            ))
+            if (permittedItems.length === 0) return null
+
+            const groupIsActive = permittedItems.some((item) => item.path === pathname)
             const isExpanded = expandedGroup === group.id
 
             return (
@@ -121,7 +135,7 @@ export default function Sidebar({ open, onClose }) {
                 </button>
                 {isExpanded && (
                   <div className="ml-3 mt-0.5 space-y-0.5 border-l border-border pl-2">
-                    {group.items.map((item) => (
+                    {permittedItems.map((item) => (
                       <NavLink
                         key={item.path}
                         to={item.path}
@@ -146,6 +160,20 @@ export default function Sidebar({ open, onClose }) {
               </div>
             )
           })}
+          {account?.roleCode?.toUpperCase() === 'ADMIN' && (
+            <NavLink
+              to="/admin/accounts"
+              onClick={onClose}
+              className={({ isActive }) => `mt-1 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs transition ${
+                isActive
+                  ? 'bg-caramel font-semibold text-action-ink shadow-sm'
+                  : 'text-rosewood hover:bg-paper hover:text-rosewood'
+              }`}
+            >
+              <Icon name="receipt" size={16} />
+              <span>Quản lý tài khoản</span>
+            </NavLink>
+          )}
         </nav>
 
         <div className="mt-auto rounded-2xl border border-border bg-paper p-4">
@@ -159,10 +187,12 @@ export default function Sidebar({ open, onClose }) {
           </div>
         </div>
         <div className="mt-4 flex items-center gap-3 border-t border-border px-2 pt-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-rosewood text-xs font-semibold text-white">MA</div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-rosewood text-xs font-semibold text-white">
+            {(account?.username?.slice(0, 2) || 'AC').toUpperCase()}
+          </div>
           <div className="min-w-0">
-            <p className="truncate text-xs font-semibold text-rosewood">Minh Anh</p>
-            <p className="mt-0.5 text-[10px] text-muted">Quản lý cửa hàng</p>
+            <p className="truncate text-xs font-semibold text-rosewood">{account?.username || 'Đang tải...'}</p>
+            <p className="mt-0.5 text-[10px] text-muted">{account?.roleName || account?.roleCode || ''}</p>
           </div>
         </div>
       </aside>

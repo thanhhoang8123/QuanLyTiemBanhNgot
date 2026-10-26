@@ -16,6 +16,8 @@ import {
   getEmployees,
   getOrderById,
   getOrders,
+  markOrderDelivered,
+  completeOrder,
   updateOrderItemQuantity,
 } from '../services/orderService.js'
 
@@ -138,6 +140,8 @@ export default function OrdersPage({ onToast }) {
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancellingOrder, setCancellingOrder] = useState(false)
   const [cancelError, setCancelError] = useState('')
+  const [updatingOrderStatus, setUpdatingOrderStatus] = useState(false)
+  const [orderStatusError, setOrderStatusError] = useState('')
 
   const loadOrders = useCallback(async ({ signal } = {}) => {
     setLoading(true)
@@ -218,6 +222,10 @@ export default function OrdersPage({ onToast }) {
     () => catalogs.employees.filter((employee) => employee.status === true),
     [catalogs.employees],
   )
+  const currentEmployee = useMemo(
+    () => activeEmployees.find((employee) => employee.currentUser === true),
+    [activeEmployees],
+  )
   const activeProducts = useMemo(
     () => catalogs.products.filter(
       (product) => product.status === true && Number(product.quantity) > 0,
@@ -276,6 +284,15 @@ export default function OrdersPage({ onToast }) {
         itemIndex === index ? { ...item, [key]: value } : item
       )),
     }))
+  }
+
+  const openCreateForm = () => {
+    setCreateError('')
+    setForm({
+      ...emptyForm,
+      employeeId: currentEmployee ? String(currentEmployee.id) : '',
+    })
+    setCreateOpen(true)
   }
 
   const submitOrder = async (event) => {
@@ -371,6 +388,24 @@ export default function OrdersPage({ onToast }) {
     }
   }
 
+  const applyOrderStatusChange = async (updateOrder, successMessage) => {
+    if (!displayedOrder || updatingOrderStatus) return
+    setUpdatingOrderStatus(true)
+    setOrderStatusError('')
+    try {
+      const updatedOrder = await updateOrder(displayedOrder.id)
+      setSelectedOrder(updatedOrder)
+      setOrders((current) => current.map((order) => (
+        order.id === updatedOrder.id ? updatedOrder : order
+      )))
+      onToast(successMessage)
+    } catch (error) {
+      setOrderStatusError(getErrorMessage(error))
+    } finally {
+      setUpdatingOrderStatus(false)
+    }
+  }
+
   const columns = [
     {
       key: 'orderCode',
@@ -456,10 +491,7 @@ export default function OrdersPage({ onToast }) {
           <p className="mt-1 text-xs text-muted">Tạo đơn, tra cứu chi tiết và kiểm tra số tiền do hệ thống tính.</p>
         </div>
         <Button
-          onClick={() => {
-            setCreateError('')
-            setCreateOpen(true)
-          }}
+          onClick={openCreateForm}
           disabled={catalogLoading || Boolean(catalogError) || activeProducts.length === 0}
         >
           <Icon name="plus" size={16} /> Tạo đơn hàng
@@ -598,21 +630,23 @@ export default function OrdersPage({ onToast }) {
                       ))}
                     </select>
                   </FormField>
-                  <FormField id="order-employee" label="Nhân viên lập đơn" required>
-                    <select
+                  <FormField id="order-employee" label="Người lập đơn (tài khoản đang đăng nhập)" required>
+                    <input
                       id="order-employee"
-                      required
-                      value={form.employeeId}
-                      onChange={(event) => setForm((current) => ({ ...current, employeeId: event.target.value }))}
+                      type="text"
+                      readOnly
+                      value={currentEmployee?.fullName ?? ''}
+                      placeholder="Tài khoản chưa có hồ sơ nhân viên"
+                      disabled={!currentEmployee}
                       className={inputClass}
-                    >
-                      <option value="">Chọn nhân viên</option>
-                      {activeEmployees.map((employee) => (
-                        <option key={employee.id} value={employee.id}>{employee.fullName}</option>
-                      ))}
-                    </select>
+                    />
                   </FormField>
                 </div>
+                {!currentEmployee && (
+                  <p role="alert" className="text-xs text-danger">
+                    Tài khoản chưa được liên kết với hồ sơ nhân viên đang hoạt động. Vui lòng nhờ quản trị viên liên kết trước khi tạo đơn.
+                  </p>
+                )}
 
                 <FormField id="order-address" label="Địa chỉ giao hàng">
                   <input
@@ -708,7 +742,7 @@ export default function OrdersPage({ onToast }) {
                   <Button type="button" variant="secondary" disabled={creating} onClick={() => setCreateOpen(false)}>
                     Hủy
                   </Button>
-                  <Button type="submit" disabled={creating || activeCustomers.length === 0 || activeEmployees.length === 0 || activeProducts.length === 0}>
+                  <Button type="submit" disabled={creating || activeCustomers.length === 0 || !currentEmployee || activeProducts.length === 0}>
                     {creating ? 'Đang tạo...' : 'Tạo đơn'}
                   </Button>
                 </div>
@@ -874,6 +908,34 @@ export default function OrdersPage({ onToast }) {
                     </Button>
                   </div>
                 )}
+                {displayedOrder.status === 'CONFIRMED' && (
+                  <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+                    {displayedOrder.deliveryStatus === 'PENDING' && (
+                      <Button
+                        disabled={updatingOrderStatus}
+                        onClick={() => applyOrderStatusChange(
+                          markOrderDelivered,
+                          `Đơn ${displayedOrder.orderCode} đã được đánh dấu giao thành công.`,
+                        )}
+                      >
+                        {updatingOrderStatus ? 'Đang cập nhật...' : 'Xác nhận đã giao'}
+                      </Button>
+                    )}
+                    {(displayedOrder.deliveryStatus === 'DELIVERED'
+                      || displayedOrder.deliveryStatus === 'NOT_REQUIRED') && (
+                      <Button
+                        disabled={updatingOrderStatus}
+                        onClick={() => applyOrderStatusChange(
+                          completeOrder,
+                          `Đơn ${displayedOrder.orderCode} đã hoàn tất.`,
+                        )}
+                      >
+                        {updatingOrderStatus ? 'Đang cập nhật...' : 'Hoàn tất đơn'}
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {orderStatusError && <p role="alert" className="text-sm text-danger">{orderStatusError}</p>}
                 {cancelError && <p role="alert" className="text-sm text-danger">{cancelError}</p>}
               </div>
             )}

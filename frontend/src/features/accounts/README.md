@@ -1,10 +1,9 @@
 # Accounts
 
-Feature này dành cho giao diện tài khoản người dùng khi phạm vi frontend được
-thống nhất.
+Feature này cung cấp màn hình quản lý tài khoản dành cho ADMIN.
 
-- Đặt page, component, service và hook dưới `features/accounts/` khi cần; route
-  đăng ký tập trung trong `src/App.jsx`.
-- Phối hợp với Roles, Employees và backend về API, xác thực và quyền truy cập.
-- Dùng `src/services/apiClient.js` thông qua service của feature.
+- `pages/AccountsPage.jsx` hiển thị, tìm kiếm, tạo, sửa và xóa tài khoản.
+- `services/accountService.js` gọi API accounts và roles qua `src/services/apiClient.js`.
+- Route `/admin/accounts` trong `src/App.jsx` giới hạn ADMIN; backend tiếp tục kiểm tra quyền độc lập.
+- Form gửi password mới dạng plaintext qua HTTPS/local API để backend hash bằng BCrypt; password/hash không được hiển thị trong response.
 - Không lưu secret hoặc kết nối database trực tiếp trong frontend.

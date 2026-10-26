@@ -2,6 +2,7 @@ package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.CreateOrderItemRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.CreateOrderRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.CustomerOrderRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderItemResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderItemUpdateRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteItemResponse;
@@ -13,6 +14,7 @@ import com.nhom4.QuanLyTiemBanhNgot.entity.Customer;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Employee;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Order;
 import com.nhom4.QuanLyTiemBanhNgot.entity.OrderItem;
+import com.nhom4.QuanLyTiemBanhNgot.entity.PaymentTransactionAttempt;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Product;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Promotion;
 import com.nhom4.QuanLyTiemBanhNgot.entity.PromotionProduct;
@@ -22,6 +24,7 @@ import com.nhom4.QuanLyTiemBanhNgot.repository.EmployeeRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.OrderItemRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.OrderRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PaymentRepository;
+import com.nhom4.QuanLyTiemBanhNgot.repository.PaymentTransactionAttemptRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.ProductRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PromotionProductRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PromotionRepository;
@@ -67,9 +70,12 @@ public class OrderService {
     private final EmployeeRepository employeeRepository;
     private final ProductRepository productRepository;
     private final PaymentRepository paymentRepository;
+    private final PaymentTransactionAttemptRepository paymentTransactionAttemptRepository;
     private final PromotionRepository promotionRepository;
     private final PromotionProductRepository promotionProductRepository;
     private final OrderMapper orderMapper;
+    private final OrderStatusHistoryService orderStatusHistoryService;
+    private final OrderConfirmationEmailService orderConfirmationEmailService;
 
     public OrderService(
             OrderRepository orderRepository,
@@ -78,18 +84,24 @@ public class OrderService {
             EmployeeRepository employeeRepository,
             ProductRepository productRepository,
             PaymentRepository paymentRepository,
+            PaymentTransactionAttemptRepository paymentTransactionAttemptRepository,
             PromotionRepository promotionRepository,
             PromotionProductRepository promotionProductRepository,
-            OrderMapper orderMapper) {
+            OrderMapper orderMapper,
+            OrderStatusHistoryService orderStatusHistoryService,
+            OrderConfirmationEmailService orderConfirmationEmailService) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.customerRepository = customerRepository;
         this.employeeRepository = employeeRepository;
         this.productRepository = productRepository;
         this.paymentRepository = paymentRepository;
+        this.paymentTransactionAttemptRepository = paymentTransactionAttemptRepository;
         this.promotionRepository = promotionRepository;
         this.promotionProductRepository = promotionProductRepository;
         this.orderMapper = orderMapper;
+        this.orderStatusHistoryService = orderStatusHistoryService;
+        this.orderConfirmationEmailService = orderConfirmationEmailService;
     }
 
     /**
@@ -142,6 +154,27 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
+    public List<OrderResponse> findByCustomerId(Long customerId) {
+        List<Order> orders = orderRepository.findByCustomer_IdOrderByOrderDateDesc(customerId);
+        return toResponses(orders);
+    }
+
+    @Transactional(readOnly = true)
+    public OrderResponse findByIdAndCustomerId(Long id, Long customerId) {
+        Order order = orderRepository.findByIdAndCustomer_Id(id, customerId)
+                .orElseThrow(() -> notFound("Không tìm thấy đơn hàng", id));
+        return toResponse(order, orderItemRepository.findByOrder_Id(id));
+    }
+
+    @Transactional(readOnly = true)
+    public OrderResponse findByCustomerIdAndRequestKey(Long customerId, String customerRequestKey) {
+        Order order = orderRepository
+                .findByCustomer_IdAndCustomerRequestKey(customerId, customerRequestKey)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy đơn hàng"));
+        return toResponse(order, orderItemRepository.findByOrder_Id(order.getId()));
+    }
+
+    @Transactional(readOnly = true)
     public OrderQuoteResponse quote(OrderQuoteRequest request) {
         validateItems(request == null ? null : request.items());
         Map<Long, Product> productsById = loadProducts(request.items(), false);
@@ -165,6 +198,79 @@ public class OrderService {
         requireActive(customer.getStatus(), "Khách hàng");
         requireActive(employee.getStatus(), "Nhân viên");
 
+        return createOrder(
+                request,
+                customer,
+                employee,
+                null,
+                true
+        );
+    }
+
+    @Transactional
+    public OrderResponse createForAuthenticatedEmployee(CreateOrderRequest request, String username) {
+        Employee currentEmployee = employeeRepository.findByAccount_UsernameAndStatusTrue(username)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Tài khoản đăng nhập chưa được liên kết với hồ sơ nhân viên đang hoạt động"
+                ));
+        if (request == null || !currentEmployee.getId().equals(request.employeeId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Chỉ được tạo đơn bằng hồ sơ nhân viên của tài khoản đang đăng nhập"
+            );
+        }
+        return create(request);
+    }
+
+    @Transactional
+    public OrderResponse createCustomerOrder(
+            Customer customer,
+            CustomerOrderRequest request,
+            String customerRequestKey) {
+        if (request == null || customer == null || customer.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thông tin đặt hàng không hợp lệ");
+        }
+        requireActive(customer.getStatus(), "Khách hàng");
+        validateCustomerOrderRequest(request);
+
+        Order existingOrder = orderRepository
+                .findByCustomer_IdAndCustomerRequestKey(customer.getId(), customerRequestKey)
+                .orElse(null);
+        if (existingOrder != null) {
+            List<OrderItem> existingItems = orderItemRepository.findByOrder_Id(existingOrder.getId());
+            if (!matchesCustomerOrder(existingOrder, existingItems, request)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Khóa yêu cầu đặt hàng đã được sử dụng cho dữ liệu khác"
+                );
+            }
+            return toResponse(existingOrder, existingItems);
+        }
+
+        CreateOrderRequest orderRequest = new CreateOrderRequest(
+                customer.getId(),
+                null,
+                request.deliveryAddress(),
+                request.items(),
+                request.promotionCode(),
+                request.note()
+        );
+        return createOrder(
+                orderRequest,
+                customer,
+                null,
+                customerRequestKey,
+                false
+        );
+    }
+
+    private OrderResponse createOrder(
+            CreateOrderRequest request,
+            Customer customer,
+            Employee employee,
+            String customerRequestKey,
+            boolean sendConfirmationEmail) {
         validateUniqueProducts(request.items());
         Map<Long, Product> productsById = loadProducts(request.items(), true);
         List<PromotionLine> lines = promotionLines(request.items(), productsById);
@@ -194,6 +300,7 @@ public class OrderService {
         );
         order.setNote(normalizeOptionalText(request.note()));
         order.setStockReserved(true);
+        order.setCustomerRequestKey(customerRequestKey);
 
         // Lưu trước để database cấp ID; ID giúp sinh mã khác nhau cho các đơn tạo đồng thời.
         order = orderRepository.saveAndFlush(order);
@@ -230,6 +337,11 @@ public class OrderService {
 
         order = orderRepository.save(order);
         List<OrderItem> savedItems = orderItemRepository.saveAll(orderItems);
+        orderStatusHistoryService.recordStatusChangeAfterCommit(
+                order.getId(), null, "PENDING", "Tạo đơn hàng");
+        if (sendConfirmationEmail) {
+            orderConfirmationEmailService.sendOrderConfirmation(order, savedItems);
+        }
         return toResponse(order, savedItems);
     }
 
@@ -251,6 +363,24 @@ public class OrderService {
                         "Không thể hủy đơn hàng đã thanh toán thành công"
                 );
             }
+            if ("VNPAY".equalsIgnoreCase(payment.getPaymentMethod())) {
+                List<PaymentTransactionAttempt> attempts =
+                        paymentTransactionAttemptRepository
+                                .findByPayment_IdOrderByCreatedAtDesc(payment.getId());
+                boolean hasUnresolvedAttempt = attempts.stream().anyMatch(attempt ->
+                        !"FAILED".equalsIgnoreCase(attempt.getStatus())
+                                && !"EXPIRED".equalsIgnoreCase(attempt.getStatus()));
+                if (hasUnresolvedAttempt) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Không thể hủy đơn hàng khi giao dịch VNPay đang cần đối soát"
+                    );
+                }
+                if (attempts.isEmpty()) {
+                    paymentRepository.delete(payment);
+                }
+                return;
+            }
             paymentRepository.delete(payment);
         });
 
@@ -259,9 +389,54 @@ public class OrderService {
             restoreReservedStock(orderItems);
             order.setStockReserved(false);
         }
+        String oldStatus = order.getStatus();
         order.setStatus("CANCELLED");
         orderRepository.saveAndFlush(order);
+        orderStatusHistoryService.recordStatusChangeAfterCommit(
+                order.getId(), oldStatus, order.getStatus(), "Hủy đơn hàng");
         return toResponse(order, orderItems);
+    }
+
+    @Transactional
+    public OrderResponse markDelivered(Long id) {
+        Order order = orderRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> notFound("Không tìm thấy đơn hàng", id));
+        requireConfirmedOrder(order);
+        if (!"PENDING".equals(order.getDeliveryStatus())
+                || order.getDeliveryAddress() == null
+                || order.getDeliveryAddress().isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Chỉ đơn giao tận nơi đang chờ giao mới có thể đánh dấu đã giao"
+            );
+        }
+        requireSuccessfulPayment(id);
+
+        order.setDeliveryStatus("DELIVERED");
+        orderRepository.saveAndFlush(order);
+        return toResponse(order, orderItemRepository.findByOrder_Id(id));
+    }
+
+    @Transactional
+    public OrderResponse complete(Long id) {
+        Order order = orderRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> notFound("Không tìm thấy đơn hàng", id));
+        requireConfirmedOrder(order);
+        if (!"DELIVERED".equals(order.getDeliveryStatus())
+                && !"NOT_REQUIRED".equals(order.getDeliveryStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Đơn giao tận nơi phải được đánh dấu đã giao trước khi hoàn tất"
+            );
+        }
+        requireSuccessfulPayment(id);
+
+        String oldStatus = order.getStatus();
+        order.setStatus("COMPLETED");
+        orderRepository.saveAndFlush(order);
+        orderStatusHistoryService.recordStatusChangeAfterCommit(
+                order.getId(), oldStatus, order.getStatus(), "Hoàn tất đơn hàng");
+        return toResponse(order, orderItemRepository.findByOrder_Id(id));
     }
 
     /**
@@ -390,6 +565,56 @@ public class OrderService {
             }
         }
         return productsById;
+    }
+
+    private void validateCustomerOrderRequest(CustomerOrderRequest request) {
+        if (request.deliveryAddress() != null && request.deliveryAddress().length() > 255) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Địa chỉ giao hàng không được vượt quá 255 ký tự"
+            );
+        }
+        if (request.note() != null && request.note().length() > 500) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ghi chú đơn hàng không được vượt quá 500 ký tự"
+            );
+        }
+        validateItems(request.items());
+    }
+
+    private boolean matchesCustomerOrder(
+            Order order,
+            List<OrderItem> existingItems,
+            CustomerOrderRequest request) {
+        if (!java.util.Objects.equals(
+                normalizeOptionalText(order.getDeliveryAddress()),
+                normalizeOptionalText(request.deliveryAddress()))
+                || !java.util.Objects.equals(
+                normalizeOptionalText(order.getNote()),
+                normalizeOptionalText(request.note()))
+                || !normalizeOptionalCode(order.getPromotionCodeSnapshot())
+                .equals(normalizeOptionalCode(request.promotionCode()))) {
+            return false;
+        }
+
+        Map<Long, Integer> savedQuantities = new HashMap<>();
+        for (OrderItem item : existingItems) {
+            if (item.getProduct() == null || item.getProduct().getId() == null) {
+                return false;
+            }
+            savedQuantities.put(item.getProduct().getId(), item.getQuantity());
+        }
+        Map<Long, Integer> requestedQuantities = new HashMap<>();
+        for (CreateOrderItemRequest item : request.items()) {
+            requestedQuantities.put(item.productId(), item.quantity());
+        }
+        return savedQuantities.equals(requestedQuantities);
+    }
+
+    private String normalizeOptionalCode(String value) {
+        String normalized = normalizeOptionalText(value);
+        return normalized == null ? "" : normalized.toUpperCase(Locale.ROOT);
     }
 
     private List<PromotionLine> promotionLines(
@@ -707,6 +932,31 @@ public class OrderService {
         );
     }
 
+    private List<OrderResponse> toResponses(List<Order> orders) {
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> orderIds = orders.stream()
+                .map(Order::getId)
+                .toList();
+        Map<Long, List<OrderItem>> itemsByOrderId = new HashMap<>();
+        for (OrderItem item : orderItemRepository.findByOrder_IdIn(orderIds)) {
+            if (item.getOrder() == null || item.getOrder().getId() == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Chi tiết đơn hàng không liên kết với đơn hàng hợp lệ"
+                );
+            }
+            itemsByOrderId.computeIfAbsent(item.getOrder().getId(), ignored -> new ArrayList<>())
+                    .add(item);
+        }
+
+        return orders.stream()
+                .map(order -> toResponse(order, itemsByOrderId.getOrDefault(order.getId(), List.of())))
+                .toList();
+    }
+
     private OrderItem findOrderItemById(Long id) {
         return orderItemRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -830,6 +1080,27 @@ public class OrderService {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Đơn hàng cũ chưa giữ tồn kho; hãy hủy và tạo lại đơn để chỉnh sửa an toàn"
+            );
+        }
+    }
+
+    private void requireConfirmedOrder(Order order) {
+        if (!"CONFIRMED".equals(order.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Chỉ đơn hàng đã xác nhận mới được cập nhật trạng thái giao hàng"
+            );
+        }
+    }
+
+    private void requireSuccessfulPayment(Long orderId) {
+        boolean paid = paymentRepository.findByOrder_IdForUpdate(orderId)
+                .map(payment -> "SUCCESS".equals(payment.getStatus()))
+                .orElse(false);
+        if (!paid) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Chỉ đơn đã thanh toán thành công mới được giao hoặc hoàn tất"
             );
         }
     }

@@ -1,5 +1,5 @@
 
-package com.nhom4.QuanLyTiemBanhNgot.entity;
+package com.nhom4.QuanLyTiemBanhNgot.document;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
@@ -16,22 +16,22 @@ public class OrderStatusHistory {
     @Indexed
     private Long orderId;
 
-    private String fromStatus;
-    private String toStatus;
-    private Long changedBy;
-    private LocalDateTime changedAt;
+    private String oldStatus;
+    private String newStatus;
+    private String changedBy;
+    private LocalDateTime createdAt;
     private String note;
 
     public OrderStatusHistory() {
     }
 
-    public OrderStatusHistory(Long orderId, String fromStatus, String toStatus,
-                              Long changedBy, LocalDateTime changedAt, String note) {
+    public OrderStatusHistory(Long orderId, String oldStatus, String newStatus,
+                              String changedBy, LocalDateTime createdAt, String note) {
         this.orderId = orderId;
-        this.fromStatus = fromStatus;
-        this.toStatus = toStatus;
+        this.oldStatus = oldStatus;
+        this.newStatus = newStatus;
         this.changedBy = changedBy;
-        this.changedAt = changedAt;
+        this.createdAt = createdAt;
         this.note = note;
     }
 
@@ -51,36 +51,36 @@ public class OrderStatusHistory {
         this.orderId = orderId;
     }
 
-    public String getFromStatus() {
-        return fromStatus;
+    public String getOldStatus() {
+        return oldStatus;
     }
 
-    public void setFromStatus(String fromStatus) {
-        this.fromStatus = fromStatus;
+    public void setOldStatus(String oldStatus) {
+        this.oldStatus = oldStatus;
     }
 
-    public String getToStatus() {
-        return toStatus;
+    public String getNewStatus() {
+        return newStatus;
     }
 
-    public void setToStatus(String toStatus) {
-        this.toStatus = toStatus;
+    public void setNewStatus(String newStatus) {
+        this.newStatus = newStatus;
     }
 
-    public Long getChangedBy() {
+    public String getChangedBy() {
         return changedBy;
     }
 
-    public void setChangedBy(Long changedBy) {
+    public void setChangedBy(String changedBy) {
         this.changedBy = changedBy;
     }
 
-    public LocalDateTime getChangedAt() {
-        return changedAt;
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
     }
 
-    public void setChangedAt(LocalDateTime changedAt) {
-        this.changedAt = changedAt;
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 
     public String getNote() {

@@ -19,6 +19,10 @@ export function getProducts({ signal } = {}) {
   return apiRequest('/products', { signal })
 }
 
+export function getProductById(id, { signal } = {}) {
+  return apiRequest(`/products/${encodeURIComponent(id)}`, { signal })
+}
+
 export function createProduct(product) {
   return apiRequest('/products', { method: 'POST', body: product })
 }

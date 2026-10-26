@@ -8,6 +8,7 @@ import com.nhom4.QuanLyTiemBanhNgot.service.CustomOrderService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -38,9 +39,10 @@ public class CustomOrderController {
 
     @PostMapping
     public ResponseEntity<CustomOrderResponse> createCustomOrder(
-            @Valid @RequestBody CreateCustomOrderRequest request) {
+            @Valid @RequestBody CreateCustomOrderRequest request,
+            Authentication authentication) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(customOrderService.create(request));
+                .body(customOrderService.createForAuthenticatedEmployee(request, authentication.getName()));
     }
 
     @PutMapping("/{id}")

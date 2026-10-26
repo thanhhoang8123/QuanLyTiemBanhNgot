@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
 import Icon from '../../../components/Icon.jsx'
 import { ProductArtwork } from '../../products/components/ProductArtwork.jsx'
 import ShopProductCard from '../components/ShopProductCard.jsx'
@@ -33,6 +33,7 @@ function LoadingCards() {
 
 export default function ShopHomePage() {
   const { categories, products, isLoading, error, retry } = useShopCatalog()
+  const { addToCart } = useOutletContext()
   const featuredProducts = products.slice(0, 4)
 
   return (
@@ -145,7 +146,7 @@ export default function ShopHomePage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
-              {featuredProducts.map((product) => <ShopProductCard key={product.id} product={product} />)}
+              {featuredProducts.map((product) => <ShopProductCard key={product.id} product={product} onAddToCart={addToCart} />)}
             </div>
           )}
         </div>

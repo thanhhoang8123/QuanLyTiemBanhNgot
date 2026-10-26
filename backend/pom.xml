@@ -53,6 +53,11 @@
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
         <!-- Spring Data JPA: Ánh xạ Entity Java với bảng MySQL,
             hỗ trợ Repository và thao tác dữ liệu bằng ORM -->
         <dependency>
@@ -64,6 +69,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <!-- Email verification already uses JavaMailSender; this supplies its Spring Boot integration. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
@@ -115,6 +125,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
 
