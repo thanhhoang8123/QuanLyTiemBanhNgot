@@ -18,6 +18,8 @@ import {
 } from '../../orders/services/orderService.js'
 import { createPayment, getPayments, simulatePayment } from '../../payments/services/paymentService.js'
 import { getProducts } from '../../products/services/productService.js'
+import { getPromotions } from '../../promotions/services/promotionService.js'
+import { getPromotionProducts } from '../../promotion-products/services/promotionProductService.js'
 import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 text-sm text-rosewood outline-none transition focus:border-caramel'
@@ -85,7 +87,7 @@ export default function PosPage({
   const [quote, setQuote] = useState(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState('')
-  const [catalogPrices, setCatalogPrices] = useState({})
+  const [promotionDetails, setPromotionDetails] = useState({})
   const [catalogPriceLoading, setCatalogPriceLoading] = useState(true)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [customerId, setCustomerId] = useState('')
@@ -112,7 +114,6 @@ export default function PosPage({
       }
       const normalizedProducts = normalizeProducts(productResult)
       setProducts(normalizedProducts)
-      setCatalogPrices({})
       setCatalogPriceLoading(true)
       setQuote(null)
       onCartChange((current) => reconcilePosCartWithCatalog(current, normalizedProducts))
@@ -131,6 +132,47 @@ export default function PosPage({
     loadCatalogs({ signal: controller.signal })
     return () => controller.abort()
   }, [loadCatalogs])
+
+  // Dùng cùng API khuyến mãi với website. Nếu API khuyến mãi lỗi thì POS vẫn tải sản phẩm bình thường.
+  useEffect(() => {
+    const controller = new AbortController()
+    Promise.all([
+      getPromotions({ signal: controller.signal }),
+      getPromotionProducts({ signal: controller.signal }),
+    ]).then(([promotionResult, linkResult]) => {
+      if (controller.signal.aborted) return
+      const today = new Date().toISOString().slice(0, 10)
+      const activePromotions = (Array.isArray(promotionResult) ? promotionResult : []).filter((promotion) => (
+        promotion.status === true
+        && (!promotion.startDate || String(promotion.startDate).slice(0, 10) <= today)
+        && (!promotion.endDate || String(promotion.endDate).slice(0, 10) >= today)
+        && Number(promotion.discountPercent) > 0
+      ))
+      const activeById = new Map(activePromotions.map((promotion) => [String(promotion.id), promotion]))
+      const nextDetails = {}
+      for (const link of (Array.isArray(linkResult) ? linkResult : [])) {
+        const promotion = activeById.get(String(link.promotionId))
+        const productId = Number(link.productId)
+        if (!promotion || !Number.isFinite(productId) || nextDetails[productId]) continue
+        nextDetails[productId] = promotion
+      }
+      setPromotionDetails(nextDetails)
+    }).catch((error) => {
+      if (!controller.signal.aborted && error.name !== 'AbortError') {
+        setPromotionDetails({})
+      }
+    })
+    return () => controller.abort()
+  }, [])
+
+  // Tính giá trưng bày theo cùng công thức với thẻ sản phẩm trên website.
+  const getPosPromotionPrice = useCallback((product) => {
+    const promotion = promotionDetails[product.id]
+    const percent = Math.min(100, Math.max(0, Number(promotion?.discountPercent) || 0))
+    return promotion && percent > 0
+      ? Math.round(Number(product.price) * (1 - percent / 100))
+      : Number(product.price)
+  }, [promotionDetails])
 
   const activeCustomers = useMemo(
     () => customers
@@ -240,11 +282,6 @@ export default function PosPage({
         ) {
           throw new Error('Báo giá chưa khớp với sản phẩm trong giỏ hàng. Vui lòng kiểm tra lại.')
         }
-        const nextCatalogPrices = Object.fromEntries(result.catalogPrices.map((price) => [
-          Number(price.productId),
-          Number(price.salePrice),
-        ]))
-        setCatalogPrices(nextCatalogPrices)
         const quotedItemsById = new Map(result.items.map((item) => [
           Number(item.productId),
           Number(item.effectiveUnitPrice),
@@ -253,9 +290,11 @@ export default function PosPage({
           let changed = false
           const updated = current.map((item) => {
             const price = quotedItemsById.get(Number(item.id))
-            if (!Number.isFinite(price) || Math.abs(item.price - price) < 0.005) return item
+            if (!Number.isFinite(price)) return item
+            const originalPrice = Number(item.originalPrice ?? products.find((product) => Number(product.id) === Number(item.id))?.price ?? item.price)
+            if (Math.abs(item.price - price) < 0.005 && item.originalPrice != null) return item
             changed = true
-            return { ...item, price }
+            return { ...item, originalPrice, price }
           })
           return changed ? updated : current
         })
@@ -283,6 +322,7 @@ export default function PosPage({
     customerId,
     loyaltyPointsToRedeem,
     onCartChange,
+    products,
     useLoyaltyPoints,
   ])
 
@@ -292,14 +332,14 @@ export default function PosPage({
       onToast(`Không đủ tồn kho cho ${product.name}.`)
       return
     }
-    const salePrice = Number(catalogPrices[product.id] ?? product.price)
+    const salePrice = getPosPromotionPrice(product)
     onCartChange((current) => {
       const existing = current.find((item) => item.id === product.id)
       return existing
         ? current.map((item) => item.id === product.id
-          ? { ...item, price: salePrice, quantity: item.quantity + 1 }
+          ? { ...item, originalPrice: Number(item.originalPrice ?? product.price), price: salePrice, quantity: item.quantity + 1 }
           : item)
-        : [...current, { ...product, price: salePrice, quantity: 1 }]
+        : [...current, { ...product, originalPrice: Number(product.price), price: salePrice, quantity: 1 }]
     })
     onToast(`${product.name} đã được thêm vào đơn.`)
   }
@@ -323,7 +363,6 @@ export default function PosPage({
     try {
       const updatedProducts = normalizeProducts(await getProducts())
       setProducts(updatedProducts)
-      setCatalogPrices({})
       setCatalogPriceLoading(true)
       setQuote(null)
       onCartChange((current) => reconcilePosCartWithCatalog(current, updatedProducts))
@@ -562,7 +601,10 @@ export default function PosPage({
                             product={{
                               ...product,
                               originalPrice: product.price,
-                              salePrice: catalogPrices[product.id] ?? product.price,
+                              salePrice: getPosPromotionPrice(product),
+                              label: promotionDetails[product.id]?.discountPercent
+                                ? `-${Number(promotionDetails[product.id].discountPercent)}% · ${promotionDetails[product.id].promotionCode ?? 'Khuyến mãi'}`
+                                : product.label,
                             }}
                             onAdd={addToCart}
                             pricingLoading={catalogPriceLoading || Boolean(quoteError)}

@@ -35,9 +35,8 @@ export default function useShopCatalog() {
         }
 
         setCategories(categoryData)
-        setProducts(productData
-          .filter((product) => product.status === true)
-          .map(toProductViewModel))
+setProducts(productData.map(toProductViewModel))
+console.log('Dữ liệu sản phẩm API:', productData)
       } catch (loadError) {
         if (loadError.name !== 'AbortError') setError(getErrorMessage(loadError))
       } finally {
