@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import java.security.Principal;
 
 import java.util.List;
 
@@ -37,14 +38,18 @@ public class CustomOrderController {
         return ResponseEntity.ok(customOrderService.findById(id));
     }
 
-    @PostMapping
-    public ResponseEntity<CustomOrderResponse> createCustomOrder(
-            @Valid @RequestBody CreateCustomOrderRequest request,
-            Authentication authentication) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(customOrderService.createForAuthenticatedEmployee(request, authentication.getName()));
+    // ĐÃ FIX: Cho phép cả Khách hàng (Customer) lẫn Nhân viên gửi yêu cầu đặt bánh riêng vào hệ thống chung
+@PostMapping("/customer/create")
+    public ResponseEntity<CustomOrderResponse> createByCustomer(
+            @RequestBody CreateCustomOrderRequest request,
+            Principal principal) {
+        // In ra console xem username lúc này là gì và có truyền lên được không
+        System.out.println("User đang gọi API đặt bánh: " + (principal != null ? principal.getName() : "null"));
+        
+        String username = principal.getName();
+        CustomOrderResponse response = customOrderService.createForAuthenticatedCustomer(request, username);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
-
     @PutMapping("/{id}")
     public ResponseEntity<CustomOrderResponse> updateCustomOrder(
             @PathVariable Long id,

@@ -30,7 +30,11 @@ public class CustomerOrderService {
     @Transactional
     public OrderResponse create(String username, CustomerOrderRequest request, String idempotencyKey) {
         Customer customer = customerResolver.requireActiveCustomer(username);
-        return orderService.createCustomerOrder(customer, request, idempotencyKey);
+        OrderResponse order = orderService.createCustomerOrder(customer, request, idempotencyKey);
+        if (request.phone() != null && !request.phone().isBlank()) {
+            customer.setPhone(request.phone());
+        }
+        return order;
     }
 
     @Transactional(readOnly = true)

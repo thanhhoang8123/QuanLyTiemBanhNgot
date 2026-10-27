@@ -1,3 +1,5 @@
+import { isValidVietnamesePhone } from './vietnamesePhone.js'
+
 export const CUSTOMER_ORDER_ATTEMPT_STORAGE_KEY = 'wa-customer-order-request'
 export const CUSTOMER_ORDER_PAYMENT_METHODS = ['CASH', 'VNPAY']
 export const CUSTOMER_ORDER_ATTEMPT_STAGES = [
@@ -19,6 +21,7 @@ function isValidPayload(payload) {
       && Number.isInteger(item.quantity)
       && item.quantity > 0
     ))
+    && (payload.phone == null || isValidVietnamesePhone(payload.phone))
     && (payload.deliveryAddress === null || typeof payload.deliveryAddress === 'string')
     && (payload.promotionCode === null || typeof payload.promotionCode === 'string')
     && (payload.note === null || typeof payload.note === 'string')

@@ -93,9 +93,11 @@ function ShopLayoutContent() {
             </span>
           </Link>
 
-          <nav aria-label="Điều hướng cửa hàng" className="hidden items-center gap-1 sm:flex">
+          {/* ĐIỀU HƯỚNG CHÍNH (MÀN HÌNH LỚN) */}
+          <nav aria-label="Điều hướng cửa hàng" className="hidden items-center gap-1 md:flex">
             <NavLink to="/shop" end className={navClass}>Trang chủ</NavLink>
             <NavLink to="/shop/products" className={navClass}>Sản phẩm</NavLink>
+            
             <NavLink to="/shop/orders" className={navClass}>Đơn hàng</NavLink>
           </nav>
 
@@ -139,9 +141,12 @@ function ShopLayoutContent() {
             </Link>
           </div>
         </div>
-        <nav aria-label="Điều hướng cửa hàng trên thiết bị nhỏ" className="flex justify-center gap-2 border-t border-[#EAE3DA]/70 px-3 py-2 sm:hidden">
+
+        {/* ĐIỀU HƯỚNG TRÊN THIẾT BỊ NHỎ / MOBILE */}
+        <nav aria-label="Điều hướng cửa hàng trên thiết bị nhỏ" className="flex flex-wrap justify-center gap-1 border-t border-[#EAE3DA]/70 px-3 py-2 md:hidden">
           <NavLink to="/shop" end className={navClass}>Trang chủ</NavLink>
           <NavLink to="/shop/products" className={navClass}>Sản phẩm</NavLink>
+          <NavLink to="/shop/custom-cake" className={navClass}>Đặt theo yêu cầu</NavLink>
           <NavLink to="/shop/cart" className={navClass}>Giỏ ({cart.items.reduce((sum, item) => sum + item.quantity, 0)})</NavLink>
           {account ? (
           <>
@@ -180,6 +185,7 @@ function ShopLayoutContent() {
           <div className="flex flex-wrap gap-x-6 gap-y-3 text-xs font-medium text-[#76534D]">
             <Link className="transition hover:text-[#4A302B]" to="/shop">Trang chủ</Link>
             <Link className="transition hover:text-[#4A302B]" to="/shop/products">Sản phẩm</Link>
+            <Link className="transition hover:text-[#4A302B]" to="/shop/custom-cake">Đặt bánh theo yêu cầu</Link>
             <span className="text-[#9A7972]">Thông tin liên hệ sẽ được cập nhật</span>
           </div>
           <p className="text-[10px] text-[#9A7972]">© {new Date().getFullYear()} WA Pâtisserie</p>

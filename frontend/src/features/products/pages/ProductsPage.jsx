@@ -88,7 +88,7 @@ export default function ProductsPage({ onToast }) {
   const [sort, setSort] = useState('name')
   const [direction, setDirection] = useState('ASC')
   const [page, setPage] = useState(0)
-  const [pageSize, setPageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(5)
   const [pageInfo, setPageInfo] = useState({ totalElements: 0, totalPages: 0 })
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)

@@ -1,6 +1,5 @@
 package com.nhom4.QuanLyTiemBanhNgot.repository;
 
-
 import com.nhom4.QuanLyTiemBanhNgot.entity.Customer;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,14 +16,11 @@ import java.util.Optional;
  * Repository dùng để thao tác với bảng customers.
  *
  * JpaRepository đã cung cấp sẵn các chức năng CRUD cơ bản:
- *
  * - findAll()
  * - findById()
  * - save()
  * - deleteById()
  * - existsById()
- *
- * 
  */
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
@@ -53,4 +49,15 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
                     or lower(customer.email) like lower(concat('%', :keyword, '%')))
             """)
     Page<Customer> findPageByKeyword(@Param("keyword") String keyword, Pageable pageable);
+
+    /**
+     * Tìm khách hàng đang hoạt động dựa theo username của tài khoản.
+     * Sử dụng @Query JOIN sang bảng Account để tìm kiếm chính xác theo username.
+     */
+    @Query("""
+        select c from Account a 
+        join a.customer c 
+        where a.username = :username and c.status = true
+    """)
+    Optional<Customer> findByAccount_UsernameAndStatusTrue(@Param("username") String username);
 }
