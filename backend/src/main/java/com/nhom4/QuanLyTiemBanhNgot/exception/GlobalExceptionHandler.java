@@ -27,10 +27,10 @@ public class GlobalExceptionHandler {
             "Dữ liệu đầu vào không hợp lệ";
 
     private static final String CONFLICT_MESSAGE =
-            "Dữ liệu bị trùng hoặc vi phạm ràng buộc";
+            "Thông tin đã tồn tại hoặc đang được sử dụng. Vui lòng kiểm tra lại";
 
     private static final String INTERNAL_ERROR_MESSAGE =
-            "Đã xảy ra lỗi nội bộ. Vui lòng thử lại sau";
+            "Chưa thể hoàn tất thao tác. Vui lòng thử lại";
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFound(

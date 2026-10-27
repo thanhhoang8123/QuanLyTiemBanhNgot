@@ -1,18 +1,27 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import Pagination, { usePagination } from '../../../components/Pagination.jsx'
 import { getCustomerOrders } from '../services/customerOrderService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const moneyFormat = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
   currency: 'VND',
   maximumFractionDigits: 0,
 })
+const orderStatusLabels = {
+  PENDING: 'Chờ xác nhận',
+  CONFIRMED: 'Đã xác nhận',
+  COMPLETED: 'Hoàn tất',
+  CANCELLED: 'Đã hủy',
+}
 
 export default function ShopOrdersPage() {
   const [orders, setOrders] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [reloadVersion, setReloadVersion] = useState(0)
+  const orderPagination = usePagination(orders)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -20,11 +29,13 @@ export default function ShopOrdersPage() {
     setError('')
     getCustomerOrders({ signal: controller.signal })
       .then((result) => {
-        if (!Array.isArray(result)) throw new Error('API đơn hàng trả về dữ liệu không hợp lệ.')
+        if (!Array.isArray(result)) throw new Error('Chưa thể tải danh sách đơn hàng. Vui lòng thử lại.')
         setOrders(result)
       })
       .catch((loadError) => {
-        if (loadError.name !== 'AbortError') setError(loadError.message)
+        if (loadError.name !== 'AbortError') {
+          setError(getUserFacingErrorMessage(loadError, 'Chưa thể tải danh sách đơn hàng. Vui lòng thử lại.'))
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setIsLoading(false)
@@ -50,24 +61,33 @@ export default function ShopOrdersPage() {
           <Link to="/shop/products" className="mt-5 inline-flex rounded-full bg-[#76534D] px-5 py-3 text-xs font-semibold text-white">Khám phá sản phẩm</Link>
         </div>
       ) : (
-        <div className="mt-7 space-y-3">
-          {orders.map((order) => (
-            <article key={order.id} className="flex flex-col gap-4 rounded-2xl border border-[#EAE3DA] bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#A97668]">Mã đơn</p>
-                <h2 className="font-display mt-1 text-lg text-[#4A302B]">{order.orderCode || `#${order.id}`}</h2>
-                <p className="mt-1 text-xs text-[#806B65]">{order.orderDate ? new Date(order.orderDate).toLocaleString('vi-VN') : 'Ngày đặt chưa có'}</p>
-              </div>
-              <div className="flex items-center justify-between gap-5 sm:justify-end">
-                <div className="text-left sm:text-right">
-                  <p className="text-xs text-[#806B65]">Trạng thái: <span className="font-semibold text-[#4A302B]">{order.status || '—'}</span></p>
-                  <p className="mt-1 text-sm font-bold text-[#76534D]">{moneyFormat.format(Number(order.finalAmount ?? 0))}</p>
+        <>
+          <div className="mt-7 space-y-3">
+            {orderPagination.pageItems.map((order) => (
+              <article key={order.id} className="flex flex-col gap-4 rounded-2xl border border-[#EAE3DA] bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#A97668]">Mã đơn</p>
+                  <h2 className="font-display mt-1 text-lg text-[#4A302B]">{order.orderCode || `#${order.id}`}</h2>
+                  <p className="mt-1 text-xs text-[#806B65]">{order.orderDate ? new Date(order.orderDate).toLocaleString('vi-VN') : 'Ngày đặt chưa có'}</p>
                 </div>
-                <Link to={`/shop/orders/${encodeURIComponent(order.id)}`} className="inline-flex h-10 items-center rounded-full border border-[#DDCDB8] px-4 text-xs font-semibold text-[#76534D] hover:bg-[#FCF9F3]">Chi tiết</Link>
-              </div>
-            </article>
-          ))}
-        </div>
+                <div className="flex items-center justify-between gap-5 sm:justify-end">
+                  <div className="text-left sm:text-right">
+                    <p className="text-xs text-[#806B65]">Trạng thái: <span className="font-semibold text-[#4A302B]">{orderStatusLabels[order.status] ?? 'Đang cập nhật'}</span></p>
+                    <p className="mt-1 text-sm font-bold text-[#76534D]">{moneyFormat.format(Number(order.finalAmount ?? 0))}</p>
+                  </div>
+                  <Link to={`/shop/orders/${encodeURIComponent(order.id)}`} className="inline-flex h-10 items-center rounded-full border border-[#DDCDB8] px-4 text-xs font-semibold text-[#76534D] hover:bg-[#FCF9F3]">Chi tiết</Link>
+                </div>
+              </article>
+            ))}
+          </div>
+          <Pagination
+            currentPage={orderPagination.currentPage}
+            pageSize={orderPagination.pageSize}
+            totalItems={orderPagination.totalItems}
+            onPageChange={orderPagination.setCurrentPage}
+            onPageSizeChange={orderPagination.setPageSize}
+          />
+        </>
       )}
     </section>
   )

@@ -17,6 +17,7 @@ import {
   getPayments,
   simulatePayment,
 } from '../services/paymentService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 text-sm text-rosewood outline-none transition focus:border-caramel'
 const moneyFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 })
@@ -41,7 +42,7 @@ const orderStatusLabels = {
 }
 
 function getErrorMessage(error) {
-  return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
+  return getUserFacingErrorMessage(error)
 }
 
 function formatMoney(value) {
@@ -60,11 +61,11 @@ function formatDateTime(value) {
 }
 
 function getPaymentStatusLabel(status) {
-  return paymentStatusLabels[status] ?? status ?? 'Không rõ'
+  return paymentStatusLabels[status] ?? 'Đang cập nhật'
 }
 
 function getOrderStatusLabel(status) {
-  return orderStatusLabels[status] ?? status ?? 'Không rõ'
+  return orderStatusLabels[status] ?? 'Đang cập nhật'
 }
 
 export default function PaymentsPage({ onToast }) {
@@ -92,7 +93,7 @@ export default function PaymentsPage({ onToast }) {
         getOrders({ signal }),
       ])
       if (!Array.isArray(paymentResult) || !Array.isArray(orderResult)) {
-        throw new Error('API Payment hoặc Order trả về dữ liệu không đúng định dạng.')
+        throw new Error('Chưa thể tải thông tin thanh toán. Vui lòng thử lại.')
       }
       setPayments(paymentResult)
       setOrders(orderResult)
@@ -192,12 +193,12 @@ export default function PaymentsPage({ onToast }) {
       const resultLoaded = await loadData()
       onToast(simulation.result === 'SUCCESS'
         ? resultLoaded
-          ? `Thanh toán thành công; đơn #${updatedPayment.orderId} đã được xác nhận.`
-          : 'Đã mô phỏng thanh toán thành công; tải lại trang nếu trạng thái đơn chưa cập nhật.'
-        : 'Đã mô phỏng thanh toán thất bại; trạng thái đơn không thay đổi.')
+          ? `Giao dịch thử nghiệm của đơn #${updatedPayment.orderId} đã được ghi nhận thành công.`
+          : 'Giao dịch thử nghiệm đã được ghi nhận; vui lòng tải lại trang để xem trạng thái đơn.'
+        : 'Giao dịch thử nghiệm chưa thành công; trạng thái đơn hàng không thay đổi.')
       setSimulation(null)
     } catch (error) {
-      onToast(`Không thể mô phỏng thanh toán: ${getErrorMessage(error)}`)
+      onToast(`Chưa thể cập nhật kết quả thanh toán: ${getErrorMessage(error)}`)
     } finally {
       setSimulating(false)
     }
@@ -249,7 +250,7 @@ export default function PaymentsPage({ onToast }) {
     },
     {
       key: 'actions',
-      label: 'Mô phỏng',
+      label: 'Thanh toán thử nghiệm',
       render: (payment) => {
         const order = ordersById.get(payment.orderId)
         const canSimulate = (payment.status === 'PENDING' || payment.status === 'FAILED')
@@ -268,7 +269,7 @@ export default function PaymentsPage({ onToast }) {
                 }}
                 className="rounded-lg border border-success-line bg-success-soft px-2.5 py-2 text-[10px] font-semibold text-success transition hover:brightness-95"
               >
-                Thành công
+                Ghi nhận thành công
               </button>
               <button
                 type="button"
@@ -278,7 +279,7 @@ export default function PaymentsPage({ onToast }) {
                 }}
                 className="rounded-lg border border-danger-line bg-danger-soft px-2.5 py-2 text-[10px] font-semibold text-danger transition hover:brightness-95"
               >
-                Thất bại
+                Ghi nhận chưa thành công
               </button>
             </div>
           )
@@ -295,7 +296,7 @@ export default function PaymentsPage({ onToast }) {
     <div className="space-y-6">
       <PageHeader
         title="Thanh toán"
-        description="Tạo thanh toán cho đơn hàng, theo dõi trạng thái và mô phỏng kết quả xử lý."
+        description="Tạo thanh toán cho đơn hàng và theo dõi trạng thái giao dịch."
         actions={(
           <Button
             onClick={() => {
@@ -312,7 +313,7 @@ export default function PaymentsPage({ onToast }) {
       <section aria-label="Tổng quan thanh toán" className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-3">
         {[
           { label: 'Chờ xử lý', value: pendingCount, icon: 'clock' },
-          { label: 'Đã thanh toán thành công', value: formatMoney(successfulAmount), icon: 'check' },
+          { label: 'Giao dịch thử nghiệm đã xác nhận', value: formatMoney(successfulAmount), icon: 'check' },
           { label: 'Thất bại', value: failedCount, icon: 'close' },
         ].map((stat) => (
           <article key={stat.label} className="soft-shadow flex items-center justify-between rounded-2xl border border-border bg-paper p-4 sm:p-5">
@@ -388,7 +389,7 @@ export default function PaymentsPage({ onToast }) {
       </section>
 
       <p className="rounded-xl border border-warning-line bg-warning-soft px-4 py-3 text-xs leading-5 text-warning">
-        Tính năng mô phỏng chỉ phục vụ kiểm thử: không kết nối ngân hàng, thẻ hoặc ví điện tử thật.
+        Chế độ thanh toán thử nghiệm không kết nối ngân hàng, thẻ hoặc ví điện tử thật.
       </p>
 
       <Modal
@@ -418,7 +419,7 @@ export default function PaymentsPage({ onToast }) {
           {selectedOrder && (
             <div className="rounded-xl border border-border bg-petal px-4 py-3 text-xs">
               <div className="flex justify-between gap-3">
-                <span className="text-muted">Số tiền dự kiến do backend xác định</span>
+                <span className="text-muted">Số tiền dự kiến từ đơn hàng</span>
                 <strong className="text-rosewood">{formatMoney(selectedOrder.finalAmount)}</strong>
               </div>
             </div>
@@ -439,7 +440,7 @@ export default function PaymentsPage({ onToast }) {
           </FormField>
 
           <p className="text-[11px] leading-5 text-muted">
-            Số tiền và trạng thái ban đầu do backend lấy từ đơn hàng; form không gửi số tiền.
+            Số tiền và trạng thái thanh toán được lấy từ đơn hàng; biểu mẫu này không thay đổi số tiền.
           </p>
           {createError && <p role="alert" className="text-sm text-danger">{createError}</p>}
 
@@ -456,10 +457,10 @@ export default function PaymentsPage({ onToast }) {
 
       <ConfirmDialog
         open={Boolean(simulation)}
-        title={simulation?.result === 'SUCCESS' ? 'Mô phỏng thanh toán thành công?' : 'Mô phỏng thanh toán thất bại?'}
+        title={simulation?.result === 'SUCCESS' ? 'Ghi nhận giao dịch thử nghiệm thành công?' : 'Ghi nhận giao dịch thử nghiệm chưa thành công?'}
         description={simulation?.result === 'SUCCESS'
-          ? `Payment #${simulation?.payment.id} sẽ chuyển sang SUCCESS và nếu đơn đang PENDING, đơn chuyển sang CONFIRMED.`
-          : `Payment #${simulation?.payment.id} sẽ chuyển sang FAILED; trạng thái đơn hàng không đổi.`}
+          ? `Giao dịch thử nghiệm của đơn #${simulation?.payment.orderId} sẽ được ghi nhận thành công; đơn đang chờ xác nhận sẽ được xác nhận.`
+          : `Giao dịch thử nghiệm của đơn #${simulation?.payment.orderId} sẽ được ghi nhận chưa thành công; trạng thái đơn hàng không đổi.`}
         confirmLabel={simulation?.result === 'SUCCESS' ? 'Xác nhận thành công' : 'Xác nhận thất bại'}
         confirmVariant={simulation?.result === 'SUCCESS' ? 'primary' : 'danger'}
         busy={simulating}

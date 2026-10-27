@@ -22,4 +22,6 @@ public interface OrderItemRepository
 
     @EntityGraph(attributePaths = {"product"})
     List<OrderItem> findByOrder_IdIn(List<Long> orderIds);
+
+    boolean existsByProduct_Id(Long productId);
 }

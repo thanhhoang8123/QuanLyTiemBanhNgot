@@ -10,6 +10,8 @@ import java.util.Optional;
 
 public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Long> {
 
+    boolean existsBySupplier_Id(Long supplierId);
+
     @Query(value = "SELECT * FROM purchase_orders WHERE id = :id FOR UPDATE", nativeQuery = true)
     Optional<PurchaseOrder> findByIdForUpdate(@Param("id") Long id);
 }

@@ -8,6 +8,11 @@ import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderItemUpdateRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteItemResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderPromotionSuggestionResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.PosCatalogPriceResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.PosOrderQuoteItemResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.PosOrderQuoteRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.PosOrderQuoteResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderUpdateRequest;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Customer;
@@ -68,6 +73,9 @@ import java.util.Set;
 @Service
 public class OrderService {
 
+    private static final String WALK_IN_CUSTOMER_EMAIL = "pos.walkin@example.invalid";
+    private static final BigDecimal LOYALTY_DISCOUNT_PER_POINT =
+            new BigDecimal("1000.00");
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final CustomerRepository customerRepository;
@@ -219,6 +227,113 @@ public class OrderService {
         return toQuoteResponse(lines, amounts);
     }
 
+    @Transactional(readOnly = true)
+    public List<OrderPromotionSuggestionResponse> promotionSuggestions(
+            OrderQuoteRequest request) {
+        validateItems(request == null ? null : request.items());
+        Map<Long, Product> productsById = loadProducts(request.items(), false);
+        List<PromotionLine> lines = promotionLines(request.items(), productsById);
+        BigDecimal totalAmount = calculateOrderAmounts(lines, (Promotion) null)
+                .totalAmount();
+
+        return promotionRepository.findAll().stream()
+                .map(promotion -> {
+                    try {
+                        OrderAmounts amounts = calculateOrderAmounts(lines, promotion);
+                        return new OrderPromotionSuggestionResponse(
+                                promotion.getId(),
+                                promotion.getPromotionCode(),
+                                promotion.getName(),
+                                promotion.getDiscountPercent(),
+                                promotion.getMaxDiscount(),
+                                promotion.getMinOrderValue(),
+                                true,
+                                amounts.discountAmount(),
+                                amounts.totalAmount().subtract(amounts.discountAmount()),
+                                null
+                        );
+                    } catch (ResponseStatusException exception) {
+                        return new OrderPromotionSuggestionResponse(
+                                promotion.getId(),
+                                promotion.getPromotionCode(),
+                                promotion.getName(),
+                                promotion.getDiscountPercent(),
+                                promotion.getMaxDiscount(),
+                                promotion.getMinOrderValue(),
+                                false,
+                                BigDecimal.ZERO,
+                                totalAmount,
+                                promotionIneligibilityMessage(
+                                        promotion,
+                                        totalAmount,
+                                        exception
+                                )
+                        );
+                    }
+                })
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PosOrderQuoteResponse quotePos(PosOrderQuoteRequest request) {
+        if (request == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Thông tin báo giá không hợp lệ"
+            );
+        }
+        List<CreateOrderItemRequest> items = request.items() == null
+                ? List.of()
+                : request.items();
+        if (!items.isEmpty()) validateItems(items);
+        Map<Long, Product> productsById = items.isEmpty()
+                ? new HashMap<>()
+                : loadProducts(items, false);
+        List<PromotionLine> lines = promotionLines(items, productsById);
+        PosOrderAmounts amounts = calculatePosOrderAmounts(
+                lines,
+                request.customerId(),
+                request.loyaltyPointsToRedeem(),
+                false
+        );
+
+        List<PosOrderQuoteItemResponse> itemResponses = lines.stream()
+                .map(line -> {
+                    BigDecimal itemDiscount = amounts.lineDiscounts()
+                            .getOrDefault(line.productId(), BigDecimal.ZERO);
+                    BigDecimal lineTotal = line.subtotal().subtract(itemDiscount);
+                    BigDecimal effectiveUnitPrice = lineTotal.divide(
+                            BigDecimal.valueOf(line.quantity()),
+                            2,
+                            RoundingMode.HALF_UP
+                    );
+                    return new PosOrderQuoteItemResponse(
+                            line.productId(),
+                            line.productName(),
+                            line.quantity(),
+                            line.unitPrice(),
+                            effectiveUnitPrice,
+                            itemDiscount,
+                            lineTotal
+                    );
+                })
+                .toList();
+
+        List<PosCatalogPriceResponse> catalogPrices =
+                getPosCatalogPrices(lines, request.productIds());
+
+        return new PosOrderQuoteResponse(
+                amounts.totalAmount(),
+                amounts.productDiscountAmount(),
+                amounts.subtotalAfterPromotions(),
+                amounts.loyaltyPointsToRedeem(),
+                amounts.loyaltyDiscountAmount(),
+                amounts.finalAmount(),
+                itemResponses,
+                catalogPrices
+        );
+    }
+
     /**
      * Lưu đơn, giữ tồn kho và lưu chi tiết trong cùng transaction.
      */
@@ -310,7 +425,37 @@ public class OrderService {
         validateUniqueProducts(request.items());
         Map<Long, Product> productsById = loadProducts(request.items(), true);
         List<PromotionLine> lines = promotionLines(request.items(), productsById);
-        OrderAmounts amounts = calculateOrderAmounts(lines, request.promotionCode());
+        boolean applyProductPromotions = Boolean.TRUE.equals(request.applyProductPromotions());
+        if (applyProductPromotions && request.promotionCode() != null
+                && !request.promotionCode().isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "POS không hỗ trợ nhập mã khuyến mãi; ưu đãi sản phẩm được tự động áp dụng"
+            );
+        }
+        OrderAmounts standardAmounts = applyProductPromotions
+                ? null
+                : calculateOrderAmounts(lines, request.promotionCode());
+        PosOrderAmounts posAmounts = applyProductPromotions
+                ? calculatePosOrderAmounts(
+                        lines,
+                        customer.getId(),
+                        request.loyaltyPointsToRedeem(),
+                        true
+                )
+                : null;
+        BigDecimal orderTotalAmount = applyProductPromotions
+                ? posAmounts.subtotalAfterPromotions()
+                : standardAmounts.totalAmount();
+        BigDecimal orderDiscountAmount = applyProductPromotions
+                ? posAmounts.loyaltyDiscountAmount()
+                : standardAmounts.discountAmount();
+        Promotion orderPromotion = applyProductPromotions
+                ? null
+                : standardAmounts.promotion();
+        Map<Long, BigDecimal> itemDiscounts = applyProductPromotions
+                ? posAmounts.lineDiscounts()
+                : standardAmounts.lineDiscounts();
 
         for (CreateOrderItemRequest item : request.items()) {
             Product product = productsById.get(item.productId());
@@ -328,11 +473,11 @@ public class OrderService {
         order.setStatus("PENDING");
         order.setOrderDate(now);
         order.setCreatedAt(now);
-        order.setTotalAmount(amounts.totalAmount());
-        order.setDiscountAmount(amounts.discountAmount());
-        order.setPromotion(amounts.promotion());
+        order.setTotalAmount(orderTotalAmount);
+        order.setDiscountAmount(orderDiscountAmount);
+        order.setPromotion(orderPromotion);
         order.setPromotionCodeSnapshot(
-                amounts.promotion() == null ? null : amounts.promotion().getPromotionCode()
+                orderPromotion == null ? null : orderPromotion.getPromotionCode()
         );
         order.setNote(normalizeOptionalText(request.note()));
         order.setStockReserved(true);
@@ -355,7 +500,7 @@ public class OrderService {
             CreateOrderItemRequest itemRequest = request.items().get(index);
             Product product = productsById.get(itemRequest.productId());
             PromotionLine line = lines.get(index);
-            BigDecimal itemDiscount = amounts.lineDiscounts()
+            BigDecimal itemDiscount = itemDiscounts
                     .getOrDefault(itemRequest.productId(), BigDecimal.ZERO);
             BigDecimal lineTotal = line.unitPrice()
                     .multiply(BigDecimal.valueOf(line.quantity()))
@@ -669,6 +814,249 @@ public class OrderService {
                 .toList();
     }
 
+    private PosOrderAmounts calculatePosOrderAmounts(
+            List<PromotionLine> lines,
+            Long customerId,
+            Integer requestedPoints,
+            boolean lockCustomer) {
+        BigDecimal totalAmount = lines.stream()
+                .map(PromotionLine::subtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Map<Long, BigDecimal> lineDiscounts =
+                calculateBestProductPromotionDiscounts(lines);
+        BigDecimal productDiscountAmount = lineDiscounts.values().stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal subtotalAfterPromotions = totalAmount.subtract(productDiscountAmount);
+        int pointsToRedeem = requestedPoints == null ? 0 : requestedPoints;
+        if (pointsToRedeem < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Số điểm sử dụng không được âm"
+            );
+        }
+
+        if (pointsToRedeem > 0) {
+            if (customerId == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Vui lòng chọn khách hàng để sử dụng điểm"
+                );
+            }
+            Customer customer = (lockCustomer
+                    ? customerRepository.findByIdForUpdate(customerId)
+                    : customerRepository.findById(customerId))
+                    .orElseThrow(() -> notFound("Không tìm thấy khách hàng", customerId));
+            requireActive(customer.getStatus(), "Khách hàng");
+            int availablePoints = customer.getLoyaltyPoints() == null
+                    ? 0
+                    : customer.getLoyaltyPoints();
+            int maximumPoints = Math.min(
+                    availablePoints,
+                    maxRedeemablePoints(subtotalAfterPromotions)
+            );
+            if (pointsToRedeem > maximumPoints) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Số điểm sử dụng vượt quá điểm hiện có hoặc số tiền được giảm"
+                );
+            }
+            if (WALK_IN_CUSTOMER_EMAIL.equalsIgnoreCase(customer.getEmail())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Khách vãng lai không thể sử dụng điểm"
+                );
+            }
+        }
+
+        BigDecimal loyaltyDiscountAmount = LOYALTY_DISCOUNT_PER_POINT
+                .multiply(BigDecimal.valueOf(pointsToRedeem));
+        BigDecimal finalAmount = subtotalAfterPromotions.subtract(loyaltyDiscountAmount);
+        return new PosOrderAmounts(
+                totalAmount,
+                productDiscountAmount,
+                subtotalAfterPromotions,
+                pointsToRedeem,
+                loyaltyDiscountAmount,
+                finalAmount,
+                lineDiscounts
+        );
+    }
+
+    private int maxRedeemablePoints(BigDecimal payableAmount) {
+        if (payableAmount == null || payableAmount.signum() <= 0) return 0;
+        BigDecimal amountAvailableForPoints = payableAmount.subtract(new BigDecimal("0.01"));
+        if (amountAvailableForPoints.signum() < 0) return 0;
+        try {
+            return amountAvailableForPoints
+                    .divideToIntegralValue(LOYALTY_DISCOUNT_PER_POINT)
+                    .intValueExact();
+        } catch (ArithmeticException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Số điểm quy đổi vượt quá giới hạn cho phép"
+            );
+        }
+    }
+
+    private Map<Long, BigDecimal> calculateBestProductPromotionDiscounts(
+            List<PromotionLine> lines) {
+        List<Promotion> promotions = promotionRepository.findAll();
+        Set<Long> productIds = lines.stream()
+                .map(PromotionLine::productId)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<Long, Set<Long>> eligibleProductIdsByPromotion =
+                loadEligibleProductIdsByPromotion(promotions, productIds);
+        return calculateBestProductPromotionDiscounts(
+                lines,
+                promotions,
+                eligibleProductIdsByPromotion
+        );
+    }
+
+    private Map<Long, BigDecimal> calculateBestProductPromotionDiscounts(
+            List<PromotionLine> lines,
+            List<Promotion> promotions,
+            Map<Long, Set<Long>> eligibleProductIdsByPromotion) {
+        Map<Long, BigDecimal> bestDiscounts = new LinkedHashMap<>();
+        lines.forEach(line -> bestDiscounts.put(line.productId(), BigDecimal.ZERO));
+        if (lines.isEmpty()) return bestDiscounts;
+
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        for (Promotion promotion : promotions) {
+            if (!Boolean.TRUE.equals(promotion.getStatus())
+                    || promotion.getStartDate() == null
+                    || promotion.getEndDate() == null
+                    || today.isBefore(promotion.getStartDate())
+                    || today.isAfter(promotion.getEndDate())) {
+                continue;
+            }
+            BigDecimal discountPercent = promotion.getDiscountPercent();
+            BigDecimal maximumDiscount = promotion.getMaxDiscount();
+            BigDecimal minimumOrderValue = promotion.getMinOrderValue();
+            if (discountPercent == null
+                    || discountPercent.signum() <= 0
+                    || discountPercent.compareTo(new BigDecimal("100")) > 0
+                    || (maximumDiscount != null && maximumDiscount.signum() < 0)
+                    || (minimumOrderValue != null && minimumOrderValue.signum() < 0)) {
+                continue;
+            }
+
+            Set<Long> eligibleProductIds = eligibleProductIdsByPromotion
+                    .getOrDefault(promotion.getId(), Set.of());
+            for (PromotionLine line : lines) {
+                BigDecimal lineSubtotal = line.subtotal();
+                if (!eligibleProductIds.contains(line.productId())
+                        || lineSubtotal.signum() <= 0
+                        || (minimumOrderValue != null
+                        && lineSubtotal.compareTo(minimumOrderValue) < 0)) {
+                    continue;
+                }
+                BigDecimal candidateDiscount = lineSubtotal
+                        .multiply(discountPercent)
+                        .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+                if (maximumDiscount != null) {
+                    candidateDiscount = candidateDiscount.min(maximumDiscount);
+                }
+                candidateDiscount = candidateDiscount.min(lineSubtotal);
+                if (candidateDiscount.compareTo(bestDiscounts.get(line.productId())) > 0) {
+                    bestDiscounts.put(line.productId(), candidateDiscount);
+                }
+            }
+        }
+        return bestDiscounts;
+    }
+
+    private Map<Long, Set<Long>> loadEligibleProductIdsByPromotion(
+            List<Promotion> promotions,
+            Set<Long> productIds) {
+        if (productIds.isEmpty()) return Map.of();
+        Map<Long, Set<Long>> eligibleProductIdsByPromotion = new HashMap<>();
+        for (Promotion promotion : promotions) {
+            if (promotion.getId() == null) continue;
+            Set<Long> eligibleProductIds = promotionProductRepository
+                    .findByPromotion_IdAndProduct_IdIn(promotion.getId(), productIds)
+                    .stream()
+                    .map(link -> link.getProduct().getId())
+                    .collect(java.util.stream.Collectors.toSet());
+            eligibleProductIdsByPromotion.put(promotion.getId(), eligibleProductIds);
+        }
+        return eligibleProductIdsByPromotion;
+    }
+
+    private List<PosCatalogPriceResponse> getPosCatalogPrices(
+            List<PromotionLine> cartLines,
+            List<Long> requestedProductIds) {
+        if (requestedProductIds == null || requestedProductIds.isEmpty()) {
+            return List.of();
+        }
+        List<Long> productIds = requestedProductIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .sorted()
+                .toList();
+        if (productIds.isEmpty()) return List.of();
+
+        Map<Long, Product> productsById = new HashMap<>();
+        productRepository.findAllById(productIds)
+                .forEach(product -> productsById.put(product.getId(), product));
+        List<Promotion> promotions = promotionRepository.findAll();
+        Set<Long> linkedProductIds = new TreeSet<>(productsById.keySet());
+        cartLines.stream().map(PromotionLine::productId).forEach(linkedProductIds::add);
+        Map<Long, Set<Long>> eligibleProductIdsByPromotion =
+                loadEligibleProductIdsByPromotion(promotions, linkedProductIds);
+
+        List<PosCatalogPriceResponse> prices = new ArrayList<>();
+        for (Long productId : productIds) {
+            Product product = productsById.get(productId);
+            if (product == null
+                    || !Boolean.TRUE.equals(product.getStatus())
+                    || product.getQuantity() == null
+                    || product.getQuantity() <= 0) {
+                continue;
+            }
+            BigDecimal originalPrice = requireMoneyValue(
+                    product.getPrice(),
+                    "Sản phẩm có giá không hợp lệ"
+            );
+            List<PromotionLine> candidateLines = new ArrayList<>(cartLines);
+            int candidateQuantity = 1;
+            for (int index = 0; index < candidateLines.size(); index++) {
+                PromotionLine line = candidateLines.get(index);
+                if (line.productId().equals(productId)) {
+                    candidateQuantity = Math.addExact(line.quantity(), 1);
+                    candidateLines.set(index, new PromotionLine(
+                            productId,
+                            product.getName(),
+                            candidateQuantity,
+                            originalPrice
+                    ));
+                    break;
+                }
+            }
+            if (candidateLines.stream().noneMatch(
+                    line -> line.productId().equals(productId))) {
+                candidateLines.add(new PromotionLine(
+                        productId,
+                        product.getName(),
+                        candidateQuantity,
+                        originalPrice
+                ));
+            }
+
+            BigDecimal discount = calculateBestProductPromotionDiscounts(
+                    candidateLines,
+                    promotions,
+                    eligibleProductIdsByPromotion
+            ).getOrDefault(productId, BigDecimal.ZERO);
+            BigDecimal salePrice = originalPrice
+                    .multiply(BigDecimal.valueOf(candidateQuantity))
+                    .subtract(discount)
+                    .divide(BigDecimal.valueOf(candidateQuantity), 2, RoundingMode.HALF_UP);
+            prices.add(new PosCatalogPriceResponse(productId, originalPrice, salePrice));
+        }
+        return prices;
+    }
+
     private OrderAmounts calculateOrderAmounts(
             List<PromotionLine> lines,
             String promotionCode) {
@@ -795,6 +1183,35 @@ public class OrderService {
         }
 
         return new OrderAmounts(totalAmount, discountAmount, promotion, lineDiscounts);
+    }
+
+    private String promotionIneligibilityMessage(
+            Promotion promotion,
+            BigDecimal totalAmount,
+            ResponseStatusException exception) {
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        if (!Boolean.TRUE.equals(promotion.getStatus())) {
+            return "Chương trình khuyến mãi đang tạm dừng.";
+        }
+        if (promotion.getStartDate() != null && today.isBefore(promotion.getStartDate())) {
+            return "Chương trình chưa bắt đầu.";
+        }
+        if (promotion.getEndDate() != null && today.isAfter(promotion.getEndDate())) {
+            return "Chương trình đã hết hạn.";
+        }
+        BigDecimal minimumOrderValue = promotion.getMinOrderValue();
+        if (minimumOrderValue != null
+                && totalAmount.compareTo(minimumOrderValue) < 0) {
+            BigDecimal remaining = minimumOrderValue.subtract(totalAmount);
+            return "Đơn hàng cần thêm "
+                    + remaining.stripTrailingZeros().toPlainString()
+                    + "đ để đạt mức tối thiểu.";
+        }
+        if (exception.getReason() != null
+                && exception.getReason().contains("không áp dụng cho sản phẩm")) {
+            return "Khuyến mãi không áp dụng cho sản phẩm trong giỏ hàng.";
+        }
+        return "Ưu đãi hiện chưa đủ điều kiện áp dụng cho đơn hàng này.";
     }
 
     private OrderQuoteResponse toQuoteResponse(
@@ -935,6 +1352,29 @@ public class OrderService {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Ghi chú đơn hàng không được vượt quá 500 ký tự"
+            );
+        }
+        if (request.loyaltyPointsToRedeem() != null
+                && request.loyaltyPointsToRedeem() < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Số điểm sử dụng không được âm"
+            );
+        }
+        if (!Boolean.TRUE.equals(request.applyProductPromotions())
+                && request.loyaltyPointsToRedeem() != null
+                && request.loyaltyPointsToRedeem() > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Chỉ đơn POS mới được sử dụng điểm tích lũy"
+            );
+        }
+        if (Boolean.TRUE.equals(request.applyProductPromotions())
+                && request.promotionCode() != null
+                && !request.promotionCode().isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "POS không hỗ trợ nhập mã khuyến mãi"
             );
         }
         validateItems(request.items());
@@ -1118,6 +1558,21 @@ public class OrderService {
                     "Đơn hàng cũ chưa giữ tồn kho; hãy hủy và tạo lại đơn để chỉnh sửa an toàn"
             );
         }
+        if (order.getPromotion() == null) {
+            BigDecimal orderDiscount = order.getDiscountAmount() == null
+                    ? BigDecimal.ZERO
+                    : order.getDiscountAmount();
+            boolean hasProductDiscount = orderItemRepository.findByOrder_Id(order.getId())
+                    .stream()
+                    .anyMatch(item -> item.getDiscountAmount() != null
+                            && item.getDiscountAmount().signum() > 0);
+            if (orderDiscount.signum() > 0 || hasProductDiscount) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Không thể chỉnh sửa đơn đã áp dụng giá khuyến mãi hoặc đổi điểm; hãy hủy và tạo lại đơn"
+                );
+            }
+        }
     }
 
     private void requireConfirmedOrder(Order order) {
@@ -1178,6 +1633,16 @@ public class OrderService {
             BigDecimal totalAmount,
             BigDecimal discountAmount,
             Promotion promotion,
+            Map<Long, BigDecimal> lineDiscounts) {
+    }
+
+    private record PosOrderAmounts(
+            BigDecimal totalAmount,
+            BigDecimal productDiscountAmount,
+            BigDecimal subtotalAfterPromotions,
+            int loyaltyPointsToRedeem,
+            BigDecimal loyaltyDiscountAmount,
+            BigDecimal finalAmount,
             Map<Long, BigDecimal> lineDiscounts) {
     }
 }

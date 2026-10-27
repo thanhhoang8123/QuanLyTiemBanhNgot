@@ -4,8 +4,10 @@ import Button from '../../../components/Button.jsx'
 import DataTable from '../../../components/DataTable.jsx'
 import Icon from '../../../components/Icon.jsx'
 import Modal from '../../../components/Modal.jsx'
+import ConfirmDialog from '../../../components/ConfirmDialog.jsx'
 import StatusBadge from '../../../components/StatusBadge.jsx'
-import { createIngredient, getIngredients, updateIngredient } from '../services/ingredientService.js'
+import { createIngredient, deleteIngredient, getIngredients, updateIngredient } from '../services/ingredientService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const currency = new Intl.NumberFormat('vi-VN')
 const quantityFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 })
@@ -28,7 +30,7 @@ function ingredientStatus(item) {
 }
 
 function getErrorMessage(error) {
-  return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
+  return getUserFacingErrorMessage(error)
 }
 
 function formatIngredient(item) {
@@ -51,13 +53,15 @@ export default function InventoryPage({ onToast }) {
   const [form, setForm] = useState(emptyForm)
   const [formError, setFormError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [pendingId, setPendingId] = useState(null)
 
   const loadItems = useCallback(async (signal) => {
     setIsLoading(true)
     setLoadError('')
     try {
       const result = await getIngredients({ signal })
-      if (!Array.isArray(result)) throw new Error('API trả về danh sách nguyên liệu không hợp lệ.')
+      if (!Array.isArray(result)) throw new Error('Chưa thể tải danh sách nguyên liệu. Vui lòng thử lại.')
       setItems(result.map(formatIngredient))
     } catch (error) {
       if (error.name !== 'AbortError') setLoadError(getErrorMessage(error))
@@ -73,15 +77,21 @@ export default function InventoryPage({ onToast }) {
   }, [loadItems])
 
   const filteredItems = useMemo(() => items.filter((item) => {
-    const matchesQuery = `${item.ingredientCode ?? ''} ${item.name ?? ''}`.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi'))
+    const normalizedQuery = query.trim().toLocaleLowerCase('vi')
+    const matchesQuery = `${item.ingredientCode ?? ''} ${item.name ?? ''}`
+      .toLocaleLowerCase('vi')
+      .includes(normalizedQuery)
+
     const status = ingredientStatus(item)
-    return matchesQuery && (
+
+    const matchesStatus =
       statusFilter === 'Tất cả trạng thái'
-        ? item.status !== false
+        ? true
         : statusFilter === 'Ngừng hoạt động'
           ? item.status === false
           : item.status !== false && status === statusFilter
-    )
+
+    return matchesQuery && matchesStatus
   }), [items, query, statusFilter])
 
   const openCreate = () => {
@@ -137,7 +147,7 @@ export default function InventoryPage({ onToast }) {
       if (editing) await updateIngredient(editing.id, payload)
       else await createIngredient(payload)
       setFormOpen(false)
-      onToast(editing ? 'Đã cập nhật nguyên liệu trên máy chủ.' : 'Đã tạo nguyên liệu trên máy chủ.')
+      onToast(editing ? 'Đã cập nhật nguyên liệu.' : 'Đã thêm nguyên liệu.')
       await loadItems()
     } catch (error) {
       setFormError(getErrorMessage(error))
@@ -147,6 +157,8 @@ export default function InventoryPage({ onToast }) {
   }
 
   const toggleIngredientStatus = async (item) => {
+    setPendingId(item.id)
+    setLoadError('')
     const payload = {
       ingredientCode: item.ingredientCode,
       name: item.name,
@@ -162,6 +174,25 @@ export default function InventoryPage({ onToast }) {
       await loadItems()
     } catch (error) {
       setLoadError(`Không thể cập nhật trạng thái: ${getErrorMessage(error)}`)
+    } finally {
+      setPendingId(null)
+    }
+  }
+
+  const removeIngredient = async () => {
+    if (!deleteTarget || pendingId !== null) return
+
+    setPendingId(deleteTarget.id)
+    setLoadError('')
+    try {
+      await deleteIngredient(deleteTarget.id)
+      onToast(`Đã xóa nguyên liệu "${deleteTarget.name}".`)
+      setDeleteTarget(null)
+      await loadItems()
+    } catch (error) {
+      setLoadError(`Không thể xóa nguyên liệu: ${getErrorMessage(error)}`)
+    } finally {
+      setPendingId(null)
     }
   }
 
@@ -195,11 +226,14 @@ export default function InventoryPage({ onToast }) {
       cellClassName: 'text-right',
       render: (item) => (
         <div className="inline-flex items-center gap-1">
-          <button type="button" aria-label={`Sửa ${item.name}`} onClick={() => openEdit(item)} className="flex h-8 w-8 items-center justify-center rounded-lg text-rosewood transition hover:bg-petal">
+          <button type="button" aria-label={`Sửa ${item.name}`} disabled={pendingId !== null || isSaving} onClick={() => openEdit(item)} className="flex h-8 w-8 items-center justify-center rounded-lg text-rosewood transition hover:bg-petal disabled:opacity-50">
             <Icon name="edit" size={14} />
           </button>
-          <button type="button" onClick={() => toggleIngredientStatus(item)} className="rounded-lg px-2 py-1.5 text-[10px] font-semibold text-rosewood transition hover:bg-petal">
+          <button type="button" disabled={pendingId !== null || isSaving} onClick={() => toggleIngredientStatus(item)} className="rounded-lg px-2 py-1.5 text-[10px] font-semibold text-rosewood transition hover:bg-petal disabled:opacity-50">
             {item.status === false ? 'Kích hoạt' : 'Ngừng'}
+          </button>
+          <button type="button" aria-label={`Xóa ${item.name}`} disabled={pendingId !== null || isSaving} onClick={() => setDeleteTarget(item)} className="flex h-8 w-8 items-center justify-center rounded-lg text-danger transition hover:bg-danger-soft disabled:opacity-50">
+            <Icon name="trash" size={14} />
           </button>
         </div>
       ),
@@ -217,10 +251,10 @@ export default function InventoryPage({ onToast }) {
         <div>
           <p className="text-[11px] font-semibold tracking-wide text-muted">Nguyên liệu & định mức</p>
           <h2 className="font-display mt-1 text-[28px] text-rosewood sm:text-[32px]">Kho nguyên liệu</h2>
-          <p className="mt-1 text-xs text-muted">Tồn kho đồng bộ với phiếu nhập đã được nhận.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link to="/admin/purchase-orders"><Button variant="secondary"><Icon name="receipt" size={15} /> Phiếu nhập</Button></Link>
+          <Button variant="secondary" onClick={() => void loadItems()} disabled={isLoading || pendingId !== null}><Icon name="refresh" size={15} /> Làm mới</Button>
           <Button onClick={openCreate}><Icon name="plus" size={16} /> Thêm nguyên liệu</Button>
         </div>
       </div>
@@ -283,21 +317,32 @@ export default function InventoryPage({ onToast }) {
       <Modal open={formOpen} title={editing ? 'Cập nhật nguyên liệu' : 'Thêm nguyên liệu'} onClose={() => { if (!isSaving) setFormOpen(false) }}>
         <form className="space-y-4" onSubmit={saveIngredient}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Mã nguyên liệu</span><input required maxLength={30} value={form.ingredientCode} onChange={(event) => setForm({ ...form, ingredientCode: event.target.value })} className={inputClass} /></label>
-            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Tên nguyên liệu</span><input required maxLength={150} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className={inputClass} /></label>
-            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Đơn vị</span><input required maxLength={30} value={form.unit} onChange={(event) => setForm({ ...form, unit: event.target.value })} className={inputClass} placeholder="kg, lít..." /></label>
+            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Mã nguyên liệu</span><input required maxLength={30} value={form.ingredientCode} onChange={(event) => setForm({ ...form, ingredientCode: event.target.value })} className={inputClass} placeholder="Ví dụ: NL-001" /></label>
+            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Tên nguyên liệu</span><input required maxLength={150} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className={inputClass} placeholder="Ví dụ: Bột mì số 13" /></label>
+            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Đơn vị</span><input required maxLength={30} value={form.unit} onChange={(event) => setForm({ ...form, unit: event.target.value })} className={inputClass} placeholder="Ví dụ: kg, g, lít, quả" /></label>
             <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Tồn hiện tại (chỉ xem)</span><input type="number" min="0" step="0.001" readOnly value={form.stockQuantity} className={`${inputClass} read-only:bg-cream read-only:text-muted`} /></label>
-            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Ngưỡng tồn thấp</span><input required type="number" min="0" step="0.001" value={form.minStockLevel} onChange={(event) => setForm({ ...form, minStockLevel: event.target.value })} className={inputClass} /></label>
-            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Giá nhập gần nhất</span><input required type="number" min="0" step="0.01" value={form.unitPrice} onChange={(event) => setForm({ ...form, unitPrice: event.target.value })} className={inputClass} /></label>
+            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Ngưỡng tồn thấp</span><input required type="number" min="0" step="0.001" value={form.minStockLevel} onChange={(event) => setForm({ ...form, minStockLevel: event.target.value })} className={inputClass} placeholder="Ví dụ: 2" /><span className="mt-1 block text-[10px] text-muted">Nhập số không âm, tối đa 3 chữ số thập phân.</span></label>
+            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Giá nhập gần nhất</span><input required type="number" min="0" step="0.01" value={form.unitPrice} onChange={(event) => setForm({ ...form, unitPrice: event.target.value })} className={inputClass} placeholder="Ví dụ: 25000" /><span className="mt-1 block text-[10px] text-muted">Nhập số không âm, tối đa 2 chữ số thập phân.</span></label>
           </div>
           {formError && <p role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger">{formError}</p>}
-          <p className="text-[10px] leading-5 text-muted">Tồn kho được cập nhật bởi workflow nhận phiếu nhập. Không điều chỉnh số tồn từ màn hình này.</p>
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="secondary" disabled={isSaving} onClick={() => setFormOpen(false)}>Hủy</Button>
             <Button type="submit" disabled={isSaving}>{isSaving ? 'Đang lưu...' : 'Lưu nguyên liệu'}</Button>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa nguyên liệu?"
+        description={deleteTarget
+          ? `Xóa "${deleteTarget.name}". Nguyên liệu còn tồn kho hoặc đã được phiếu nhập tham chiếu không thể xóa; hãy ngừng hoạt động để giữ dữ liệu.`
+          : ''}
+        confirmLabel="Xóa nguyên liệu"
+        onConfirm={() => void removeIngredient()}
+        onClose={() => { if (pendingId === null) setDeleteTarget(null) }}
+        busy={pendingId !== null}
+      />
     </div>
   )
 }

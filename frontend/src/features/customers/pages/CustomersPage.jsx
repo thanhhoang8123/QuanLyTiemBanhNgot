@@ -18,6 +18,7 @@ import {
   getCustomerPage,
   updateCustomer,
 } from '../services/customerService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const emptyForm = {
   fullName: '',
@@ -30,7 +31,7 @@ const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 te
 const pointsFormat = new Intl.NumberFormat('vi-VN')
 
 function getErrorMessage(error) {
-  return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
+  return getUserFacingErrorMessage(error)
 }
 
 function getStatusLabel(status) {
@@ -88,20 +89,9 @@ export default function CustomersPage({ onToast }) {
     setIsLoading(true)
     setLoadError('')
     try {
-      const result = await getCustomerPage({
-        page: requestedPage,
-        size: pageSize,
-        keyword: query,
-        sort,
-        direction,
-        signal,
-      })
-      if (!Array.isArray(result?.content)
-        || !Number.isInteger(result.page)
-        || !Number.isInteger(result.size)
-        || !Number.isInteger(result.totalPages)
-        || !Number.isInteger(result.totalElements)) {
-        throw new Error('API không trả về danh sách khách hàng hợp lệ.')
+      const result = await getCustomers({ signal })
+      if (!Array.isArray(result)) {
+        throw new Error('Chưa thể tải danh sách khách hàng. Vui lòng thử lại.')
       }
       if (result.totalPages === 0 ? requestedPage > 0 : requestedPage >= result.totalPages) {
         setPage(result.totalPages === 0 ? 0 : result.totalPages - 1)
@@ -430,7 +420,7 @@ export default function CustomersPage({ onToast }) {
           </FormField>
 
           <p className="text-xs leading-5 text-muted">
-            Điểm tích lũy và trạng thái do backend quản lý, không chỉnh sửa tại biểu mẫu này.
+            Điểm tích lũy và trạng thái được quản lý tự động, không chỉnh sửa tại biểu mẫu này.
           </p>
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
@@ -492,7 +482,7 @@ export default function CustomersPage({ onToast }) {
         open={Boolean(customerToDelete)}
         title="Xóa khách hàng?"
         description={customerToDelete
-          ? `Bạn sắp xóa hồ sơ "${customerToDelete.fullName || customerToDelete.id}". Thao tác này có thể bị backend từ chối nếu hồ sơ đang được dữ liệu khác sử dụng.`
+          ? `Bạn có chắc chắn muốn xóa hồ sơ "${customerToDelete.fullName || customerToDelete.id}" không? Không thể xóa khách hàng đang có đơn hàng liên quan.`
           : ''}
         confirmLabel="Xóa khách hàng"
         onConfirm={confirmDelete}

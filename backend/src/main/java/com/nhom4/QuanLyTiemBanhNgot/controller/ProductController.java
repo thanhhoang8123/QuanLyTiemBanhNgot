@@ -69,20 +69,27 @@ public class ProductController {
     @PutMapping("/{id}")
     public ResponseEntity<Product> update(
             @PathVariable Long id,
+            @RequestHeader("X-Expected-Quantity") Integer expectedQuantity,
             @RequestBody Product product) {
 
         return ResponseEntity.ok(
-                productService.update(id, product)
+                productService.update(id, product, expectedQuantity)
         );
     }
 
-    // Ngừng kinh doanh sản phẩm, không xóa cứng
+    // Xóa sản phẩm chưa được tham chiếu từ đơn hàng.
     @DeleteMapping("/{id}")
-    public ResponseEntity<Product> deactivate(
+    public ResponseEntity<Void> delete(
             @PathVariable Long id) {
 
-        return ResponseEntity.ok(
-                productService.deactivate(id)
-        );
+        productService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // Ngừng kinh doanh sản phẩm nhưng giữ nguyên dữ liệu.
+    @PostMapping("/{id}/deactivate")
+    public ResponseEntity<Product> deactivate(
+            @PathVariable Long id) {
+        return ResponseEntity.ok(productService.deactivate(id));
     }
 }

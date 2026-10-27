@@ -6,6 +6,7 @@ import LoadingState from '../../../components/LoadingState.jsx'
 import PageHeader from '../../../components/PageHeader.jsx'
 import SearchFilter from '../../../components/SearchFilter.jsx'
 import { getActivityLogs, getOrderStatusHistory } from '../services/managementLogsService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const tabs = [
   { id: 'activity', label: 'Nhật ký hoạt động' },
@@ -23,7 +24,7 @@ function formatDateTime(value) {
 }
 
 function getErrorMessage(error) {
-  return error instanceof Error ? error.message : 'Không thể tải nhật ký.'
+  return getUserFacingErrorMessage(error, 'Không thể tải nhật ký.')
 }
 
 export default function ManagementLogsPage() {
@@ -41,7 +42,7 @@ export default function ManagementLogsPage() {
       const result = tab === 'activity'
         ? await getActivityLogs({ limit: 100, signal })
         : await getOrderStatusHistory({ limit: 100, signal })
-      if (!Array.isArray(result)) throw new Error('API nhật ký trả về dữ liệu không hợp lệ.')
+      if (!Array.isArray(result)) throw new Error('Chưa thể tải nhật ký. Vui lòng thử lại.')
       setRecords(result)
     } catch (loadError) {
       if (signal?.aborted || loadError.name === 'AbortError') return
@@ -86,7 +87,7 @@ export default function ManagementLogsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Nhật ký & lịch sử NoSQL"
+        title="Nhật ký hoạt động & lịch sử đơn hàng"
         description="Tra cứu gần đây các hoạt động và thay đổi trạng thái đơn. Dữ liệu chỉ đọc để bảo toàn dấu vết kiểm toán."
         actions={(
           <Button variant="secondary" onClick={() => setRefreshVersion((version) => version + 1)}>
@@ -119,7 +120,7 @@ export default function ManagementLogsPage() {
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div>
             <h2 className="font-display text-lg font-semibold text-rosewood">
-              {tab === 'activity' ? 'Activity logs' : 'Order status histories'}
+              {tab === 'activity' ? 'Hoạt động gần đây' : 'Lịch sử trạng thái đơn'}
             </h2>
             <p className="mt-1 text-[11px] text-muted">
               Hiển thị tối đa 100 bản ghi mới nhất; tìm kiếm trong dữ liệu đã tải.

@@ -5,17 +5,20 @@ import FormField from '../../../components/FormField.jsx'
 import Icon from '../../../components/Icon.jsx'
 import LoadingState from '../../../components/LoadingState.jsx'
 import Modal from '../../../components/Modal.jsx'
+import Pagination, { usePagination } from '../../../components/Pagination.jsx'
 import CartPanel from '../components/CartPanel.jsx'
 import ProductCard from '../components/ProductCard.jsx'
+import { reconcilePosCartWithCatalog } from '../services/posCatalog.js'
 import { getCustomers } from '../../customers/services/customerService.js'
 import {
   cancelOrder,
   createOrder,
   getEmployees,
-  quoteOrder,
+  quotePosOrder,
 } from '../../orders/services/orderService.js'
 import { createPayment, getPayments, simulatePayment } from '../../payments/services/paymentService.js'
 import { getProducts } from '../../products/services/productService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 text-sm text-rosewood outline-none transition focus:border-caramel'
 const moneyFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 })
@@ -25,9 +28,14 @@ const paymentMethods = [
   { value: 'CARD', label: 'Thẻ' },
   { value: 'EWALLET', label: 'Ví điện tử' },
 ]
+const paymentStatusLabels = {
+  PENDING: 'Chờ thanh toán',
+  SUCCESS: 'Thành công',
+  FAILED: 'Chưa thành công',
+}
 
 function getErrorMessage(error) {
-  return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
+  return getUserFacingErrorMessage(error)
 }
 
 function formatMoney(value) {
@@ -37,7 +45,7 @@ function formatMoney(value) {
 
 function normalizeProducts(result) {
   if (!Array.isArray(result)) {
-    throw new Error('API sản phẩm trả về dữ liệu không đúng định dạng.')
+    throw new Error('Chưa thể tải danh sách sản phẩm. Vui lòng thử lại.')
   }
   return result.map((product) => {
     const price = Number(product.price)
@@ -47,10 +55,11 @@ function normalizeProducts(result) {
         || !Number.isFinite(price)
         || !Number.isInteger(stock)
         || stock < 0) {
-      throw new Error('API sản phẩm thiếu ID, tên, giá hoặc số lượng tồn kho hợp lệ.')
+      throw new Error('Thông tin sản phẩm chưa đầy đủ. Vui lòng tải lại danh sách.')
     }
     return {
       ...product,
+      id: Number(product.id),
       price,
       stock,
       category: product.category?.name ?? product.categoryName ?? 'Khác',
@@ -62,8 +71,6 @@ export default function PosPage({
   onToast,
   cart,
   onCartChange,
-  promotionCode,
-  onPromotionCodeChange,
   note,
   onNoteChange,
 }) {
@@ -78,8 +85,12 @@ export default function PosPage({
   const [quote, setQuote] = useState(null)
   const [quoteLoading, setQuoteLoading] = useState(false)
   const [quoteError, setQuoteError] = useState('')
+  const [catalogPrices, setCatalogPrices] = useState({})
+  const [catalogPriceLoading, setCatalogPriceLoading] = useState(true)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [customerId, setCustomerId] = useState('')
+  const [useLoyaltyPoints, setUseLoyaltyPoints] = useState(false)
+  const [loyaltyPointsToRedeem, setLoyaltyPointsToRedeem] = useState(0)
   const [employeeId, setEmployeeId] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('CASH')
   const [createdOrder, setCreatedOrder] = useState(null)
@@ -97,9 +108,14 @@ export default function PosPage({
         getEmployees({ signal }),
       ])
       if (!Array.isArray(customerResult) || !Array.isArray(employeeResult)) {
-        throw new Error('API khách hàng hoặc nhân viên trả về dữ liệu không đúng định dạng.')
+        throw new Error('Chưa thể tải thông tin khách hàng và nhân viên. Vui lòng thử lại.')
       }
-      setProducts(normalizeProducts(productResult))
+      const normalizedProducts = normalizeProducts(productResult)
+      setProducts(normalizedProducts)
+      setCatalogPrices({})
+      setCatalogPriceLoading(true)
+      setQuote(null)
+      onCartChange((current) => reconcilePosCartWithCatalog(current, normalizedProducts))
       setCustomers(customerResult)
       setEmployees(employeeResult)
     } catch (error) {
@@ -136,6 +152,10 @@ export default function PosPage({
     () => products.filter((product) => product.status === true && product.stock > 0),
     [products],
   )
+  const activeProductIds = useMemo(
+    () => activeProducts.map((product) => product.id),
+    [activeProducts],
+  )
   const categories = useMemo(
     () => ['Tất cả', ...new Set(activeProducts.map((product) => product.category))],
     [activeProducts],
@@ -147,6 +167,17 @@ export default function PosPage({
       .includes(search.trim().toLocaleLowerCase('vi'))
     return matchesCategory && matchesSearch
   }), [activeProducts, category, search])
+  const productPagination = usePagination(filteredProducts)
+  const availableLoyaltyPoints = Number(selectedCustomer?.loyaltyPoints ?? 0)
+
+  useEffect(() => {
+    if (isWalkInCustomer) {
+      setUseLoyaltyPoints(false)
+      setLoyaltyPointsToRedeem(0)
+    } else if (loyaltyPointsToRedeem > availableLoyaltyPoints) {
+      setLoyaltyPointsToRedeem(availableLoyaltyPoints)
+    }
+  }, [availableLoyaltyPoints, isWalkInCustomer, loyaltyPointsToRedeem])
 
   useEffect(() => {
     if (activeCustomers.length && !activeCustomers.some((customer) => String(customer.id) === customerId)) {
@@ -158,36 +189,86 @@ export default function PosPage({
   }, [activeCustomers, activeEmployees, currentEmployee, customerId, employeeId])
 
   useEffect(() => {
-    if (cart.length === 0 || createdOrder) {
-      if (cart.length === 0) setQuote(null)
+    if (createdOrder) {
       setQuoteError('')
       setQuoteLoading(false)
+      setCatalogPriceLoading(false)
       return undefined
     }
 
     const controller = new AbortController()
+    setQuote(null)
+    setQuoteError('')
+    setQuoteLoading(true)
+    setCatalogPriceLoading(true)
     const timeoutId = window.setTimeout(async () => {
-      setQuote(null)
-      setQuoteError('')
-      setQuoteLoading(true)
       try {
-        const result = await quoteOrder({
+        const result = await quotePosOrder({
           items: cart.map((item) => ({
             productId: item.id,
             quantity: item.quantity,
           })),
-          promotionCode: promotionCode.trim() || null,
+          productIds: activeProductIds,
+          customerId: customerId ? Number(customerId) : null,
+          loyaltyPointsToRedeem: useLoyaltyPoints
+            ? Number(loyaltyPointsToRedeem)
+            : 0,
         }, { signal: controller.signal })
         if (typeof result?.finalAmount !== 'string' && typeof result?.finalAmount !== 'number') {
-          throw new Error('API báo giá trả về số tiền không hợp lệ.')
+          throw new Error('Chưa thể xác nhận báo giá. Vui lòng kiểm tra giỏ hàng và thử lại.')
         }
+        const totalAmount = Number(result.totalAmount)
+        const productDiscountAmount = Number(result.productDiscountAmount)
+        const subtotalAfterPromotions = Number(result.subtotalAfterPromotions)
+        const loyaltyDiscountAmount = Number(result.loyaltyDiscountAmount)
+        const finalAmount = Number(result.finalAmount)
+        if (
+          !Number.isFinite(totalAmount)
+          || !Number.isFinite(productDiscountAmount)
+          || !Number.isFinite(subtotalAfterPromotions)
+          || !Number.isFinite(loyaltyDiscountAmount)
+          || !Number.isFinite(finalAmount)
+          || totalAmount < 0
+          || productDiscountAmount < 0
+          || productDiscountAmount > totalAmount
+          || loyaltyDiscountAmount < 0
+          || loyaltyDiscountAmount > subtotalAfterPromotions
+          || Math.abs(totalAmount - productDiscountAmount - subtotalAfterPromotions) >= 0.005
+          || Math.abs(subtotalAfterPromotions - loyaltyDiscountAmount - finalAmount) >= 0.005
+          || !Array.isArray(result.catalogPrices)
+          || !Array.isArray(result.items)
+        ) {
+          throw new Error('Báo giá chưa khớp với sản phẩm trong giỏ hàng. Vui lòng kiểm tra lại.')
+        }
+        const nextCatalogPrices = Object.fromEntries(result.catalogPrices.map((price) => [
+          Number(price.productId),
+          Number(price.salePrice),
+        ]))
+        setCatalogPrices(nextCatalogPrices)
+        const quotedItemsById = new Map(result.items.map((item) => [
+          Number(item.productId),
+          Number(item.effectiveUnitPrice),
+        ]))
+        onCartChange((current) => {
+          let changed = false
+          const updated = current.map((item) => {
+            const price = quotedItemsById.get(Number(item.id))
+            if (!Number.isFinite(price) || Math.abs(item.price - price) < 0.005) return item
+            changed = true
+            return { ...item, price }
+          })
+          return changed ? updated : current
+        })
         setQuote(result)
       } catch (error) {
         if (!controller.signal.aborted && error.name !== 'AbortError') {
           setQuoteError(getErrorMessage(error))
         }
       } finally {
-        if (!controller.signal.aborted) setQuoteLoading(false)
+        if (!controller.signal.aborted) {
+          setQuoteLoading(false)
+          setCatalogPriceLoading(false)
+        }
       }
     }, 250)
 
@@ -195,7 +276,15 @@ export default function PosPage({
       window.clearTimeout(timeoutId)
       controller.abort()
     }
-  }, [cart, createdOrder, products, promotionCode])
+  }, [
+    activeProductIds,
+    cart,
+    createdOrder,
+    customerId,
+    loyaltyPointsToRedeem,
+    onCartChange,
+    useLoyaltyPoints,
+  ])
 
   const addToCart = (product) => {
     const selected = cart.find((item) => item.id === product.id)
@@ -203,13 +292,14 @@ export default function PosPage({
       onToast(`Không đủ tồn kho cho ${product.name}.`)
       return
     }
+    const salePrice = Number(catalogPrices[product.id] ?? product.price)
     onCartChange((current) => {
       const existing = current.find((item) => item.id === product.id)
       return existing
         ? current.map((item) => item.id === product.id
-          ? { ...item, quantity: item.quantity + 1 }
+          ? { ...item, price: salePrice, quantity: item.quantity + 1 }
           : item)
-        : [...current, { ...product, quantity: 1 }]
+        : [...current, { ...product, price: salePrice, quantity: 1 }]
     })
     onToast(`${product.name} đã được thêm vào đơn.`)
   }
@@ -225,7 +315,6 @@ export default function PosPage({
 
   const clearCart = () => {
     onCartChange([])
-    onPromotionCodeChange('')
     onNoteChange('')
     setQuote(null)
   }
@@ -233,25 +322,11 @@ export default function PosPage({
   const refreshProducts = async () => {
     try {
       const updatedProducts = normalizeProducts(await getProducts())
-      const productsById = new Map(updatedProducts.map((product) => [product.id, product]))
       setProducts(updatedProducts)
-      onCartChange((current) => {
-        let changed = false
-        const refreshedCart = current.map((item) => {
-          const product = productsById.get(item.id)
-          if (!product) return item
-          changed = true
-          return {
-            ...item,
-            name: product.name,
-            price: product.price,
-            stock: product.stock,
-            category: product.category,
-            unit: product.unit,
-          }
-        })
-        return changed ? refreshedCart : current
-      })
+      setCatalogPrices({})
+      setCatalogPriceLoading(true)
+      setQuote(null)
+      onCartChange((current) => reconcilePosCartWithCatalog(current, updatedProducts))
     } catch (error) {
       setCatalogError(`Không thể làm mới tồn kho: ${getErrorMessage(error)}`)
     }
@@ -259,28 +334,52 @@ export default function PosPage({
 
   const openCheckout = () => {
     setCheckoutError('')
+    setUseLoyaltyPoints(false)
+    setLoyaltyPointsToRedeem(0)
     setCheckoutOpen(true)
   }
 
   const createOrFindPayment = async (order) => {
+    const verifyPaymentAmount = (payment) => {
+      const paymentAmount = Number(payment?.amount)
+      const expectedAmount = Number(order.finalAmount)
+      if (
+        Number(payment?.orderId) !== Number(order.id)
+        || !Number.isFinite(paymentAmount)
+        || !Number.isFinite(expectedAmount)
+        || Math.round(paymentAmount * 100) !== Math.round(expectedAmount * 100)
+      ) {
+        throw new Error('Số tiền thanh toán chưa khớp với đơn hàng. Vui lòng kiểm tra lại trước khi tiếp tục.')
+      }
+      return payment
+    }
+    let payment
     try {
-      return await createPayment({
+      payment = await createPayment({
         orderId: order.id,
         paymentMethod,
       })
     } catch (createError) {
+      let existingPayment
       try {
         const payments = await getPayments()
-        const existingPayment = payments.find((payment) => payment.orderId === order.id)
-        if (existingPayment) return existingPayment
-      } catch {
+        if (!Array.isArray(payments)) {
+          throw new Error('Chưa thể kiểm tra trạng thái thanh toán. Vui lòng tải lại trang.')
+        }
+        existingPayment = payments.find(
+          (payment) => Number(payment.orderId) === Number(order.id),
+        )
+      } catch (lookupError) {
         throw new Error(
-          `Đơn ${order.orderCode} đã được tạo nhưng chưa xác định được trạng thái Payment. `
-          + 'Tải lại trang Thanh toán trước khi thử lại.',
+          `Đơn ${order.orderCode} đã được lưu nhưng chưa xác nhận được trạng thái thanh toán. `
+          + 'Vui lòng kiểm tra đơn hàng trước khi thử lại.',
+          { cause: lookupError },
         )
       }
-      throw createError
+      if (!existingPayment) throw createError
+      payment = existingPayment
     }
+    return verifyPaymentAmount(payment)
   }
 
   const submitCheckout = async (event) => {
@@ -290,7 +389,7 @@ export default function PosPage({
       return
     }
     if (!createdOrder && (!quote || quoteLoading || quoteError)) {
-      setCheckoutError('Chưa có báo giá hợp lệ từ máy chủ. Hãy kiểm tra giỏ hàng và mã khuyến mãi.')
+      setCheckoutError('Chưa thể xác nhận báo giá. Vui lòng kiểm tra giỏ hàng.')
       return
     }
 
@@ -303,8 +402,11 @@ export default function PosPage({
           customerId: Number(customerId),
           employeeId: Number(employeeId),
           deliveryAddress: null,
-          promotionCode: promotionCode.trim() || null,
           note: note.trim() || null,
+          applyProductPromotions: true,
+          loyaltyPointsToRedeem: useLoyaltyPoints
+            ? Number(loyaltyPointsToRedeem)
+            : 0,
           items: cart.map((item) => ({
             productId: item.id,
             quantity: item.quantity,
@@ -334,18 +436,27 @@ export default function PosPage({
         const earnedPoints = isWalkInCustomer
           ? 0
           : Math.floor(Number(payment.amount) / 10000)
-        if (earnedPoints > 0) {
+        const redeemedPoints = Math.round(Number(createdOrder?.discountAmount ?? 0) / 1000)
+        if (earnedPoints > 0 || redeemedPoints > 0) {
           setCustomers((current) => current.map((customer) => (
             Number(customer.id) === Number(customerId)
-              ? { ...customer, loyaltyPoints: Number(customer.loyaltyPoints ?? 0) + earnedPoints }
+              ? {
+                  ...customer,
+                  loyaltyPoints: Math.max(
+                    0,
+                    Number(customer.loyaltyPoints ?? 0) - redeemedPoints + earnedPoints,
+                  ),
+                }
               : customer
           )))
         }
         clearCart()
         await refreshProducts()
-        onToast(earnedPoints > 0
-          ? `Đơn ${createdOrder.orderCode} đã thanh toán thành công; khách được cộng ${earnedPoints} điểm.`
-          : `Đơn ${createdOrder.orderCode} đã thanh toán thành công.`)
+        onToast(earnedPoints > 0 || redeemedPoints > 0
+          ? `Giao dịch thử nghiệm của đơn ${createdOrder.orderCode} đã được ghi nhận; sử dụng ${redeemedPoints} điểm${earnedPoints > 0 ? `, cộng ${earnedPoints} điểm` : ''}.`
+          : `Giao dịch thử nghiệm của đơn ${createdOrder.orderCode} đã được ghi nhận thành công.`)
+      } else {
+        onToast(`Giao dịch thử nghiệm của đơn ${createdOrder.orderCode} chưa thành công. Bạn có thể thử lại hoặc hủy đơn.`)
       }
     } catch (error) {
       setCheckoutError(getErrorMessage(error))
@@ -377,6 +488,8 @@ export default function PosPage({
     setCreatedOrder(null)
     setCreatedPayment(null)
     setCheckoutError('')
+    setUseLoyaltyPoints(false)
+    setLoyaltyPointsToRedeem(0)
   }
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
@@ -384,7 +497,7 @@ export default function PosPage({
 
   return (
     <>
-      <div className="flex min-h-[calc(100vh-152px)] gap-6">
+      <div className="flex min-h-[calc(100vh-152px)] gap-4">
         <section className="min-w-0 flex-1 pb-28 xl:pb-0">
           <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
@@ -441,16 +554,30 @@ export default function PosPage({
                   </div>
 
                   {filteredProducts.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
-                      {filteredProducts.map((product) => (
-                        <ProductCard
-                          key={product.id}
-                          product={product}
-                          onAdd={addToCart}
-                          quantityInCart={cart.find((item) => item.id === product.id)?.quantity ?? 0}
-                        />
-                      ))}
-                    </div>
+                    <>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
+                        {productPagination.pageItems.map((product) => (
+                          <ProductCard
+                            key={product.id}
+                            product={{
+                              ...product,
+                              originalPrice: product.price,
+                              salePrice: catalogPrices[product.id] ?? product.price,
+                            }}
+                            onAdd={addToCart}
+                            pricingLoading={catalogPriceLoading || Boolean(quoteError)}
+                            quantityInCart={cart.find((item) => item.id === product.id)?.quantity ?? 0}
+                          />
+                        ))}
+                      </div>
+                      <Pagination
+                        currentPage={productPagination.currentPage}
+                        pageSize={productPagination.pageSize}
+                        totalItems={productPagination.totalItems}
+                        onPageChange={productPagination.setCurrentPage}
+                        onPageSizeChange={productPagination.setPageSize}
+                      />
+                    </>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-border bg-paper px-5 py-12 text-center">
                       <p className="font-display text-base text-rosewood">Không tìm thấy sản phẩm</p>
@@ -463,8 +590,6 @@ export default function PosPage({
 
         <CartPanel
           cart={cart}
-          promotionCode={promotionCode}
-          onPromotionCodeChange={onPromotionCodeChange}
           quote={quote}
           quoteLoading={quoteLoading}
           quoteError={quoteError}
@@ -500,8 +625,8 @@ export default function PosPage({
         {!createdOrder ? (
           <form onSubmit={submitCheckout} className="space-y-4">
             <p className="text-xs leading-5 text-muted">
-              Máy chủ sẽ xác nhận lại tồn kho, giá và mã khuyến mãi khi tạo đơn.
-              Thanh toán trong môi trường này chỉ được mô phỏng.
+              Giá bán và tồn kho sẽ được xác nhận khi tạo đơn.
+              Đây là thanh toán thử nghiệm, không phát sinh giao dịch thật.
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FormField id="pos-customer" label="Khách hàng" required>
@@ -529,6 +654,71 @@ export default function PosPage({
                     : `Khách hiện có ${selectedCustomer.loyaltyPoints ?? 0} điểm; cứ đủ 10.000đ thanh toán thành công được cộng 1 điểm.`
                   : 'Chọn Khách vãng lai hoặc hồ sơ khách hàng có sẵn.'}
               </p>
+              <div className="space-y-3 sm:col-span-2">
+                <p className="text-xs font-semibold text-rosewood">
+                  Điểm tích lũy: {availableLoyaltyPoints} điểm
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2.5 text-xs text-rosewood">
+                    <input
+                      type="radio"
+                      name="pos-loyalty-choice"
+                      checked={!useLoyaltyPoints}
+                      onChange={() => {
+                        setUseLoyaltyPoints(false)
+                        setLoyaltyPointsToRedeem(0)
+                      }}
+                      className="accent-rosewood"
+                    />
+                    Không sử dụng điểm
+                  </label>
+                  <label className={`flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2.5 text-xs ${
+                    isWalkInCustomer || availableLoyaltyPoints === 0
+                      ? 'cursor-not-allowed text-muted'
+                      : 'text-rosewood'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="pos-loyalty-choice"
+                      checked={useLoyaltyPoints}
+                      disabled={isWalkInCustomer || availableLoyaltyPoints === 0}
+                      onChange={() => setUseLoyaltyPoints(true)}
+                      className="accent-rosewood"
+                    />
+                    Sử dụng điểm để giảm giá
+                  </label>
+                </div>
+                {useLoyaltyPoints && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <FormField id="pos-loyalty-points" label="Số điểm muốn sử dụng">
+                      <input
+                        id="pos-loyalty-points"
+                        type="number"
+                        min="0"
+                        max={availableLoyaltyPoints}
+                        step="1"
+                        value={loyaltyPointsToRedeem}
+                        onChange={(event) => {
+                          const nextPoints = event.target.value === ''
+                            ? 0
+                            : Number.parseInt(event.target.value, 10)
+                          setLoyaltyPointsToRedeem(
+                            Number.isFinite(nextPoints)
+                              ? Math.min(availableLoyaltyPoints, Math.max(0, nextPoints))
+                              : 0,
+                          )
+                        }}
+                        className={inputClass}
+                      />
+                    </FormField>
+                    <div className="self-end text-xs leading-5 text-muted">
+                      1 điểm = 1.000 ₫
+                      <br />
+                      Giảm: {formatMoney(quote?.loyaltyDiscountAmount ?? 0)}
+                    </div>
+                  </div>
+                )}
+              </div>
               <FormField id="pos-employee" label="Nhân viên lập đơn" required>
                 <input
                   id="pos-employee"
@@ -560,12 +750,19 @@ export default function PosPage({
               </select>
             </FormField>
             <div className="rounded-xl border border-border bg-petal px-4 py-3 text-xs">
-              <div className="flex justify-between"><span>Tạm tính</span><span>{formatMoney(quote?.totalAmount)}</span></div>
-              <div className="mt-2 flex justify-between"><span>Khuyến mãi</span><span>- {formatMoney(quote?.discountAmount)}</span></div>
+              <div className="flex justify-between"><span>Tiền hàng</span><span>{formatMoney(quote?.subtotalAfterPromotions)}</span></div>
+              {useLoyaltyPoints && (
+                <div className="mt-2 flex justify-between">
+                  <span>Giảm từ điểm</span>
+                  <span>- {formatMoney(quote?.loyaltyDiscountAmount)}</span>
+                </div>
+              )}
               <div className="mt-2 flex justify-between border-t border-border pt-2 font-bold text-rosewood">
                 <span>Tổng phải thanh toán</span><span>{formatMoney(quote?.finalAmount)}</span>
               </div>
             </div>
+            {quoteLoading && <p className="text-xs text-muted">Đang tính lại tổng tiền...</p>}
+            {quoteError && <p role="alert" className="text-xs text-danger">{quoteError}</p>}
             {checkoutError && <p role="alert" className="text-sm text-danger">{checkoutError}</p>}
             <div className="flex justify-end gap-2 border-t border-border pt-4">
               <Button type="button" variant="secondary" disabled={processing} onClick={closeCheckout}>Quay lại</Button>
@@ -583,29 +780,29 @@ export default function PosPage({
           <div className="space-y-4">
             <div className="rounded-xl border border-border bg-petal px-4 py-3 text-sm">
               <p className="font-semibold text-rosewood">Đơn đã lưu: {createdOrder.orderCode}</p>
-              <p className="mt-1 text-xs text-muted">Tổng từ backend: {formatMoney(createdOrder.finalAmount)}</p>
+              <p className="mt-1 text-xs text-muted">Tổng đơn hàng: {formatMoney(createdOrder.finalAmount)}</p>
               <p className="mt-1 text-xs text-muted">
                 {createdPayment
-                  ? `Trạng thái Payment: ${createdPayment.status}`
+                  ? `Trạng thái thanh toán: ${paymentStatusLabels[createdPayment.status] ?? 'Đang cập nhật'}`
                   : 'Tồn kho đang được giữ cho đơn này.'}
               </p>
             </div>
             {checkoutError && <p role="alert" className="text-sm text-danger">{checkoutError}</p>}
             {createdPayment?.status !== 'SUCCESS' && (
               <>
-                {createdPayment && (
+                {createdPayment && createdPayment.status !== 'SUCCESS' && (
                   <div className="grid grid-cols-2 gap-2">
                     <Button disabled={processing} onClick={() => simulateResult('SUCCESS')}>
-                      Mô phỏng thành công
+                      Ghi nhận thành công
                     </Button>
                     <Button variant="danger" disabled={processing} onClick={() => simulateResult('FAILED')}>
-                      Mô phỏng thất bại
+                      Ghi nhận chưa thành công
                     </Button>
                   </div>
                 )}
                 {!createdPayment && (
                   <Button disabled={processing} onClick={(event) => submitCheckout(event)}>
-                    Thử tạo/khôi phục Payment
+                    Tiếp tục thanh toán
                   </Button>
                 )}
                 <p className="text-[11px] leading-5 text-muted">

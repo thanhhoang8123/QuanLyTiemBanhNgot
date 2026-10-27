@@ -3,8 +3,14 @@ import { ProductArtwork } from '../../products/components/ProductArtwork.jsx'
 
 const currency = new Intl.NumberFormat('vi-VN')
 
-export default function ProductCard({ product, onAdd, quantityInCart = 0 }) {
+export default function ProductCard({
+  product,
+  onAdd,
+  quantityInCart = 0,
+  pricingLoading = false,
+}) {
   const outOfStock = quantityInCart >= product.stock
+  const hasPromotion = Number(product.salePrice) < Number(product.originalPrice)
 
   return (
     <article className={`group overflow-hidden rounded-2xl border bg-paper transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-rosewood/[0.12] ${
@@ -19,8 +25,17 @@ export default function ProductCard({ product, onAdd, quantityInCart = 0 }) {
         <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted">{product.category}</p>
         <h3 className="mt-1.5 min-h-8 text-xs font-bold leading-4 text-rosewood sm:text-[13px]">{product.name}</h3>
         <div className="mt-3 flex items-center justify-between gap-1">
-          <span className="text-[13px] font-bold tracking-tight text-rosewood sm:text-sm">{currency.format(product.price)}đ</span>
-          <button type="button" onClick={() => onAdd(product)} disabled={outOfStock} aria-label={`Thêm ${product.name} vào giỏ`} className="flex h-10 w-10 items-center justify-center rounded-xl bg-caramel text-action-ink shadow-sm transition hover:bg-caramel-hover active:scale-95 focus-visible:outline-caramel disabled:cursor-not-allowed disabled:bg-rosewood-soft disabled:text-white disabled:shadow-none">
+          <span className="flex min-w-0 flex-col">
+            {hasPromotion && (
+              <span className="text-[10px] font-medium text-muted line-through">
+                {currency.format(product.originalPrice)}đ
+              </span>
+            )}
+            <span className={`text-[13px] font-bold tracking-tight sm:text-sm ${hasPromotion ? 'text-danger' : 'text-rosewood'}`}>
+              {currency.format(hasPromotion ? product.salePrice : product.originalPrice)}đ
+            </span>
+          </span>
+          <button type="button" onClick={() => onAdd(product)} disabled={outOfStock || pricingLoading} aria-label={`Thêm ${product.name} vào giỏ`} className="flex h-10 w-10 items-center justify-center rounded-xl bg-caramel text-action-ink shadow-sm transition hover:bg-caramel-hover active:scale-95 focus-visible:outline-caramel disabled:cursor-not-allowed disabled:bg-rosewood-soft disabled:text-white disabled:shadow-none">
             <Icon name="plus" size={18} />
           </button>
         </div>

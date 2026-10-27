@@ -21,10 +21,6 @@ export default function ShopLayout() {
   const normalizedPath = pathname.replace(/\/+$/, '') || '/'
   const isAuthPage = AUTH_PATHS.has(normalizedPath)
 
-  console.log('Đường dẫn:', pathname)
-  console.log('Có phải trang xác thực:', isAuthPage)
-
-
   return (
     <div className="min-h-screen bg-[#FCF9F3] text-[#4A302B]">
       {!isAuthPage && (
@@ -33,7 +29,7 @@ export default function ShopLayout() {
             <Link
               to="/shop"
               className="group flex shrink-0 items-center gap-3"
-              aria-label="WA Pâtisserie - Trang chủ"
+              aria-label="Daily Fresh - Trang chủ"
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[#D0A263]/60 bg-white font-display text-xl text-[#76534D] transition group-hover:bg-[#FAF0EE]">
                 W
@@ -41,7 +37,7 @@ export default function ShopLayout() {
 
               <span>
                 <span className="block font-display text-[15px] font-semibold tracking-wide text-[#4A302B] sm:text-base">
-                  WA Pâtisserie
+                  Daily Fresh
                 </span>
                 <span className="mt-0.5 block text-[8px] font-semibold uppercase tracking-[0.22em] text-[#9A7972]">
                   Bánh ngọt thủ công
@@ -124,7 +120,7 @@ export default function ShopLayout() {
           <div className="mx-auto flex max-w-7xl flex-col gap-7 px-4 py-10 sm:px-7 md:flex-row md:items-end md:justify-between lg:px-10">
             <div>
               <p className="font-display text-xl font-semibold text-[#4A302B]">
-                WA Pâtisserie
+                Daily Fresh
               </p>
               <p className="mt-2 max-w-md text-xs leading-6 text-[#806B65]">
                 Bánh ngọt được làm bằng sự chăm chút, dành cho những khoảnh khắc thật dịu dàng.
@@ -150,7 +146,7 @@ export default function ShopLayout() {
             </div>
 
             <p className="text-[10px] text-[#9A7972]">
-              © {new Date().getFullYear()} WA Pâtisserie
+              © {new Date().getFullYear()} Daily Fresh
             </p>
           </div>
         </footer>

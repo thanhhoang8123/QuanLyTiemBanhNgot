@@ -59,7 +59,7 @@ export default function ShopHomePage() {
             </div>
             <div className="mt-10 flex items-center gap-4 border-t border-[#EAE3DA] pt-5">
               <span className="font-display text-2xl text-[#D0A263]">01</span>
-              <p className="max-w-xs text-[11px] leading-5 text-[#806B65]">Khám phá bộ sưu tập bánh được chuẩn bị mỗi ngày tại WA Pâtisserie.</p>
+              <p className="max-w-xs text-[11px] leading-5 text-[#806B65]">Khám phá những chiếc bánh và thức uống tươi ngon được chuẩn bị mỗi ngày tại Daily Fresh.</p>
             </div>
           </div>
 

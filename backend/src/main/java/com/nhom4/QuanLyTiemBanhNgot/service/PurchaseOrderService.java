@@ -68,7 +68,7 @@ public class PurchaseOrderService {
     public PurchaseOrderResponse create(PurchaseOrderCreateRequest request) {
         TV2ValidationUtils.validatePurchaseOrder(request);
 
-        var supplier = supplierRepository.findById(request.supplierId())
+        var supplier = supplierRepository.findByIdForUpdate(request.supplierId())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Không tìm thấy nhà cung cấp"));
 
@@ -78,14 +78,19 @@ public class PurchaseOrderService {
                     "Nhà cung cấp đã ngừng hoạt động");
         }
 
-        // Kiểm tra nguyên liệu trước khi tạo phiếu.
-        for (PurchaseOrderCreateRequest.PurchaseOrderItemRequest itemRequest
-                : request.items()) {
-            Ingredient ingredient = ingredientRepository
-                    .findById(itemRequest.ingredientId())
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND, "Không tìm thấy nguyên liệu"));
+        TreeSet<Long> ingredientIds = new TreeSet<>();
+        request.items().forEach(item -> ingredientIds.add(item.ingredientId()));
+        List<Ingredient> lockedIngredients = ingredientRepository.findAllByIdForUpdate(
+                new ArrayList<>(ingredientIds));
+        Map<Long, Ingredient> ingredientsById = new HashMap<>();
+        lockedIngredients.forEach(ingredient ->
+                ingredientsById.put(ingredient.getId(), ingredient));
+        if (ingredientsById.size() != ingredientIds.size()) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "Không tìm thấy nguyên liệu");
+        }
 
+        for (Ingredient ingredient : lockedIngredients) {
             if (Boolean.FALSE.equals(ingredient.getStatus())) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
@@ -111,10 +116,7 @@ public class PurchaseOrderService {
 
         for (PurchaseOrderCreateRequest.PurchaseOrderItemRequest itemRequest
                 : request.items()) {
-            Ingredient ingredient = ingredientRepository
-                    .findById(itemRequest.ingredientId())
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND, "Không tìm thấy nguyên liệu"));
+            Ingredient ingredient = ingredientsById.get(itemRequest.ingredientId());
 
             BigDecimal lineTotal = itemRequest.quantity()
                     .multiply(itemRequest.unitCost())

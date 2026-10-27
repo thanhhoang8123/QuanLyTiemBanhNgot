@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
 import { ShopCartProvider, useShopCart } from '../features/shop/ShopCartContext.jsx'
-import { apiRequest } from '../services/apiClient.js'
+import { apiRequest, getUserFacingErrorMessage } from '../services/apiClient.js'
 
 const navClass = ({ isActive }) => `rounded-full px-4 py-2 text-xs font-semibold transition ${
   isActive ? 'bg-[#FAF0EE] text-[#76534D]' : 'text-[#806B65] hover:bg-[#FAF0EE] hover:text-[#4A302B]'
@@ -30,7 +30,7 @@ function ShopLayoutContent() {
       if (error.status === 401 || error.status === 403) {
         setAccount(null)
       } else {
-        setAuthError(error.message || 'Không thể kiểm tra phiên đăng nhập.')
+        setAuthError(getUserFacingErrorMessage(error, 'Không thể kiểm tra phiên đăng nhập.'))
       }
     } finally {
       if (!signal?.aborted) setIsCheckingSession(false)
@@ -69,7 +69,7 @@ function ShopLayoutContent() {
       setAccount(null)
       navigate('/shop', { replace: true })
     } catch (error) {
-      setAuthError(error.message || 'Không thể đăng xuất. Vui lòng thử lại.')
+      setAuthError(getUserFacingErrorMessage(error, 'Không thể đăng xuất. Vui lòng thử lại.'))
     } finally {
       setIsLoggingOut(false)
     }
@@ -85,10 +85,10 @@ function ShopLayoutContent() {
     <div className="min-h-screen bg-[#FCF9F3] text-[#4A302B]">
       <header className="sticky top-0 z-40 border-b border-[#EAE3DA]/80 bg-[#FCF9F3]/95 backdrop-blur">
         <div className="mx-auto flex min-h-[76px] max-w-7xl items-center justify-between gap-4 px-4 sm:px-7 lg:px-10">
-          <Link to="/shop" className="group flex shrink-0 items-center gap-3" aria-label="WA Pâtisserie - Trang chủ">
+          <Link to="/shop" className="group flex shrink-0 items-center gap-3" aria-label="Daily Fresh - Trang chủ">
             <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[#D0A263]/60 bg-white font-display text-xl text-[#76534D] transition group-hover:bg-[#FAF0EE]">W</span>
             <span>
-              <span className="font-display block text-[15px] font-semibold tracking-wide text-[#4A302B] sm:text-base">WA Pâtisserie</span>
+              <span className="font-display block text-[15px] font-semibold tracking-wide text-[#4A302B] sm:text-base">Daily Fresh</span>
               <span className="mt-0.5 block text-[8px] font-semibold uppercase tracking-[0.22em] text-[#9A7972]">Bánh ngọt thủ công</span>
             </span>
           </Link>
@@ -179,7 +179,7 @@ function ShopLayoutContent() {
       <footer className="mt-16 border-t border-[#EAE3DA] bg-[#FAF0EE]/55">
         <div className="mx-auto flex max-w-7xl flex-col gap-7 px-4 py-10 sm:px-7 md:flex-row md:items-end md:justify-between lg:px-10">
           <div>
-            <p className="font-display text-xl font-semibold text-[#4A302B]">WA Pâtisserie</p>
+            <p className="font-display text-xl font-semibold text-[#4A302B]">Daily Fresh</p>
             <p className="mt-2 max-w-md text-xs leading-6 text-[#806B65]">Bánh ngọt được làm bằng sự chăm chút, dành cho những khoảnh khắc thật dịu dàng.</p>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-3 text-xs font-medium text-[#76534D]">
@@ -188,7 +188,7 @@ function ShopLayoutContent() {
             <Link className="transition hover:text-[#4A302B]" to="/shop/custom-cake">Đặt bánh theo yêu cầu</Link>
             <span className="text-[#9A7972]">Thông tin liên hệ sẽ được cập nhật</span>
           </div>
-          <p className="text-[10px] text-[#9A7972]">© {new Date().getFullYear()} WA Pâtisserie</p>
+          <p className="text-[10px] text-[#9A7972]">© {new Date().getFullYear()} Daily Fresh</p>
         </div>
       </footer>
     </div>

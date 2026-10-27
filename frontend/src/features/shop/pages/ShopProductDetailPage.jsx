@@ -4,6 +4,7 @@ import Icon from '../../../components/Icon.jsx'
 import { ProductArtwork } from '../../products/components/ProductArtwork.jsx'
 import { getProductById } from '../../products/services/productService.js'
 import { toProductViewModel } from '../../products/adapters/productAdapter.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const currency = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -28,7 +29,9 @@ export default function ShopProductDetailPage() {
     getProductById(productId, { signal: controller.signal })
       .then((result) => setProduct(toProductViewModel(result)))
       .catch((loadError) => {
-        if (loadError.name !== 'AbortError') setError(loadError.message)
+        if (loadError.name !== 'AbortError') {
+          setError(getUserFacingErrorMessage(loadError, 'Chưa thể tải thông tin sản phẩm. Vui lòng thử lại.'))
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setIsLoading(false)
@@ -64,7 +67,7 @@ export default function ShopProductDetailPage() {
             className="min-h-[300px] w-full rounded-2xl sm:min-h-[440px]"
           />
           <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">{product.category || 'WA Pâtisserie'}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">{product.category || 'Daily Fresh'}</p>
             <h1 className="font-display mt-3 text-3xl font-medium text-[#4A302B] sm:text-4xl">{product.name}</h1>
             <p className="mt-3 text-xs text-[#806B65]">Mã sản phẩm: {product.code || '—'}</p>
             <p className="mt-6 text-2xl font-bold text-[#76534D]">{currency.format(product.price)}</p>
@@ -99,7 +102,7 @@ export default function ShopProductDetailPage() {
               </button>
             </div>
             {feedback && <p role="status" className="mt-3 text-xs font-medium text-[#536B50]">{feedback}</p>}
-            <p className="mt-5 text-[11px] leading-5 text-[#9A7972]">Giá và tồn kho sẽ được máy chủ kiểm tra lại khi báo giá và tạo đơn.</p>
+            <p className="mt-5 text-[11px] leading-5 text-[#9A7972]">Giá và tồn kho sẽ được xác nhận lại khi báo giá và tạo đơn.</p>
           </div>
         </div>
       ) : null}

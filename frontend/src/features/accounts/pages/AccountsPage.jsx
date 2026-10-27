@@ -15,6 +15,7 @@ import {
   getRoles,
   updateAccount,
 } from '../services/accountService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const emptyForm = {
   username: '',
@@ -24,9 +25,20 @@ const emptyForm = {
 }
 
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 text-sm text-rosewood outline-none transition focus:border-caramel'
+const roleLabels = {
+  ADMIN: 'Quản trị viên',
+  MANAGER: 'Quản lý',
+  STAFF: 'Nhân viên',
+  CUSTOMER: 'Khách hàng',
+}
+const accountStatusLabels = {
+  ACTIVE: 'Đang hoạt động',
+  LOCKED: 'Đã khóa',
+  PENDING_VERIFICATION: 'Chờ xác minh email',
+}
 
 function errorMessage(error) {
-  return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
+  return getUserFacingErrorMessage(error)
 }
 
 export default function AccountsPage({ onToast }) {
@@ -52,7 +64,7 @@ export default function AccountsPage({ onToast }) {
         getRoles({ signal }),
       ])
       if (!Array.isArray(accountData) || !Array.isArray(roleData)) {
-        throw new Error('API không trả về danh sách tài khoản hoặc vai trò hợp lệ.')
+        throw new Error('Chưa thể tải danh sách tài khoản. Vui lòng thử lại.')
       }
       setAccounts(accountData)
       setRoles(roleData)
@@ -185,7 +197,7 @@ export default function AccountsPage({ onToast }) {
       key: 'roleName',
       label: 'Vai trò',
       render: (account) => (
-        <span>{account.roleName || account.roleCode || 'Chưa gán'}</span>
+        <span>{account.roleName || roleLabels[account.roleCode] || 'Chưa gán'}</span>
       ),
     },
     {
@@ -197,7 +209,7 @@ export default function AccountsPage({ onToast }) {
             ? 'bg-emerald-50 text-emerald-800'
             : 'bg-amber-50 text-amber-800'
         }`}>
-          {account.status || 'Không xác định'}
+          {accountStatusLabels[account.status] || 'Chưa xác định'}
         </span>
       ),
     },
@@ -303,7 +315,7 @@ export default function AccountsPage({ onToast }) {
                 <option value="">Chọn vai trò</option>
                 {availableRoles.map((role) => (
                   <option key={role.id} value={role.id}>
-                    {role.name} ({role.roleCode})
+                    {role.name || roleLabels[role.roleCode] || 'Vai trò khác'}
                   </option>
                 ))}
               </select>

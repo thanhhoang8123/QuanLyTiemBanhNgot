@@ -65,7 +65,7 @@ export function readCustomerOrderAttempt(storage, owner) {
 
 export function createCustomerOrderAttempt(owner, payload, key, paymentMethod = 'CASH') {
   if (!owner || !uuidPattern.test(key || '') || !isValidPayload(payload)) {
-    throw new Error('Không thể lưu yêu cầu đặt hàng hợp lệ.')
+    throw new Error('Thông tin đặt hàng chưa đầy đủ. Vui lòng kiểm tra lại.')
   }
   if (!CUSTOMER_ORDER_PAYMENT_METHODS.includes(paymentMethod)) {
     throw new Error('Phương thức thanh toán không hợp lệ.')
@@ -120,7 +120,7 @@ export function updateCustomerOrderAttempt(storage, attempt) {
 export function createCustomerOrderRequestKey(cryptoApi = globalThis.crypto) {
   if (cryptoApi?.randomUUID) return cryptoApi.randomUUID()
   if (!cryptoApi?.getRandomValues) {
-    throw new Error('Trình duyệt không hỗ trợ tạo khóa đặt hàng an toàn.')
+    throw new Error('Trình duyệt này chưa hỗ trợ đặt hàng an toàn. Vui lòng thử trình duyệt khác.')
   }
 
   const bytes = cryptoApi.getRandomValues(new Uint8Array(16))

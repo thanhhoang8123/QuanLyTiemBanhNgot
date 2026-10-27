@@ -3,14 +3,16 @@ import Button from '../../../components/Button.jsx'
 import DataTable from '../../../components/DataTable.jsx'
 import Icon from '../../../components/Icon.jsx'
 import Modal from '../../../components/Modal.jsx'
+import ConfirmDialog from '../../../components/ConfirmDialog.jsx'
 import StatusBadge from '../../../components/StatusBadge.jsx'
-import { createSupplier, getSuppliers, updateSupplier } from '../services/supplierService.js'
+import { createSupplier, deleteSupplier, getSuppliers, updateSupplier } from '../services/supplierService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const emptyForm = { supplierCode: '', name: '', phone: '', email: '', address: '', status: true }
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 text-xs text-rosewood outline-none focus:border-caramel-hover'
 
 function getErrorMessage(error) {
-  return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
+  return getUserFacingErrorMessage(error)
 }
 
 function supplierPayload(supplier) {
@@ -37,13 +39,14 @@ export default function SuppliersPage({ onToast }) {
   const [formError, setFormError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [pendingId, setPendingId] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
   const loadSuppliers = useCallback(async (signal) => {
     setIsLoading(true)
     setLoadError('')
     try {
       const result = await getSuppliers({ signal })
-      if (!Array.isArray(result)) throw new Error('API trả về danh sách nhà cung cấp không hợp lệ.')
+      if (!Array.isArray(result)) throw new Error('Chưa thể tải danh sách nhà cung cấp. Vui lòng thử lại.')
       setItems(result)
     } catch (error) {
       if (error.name !== 'AbortError') setLoadError(getErrorMessage(error))
@@ -110,7 +113,7 @@ export default function SuppliersPage({ onToast }) {
       else await createSupplier(payload)
       setFormOpen(false)
       setEditing(null)
-      onToast(editing ? 'Đã cập nhật nhà cung cấp trên máy chủ.' : 'Đã tạo nhà cung cấp trên máy chủ.')
+      onToast(editing ? 'Đã cập nhật nhà cung cấp.' : 'Đã thêm nhà cung cấp.')
       await loadSuppliers()
     } catch (error) {
       setFormError(getErrorMessage(error))
@@ -128,6 +131,24 @@ export default function SuppliersPage({ onToast }) {
       await loadSuppliers()
     } catch (error) {
       setLoadError(`Không thể cập nhật nhà cung cấp: ${getErrorMessage(error)}`)
+    } finally {
+      setPendingId(null)
+    }
+  }
+
+  const removeSupplier = async () => {
+    if (!deleteTarget || pendingId !== null) return
+
+    setPendingId(deleteTarget.id)
+    setLoadError('')
+    try {
+      await deleteSupplier(deleteTarget.id)
+      onToast(`Đã xóa nhà cung cấp "${deleteTarget.name}".`)
+      setDeleteTarget(null)
+      await loadSuppliers()
+    } catch (error) {
+      setLoadError(`Không thể xóa nhà cung cấp: ${getErrorMessage(error)}`)
+      setDeleteTarget(null)
     } finally {
       setPendingId(null)
     }
@@ -154,11 +175,12 @@ export default function SuppliersPage({ onToast }) {
       cellClassName: 'text-right',
       render: (item) => (
         <div className="inline-flex items-center gap-1">
-          <button type="button" onClick={() => setDetail(item)} aria-label={`Xem ${item.name}`} className="rounded-lg px-2 py-1.5 text-[10px] font-semibold text-rosewood transition hover:bg-petal">Chi tiết</button>
-          <button type="button" disabled={pendingId === item.id} onClick={() => openEdit(item)} aria-label={`Sửa ${item.name}`} className="flex h-8 w-8 items-center justify-center rounded-lg text-rosewood transition hover:bg-petal disabled:opacity-50"><Icon name="edit" size={14} /></button>
-          <button type="button" disabled={pendingId === item.id} onClick={() => toggleStatus(item)} className="rounded-lg px-2 py-1.5 text-[10px] font-semibold text-rosewood transition hover:bg-petal disabled:opacity-50">
+          <button type="button" disabled={pendingId !== null || isSaving} onClick={() => setDetail(item)} aria-label={`Xem ${item.name}`} className="rounded-lg px-2 py-1.5 text-[10px] font-semibold text-rosewood transition hover:bg-petal disabled:opacity-50">Chi tiết</button>
+          <button type="button" disabled={pendingId !== null || isSaving} onClick={() => openEdit(item)} aria-label={`Sửa ${item.name}`} className="flex h-8 w-8 items-center justify-center rounded-lg text-rosewood transition hover:bg-petal disabled:opacity-50"><Icon name="edit" size={14} /></button>
+          <button type="button" disabled={pendingId !== null || isSaving} onClick={() => toggleStatus(item)} className="rounded-lg px-2 py-1.5 text-[10px] font-semibold text-rosewood transition hover:bg-petal disabled:opacity-50">
             {item.status === false ? 'Kích hoạt' : 'Ngừng'}
           </button>
+          <button type="button" aria-label={`Xóa ${item.name}`} disabled={pendingId !== null || isSaving} onClick={() => setDeleteTarget(item)} className="flex h-8 w-8 items-center justify-center rounded-lg text-danger transition hover:bg-danger-soft disabled:opacity-50"><Icon name="trash" size={14} /></button>
         </div>
       ),
     },
@@ -172,9 +194,11 @@ export default function SuppliersPage({ onToast }) {
         <div>
           <p className="text-[11px] font-semibold tracking-wide text-muted">Đối tác cung ứng</p>
           <h2 className="font-display mt-1 text-[28px] text-rosewood sm:text-[32px]">Nhà cung cấp</h2>
-          <p className="mt-1 text-xs text-muted">Quản lý thông tin liên hệ và trạng thái nhà cung cấp.</p>
         </div>
-        <Button onClick={openCreate}><Icon name="plus" size={16} /> Thêm nhà cung cấp</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => void loadSuppliers()} disabled={isLoading || pendingId !== null}><Icon name="refresh" size={15} /> Làm mới</Button>
+          <Button onClick={openCreate}><Icon name="plus" size={16} /> Thêm nhà cung cấp</Button>
+        </div>
       </div>
 
       {loadError && <div role="alert" className="flex flex-col gap-3 rounded-xl border border-danger-line bg-danger-soft px-4 py-3 text-xs text-danger sm:flex-row sm:items-center sm:justify-between"><span>{loadError}</span><Button size="sm" variant="secondary" onClick={() => void loadSuppliers()}>Tải lại</Button></div>}
@@ -212,11 +236,11 @@ export default function SuppliersPage({ onToast }) {
       <Modal open={formOpen} title={editing ? 'Cập nhật nhà cung cấp' : 'Thêm nhà cung cấp'} onClose={() => { if (!isSaving) setFormOpen(false) }}>
         <form className="space-y-4" onSubmit={saveSupplier}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Mã nhà cung cấp</span><input required maxLength={30} value={form.supplierCode} onChange={(event) => setForm({ ...form, supplierCode: event.target.value })} className={inputClass} /></label>
-            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Tên nhà cung cấp</span><input required maxLength={150} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className={inputClass} /></label>
-            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Số điện thoại</span><input maxLength={15} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} className={inputClass} /></label>
-            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Email</span><input type="email" maxLength={100} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} className={inputClass} /></label>
-            <label className="block sm:col-span-2"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Địa chỉ</span><input maxLength={255} value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} className={inputClass} /></label>
+            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Mã nhà cung cấp</span><input required maxLength={30} value={form.supplierCode} onChange={(event) => setForm({ ...form, supplierCode: event.target.value })} className={inputClass} placeholder="Ví dụ: NCC-001" /></label>
+            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Tên nhà cung cấp</span><input required maxLength={150} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className={inputClass} placeholder="Ví dụ: Công ty Nguyên liệu ABC" /></label>
+            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Số điện thoại</span><input maxLength={15} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} className={inputClass} placeholder="Ví dụ: 0901234567" /></label>
+            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Email</span><input type="email" maxLength={100} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} className={inputClass} placeholder="Ví dụ: lienhe@example.com" /></label>
+            <label className="block sm:col-span-2"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Địa chỉ</span><input maxLength={255} value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} className={inputClass} placeholder="Ví dụ: Quận 1, TP. Hồ Chí Minh" /></label>
           </div>
           {formError && <p role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger">{formError}</p>}
           <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="secondary" disabled={isSaving} onClick={() => setFormOpen(false)}>Hủy</Button><Button type="submit" disabled={isSaving}>{isSaving ? 'Đang lưu...' : 'Lưu nhà cung cấp'}</Button></div>
@@ -226,6 +250,18 @@ export default function SuppliersPage({ onToast }) {
       <Modal open={Boolean(detail)} title="Thông tin nhà cung cấp" onClose={() => setDetail(null)} size="max-w-md">
         {detail && <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-3 text-xs"><dt className="text-muted">Mã</dt><dd className="font-semibold text-rosewood">{detail.supplierCode}</dd><dt className="text-muted">Tên</dt><dd className="font-semibold text-rosewood">{detail.name}</dd><dt className="text-muted">Điện thoại</dt><dd className="text-rosewood">{detail.phone || '—'}</dd><dt className="text-muted">Email</dt><dd className="break-all text-rosewood">{detail.email || '—'}</dd><dt className="text-muted">Địa chỉ</dt><dd className="text-rosewood">{detail.address || '—'}</dd><dt className="text-muted">Trạng thái</dt><dd><StatusBadge status={detail.status === false ? 'Ngừng hoạt động' : 'Đang hoạt động'} /></dd></dl>}
       </Modal>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Xóa nhà cung cấp?"
+        description={deleteTarget
+          ? `Xóa "${deleteTarget.name}". Nhà cung cấp đã có phiếu nhập không thể xóa; hãy ngừng hoạt động để giữ nguyên lịch sử.`
+          : ''}
+        confirmLabel="Xóa nhà cung cấp"
+        onConfirm={() => void removeSupplier()}
+        onClose={() => { if (pendingId === null) setDeleteTarget(null) }}
+        busy={deleteTarget !== null && pendingId === deleteTarget.id}
+      />
     </div>
   )
 }

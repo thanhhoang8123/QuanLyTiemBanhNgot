@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import Pagination, { usePagination } from '../../../components/Pagination.jsx'
 import { getCustomerOrderById } from '../services/customerOrderService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const moneyFormat = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
   currency: 'VND',
   maximumFractionDigits: 0,
 })
+const emptyItems = []
+const orderStatusLabels = {
+  PENDING: 'Chờ xác nhận',
+  CONFIRMED: 'Đã xác nhận',
+  COMPLETED: 'Hoàn tất',
+  CANCELLED: 'Đã hủy',
+}
 
 export default function ShopOrderDetailPage() {
   const { orderId } = useParams()
@@ -14,6 +23,7 @@ export default function ShopOrderDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [reloadVersion, setReloadVersion] = useState(0)
+  const itemPagination = usePagination(order?.items ?? emptyItems)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -22,7 +32,9 @@ export default function ShopOrderDetailPage() {
     getCustomerOrderById(orderId, { signal: controller.signal })
       .then((result) => setOrder(result))
       .catch((loadError) => {
-        if (loadError.name !== 'AbortError') setError(loadError.message)
+        if (loadError.name !== 'AbortError') {
+          setError(getUserFacingErrorMessage(loadError, 'Chưa thể tải chi tiết đơn hàng. Vui lòng thử lại.'))
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setIsLoading(false)
@@ -52,20 +64,29 @@ export default function ShopOrderDetailPage() {
             </div>
             <div className="sm:text-right">
               <p className="text-xs text-[#806B65]">Trạng thái đơn</p>
-              <p className="mt-1 font-semibold text-[#76534D]">{order.status || '—'}</p>
+              <p className="mt-1 font-semibold text-[#76534D]">{orderStatusLabels[order.status] ?? 'Đang cập nhật'}</p>
             </div>
           </div>
           <div className="mt-5">
             <h3 className="font-display text-lg text-[#4A302B]">Sản phẩm</h3>
             {Array.isArray(order.items) && order.items.length > 0 ? (
-              <ul className="mt-3 divide-y divide-[#EAE3DA]">
-                {order.items.map((item) => (
-                  <li key={item.id ?? `${item.productId}-${item.productName}`} className="flex flex-col justify-between gap-1 py-3 text-sm sm:flex-row sm:items-center">
-                    <span className="text-[#675650]">{item.productName} <span className="text-xs text-[#806B65]">× {item.quantity}</span></span>
-                    <span className="text-xs font-semibold text-[#76534D]">{moneyFormat.format(Number(item.lineTotal ?? 0))}</span>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="mt-3 divide-y divide-[#EAE3DA]">
+                  {itemPagination.pageItems.map((item) => (
+                    <li key={item.id ?? `${item.productId}-${item.productName}`} className="flex flex-col justify-between gap-1 py-3 text-sm sm:flex-row sm:items-center">
+                      <span className="text-[#675650]">{item.productName} <span className="text-xs text-[#806B65]">× {item.quantity}</span></span>
+                      <span className="text-xs font-semibold text-[#76534D]">{moneyFormat.format(Number(item.lineTotal ?? 0))}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Pagination
+                  currentPage={itemPagination.currentPage}
+                  pageSize={itemPagination.pageSize}
+                  totalItems={itemPagination.totalItems}
+                  onPageChange={itemPagination.setCurrentPage}
+                  onPageSizeChange={itemPagination.setPageSize}
+                />
+              </>
             ) : <p className="mt-3 text-sm text-[#806B65]">Đơn hàng không có thông tin dòng sản phẩm.</p>}
           </div>
           <dl className="mt-4 space-y-2 border-t border-[#EAE3DA] pt-4 text-sm">

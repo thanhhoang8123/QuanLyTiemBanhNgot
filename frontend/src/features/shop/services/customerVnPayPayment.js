@@ -19,14 +19,14 @@ export function getVnPayReturnTransactionReference(search) {
 
 export function getVnPayInitiationErrorMessage(error) {
   if (error?.status === 409) {
-    return 'Đơn hàng đang có giao dịch cần kiểm tra. Vui lòng xem trạng thái đơn trước khi thanh toán lại.'
+    return 'Đơn hàng đã có giao dịch đang chờ xác minh. Vui lòng kiểm tra trạng thái; không thử tạo giao dịch mới trước khi có kết quả.'
   }
   if (error?.status === 401 || error?.status === 403) {
     return error.status === 401
       ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại rồi kiểm tra đơn hàng.'
-      : 'Tài khoản chưa thể tiếp tục thanh toán. Vui lòng liên hệ cửa hàng.'
+      : 'Bạn không có quyền truy cập chức năng thanh toán này.'
   }
-  return 'Chưa thể mở trang thanh toán. Đơn hàng vẫn được lưu; vui lòng kiểm tra trạng thái trước khi thử lại.'
+  return 'Chưa xác định được trạng thái thanh toán. Đơn hàng vẫn được giữ; vui lòng kiểm tra trạng thái trước, không tự gửi lại yêu cầu.'
 }
 
 export function requireVnPayPaymentUrl(response) {
@@ -38,14 +38,14 @@ export function requireVnPayPaymentUrl(response) {
     || !response.transactionReference.trim()
     || typeof response.paymentUrl !== 'string'
   ) {
-    throw new Error('Backend không trả về thông tin khởi tạo thanh toán hợp lệ.')
+    throw new Error('Chưa thể bắt đầu thanh toán. Vui lòng kiểm tra đơn hàng và thử lại.')
   }
 
   let paymentUrl
   try {
     paymentUrl = new URL(response.paymentUrl)
   } catch {
-    throw new Error('Backend trả về URL thanh toán không hợp lệ.')
+    throw new Error('Chưa thể mở trang thanh toán. Vui lòng thử lại sau.')
   }
   if (
     paymentUrl.protocol !== 'https:'
@@ -54,7 +54,7 @@ export function requireVnPayPaymentUrl(response) {
     || paymentUrl.password
     || paymentUrl.port
   ) {
-    throw new Error('URL thanh toán không thuộc VNPay Sandbox an toàn.')
+    throw new Error('Không thể mở trang thanh toán an toàn. Vui lòng liên hệ cửa hàng.')
   }
   return paymentUrl.href
 }

@@ -18,6 +18,7 @@ const paths = {
   chevronDown: <path d="m7 10 5 5 5-5" />,
   chevronRight: <path d="m9 18 6-6-6-6" />,
   check: <path d="m5 12 4 4L19 6" />,
+  refresh: <><path d="M20 7v5h-5M4 17v-5h5" /><path d="M5.6 9a7 7 0 0 1 11.6-2L20 12M4 12l2.8 5a7 7 0 0 0 11.6-2" /></>,
   trash: <><path d="M4 7h16M10 11v6M14 11v6M5 7l1 14h12l1-14M9 7V4h6v3" /></>,
   edit: <><path d="m15 5 4 4M4 20l4-.8L19 8a2.8 2.8 0 0 0-4-4L4 15l0 5Z" /><path d="M13.5 5.5 18.5 10.5" /></>,
   tag: <><path d="M20 13 13 20 4 11V4h7l9 9Z" /><circle cx="8" cy="8" r="1" /></>,

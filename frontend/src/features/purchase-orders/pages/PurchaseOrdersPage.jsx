@@ -3,6 +3,7 @@ import Button from '../../../components/Button.jsx'
 import DataTable from '../../../components/DataTable.jsx'
 import Icon from '../../../components/Icon.jsx'
 import Modal from '../../../components/Modal.jsx'
+import Pagination, { usePagination } from '../../../components/Pagination.jsx'
 import StatusBadge from '../../../components/StatusBadge.jsx'
 import { getIngredients } from '../../inventory/services/ingredientService.js'
 import {
@@ -13,15 +14,21 @@ import {
 } from '../services/purchaseOrderService.js'
 import { getSuppliers } from '../../suppliers/services/supplierService.js'
 import { getEmployees } from '../../orders/services/orderService.js'
+import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const currency = new Intl.NumberFormat('vi-VN')
 const quantityFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 })
 const emptyForm = { supplierId: '', employeeId: '', items: [] }
+const emptyItems = []
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 text-xs text-rosewood outline-none focus:border-caramel-hover'
 const statusLabels = { PENDING: 'Chờ xử lý', RECEIVED: 'Đã nhận', CANCELLED: 'Đã hủy' }
 
 function getErrorMessage(error) {
-  return error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định.'
+  return getUserFacingErrorMessage(error)
+}
+
+function getStatusLabel(status) {
+  return statusLabels[status] ?? 'Đang cập nhật'
 }
 
 function formatDateTime(value) {
@@ -38,7 +45,7 @@ async function loadPurchaseData(signal) {
     getEmployees({ signal }),
   ])
   if (![orders, suppliers, ingredients, employees].every(Array.isArray)) {
-    throw new Error('Một API không trả về danh sách dữ liệu hợp lệ.')
+    throw new Error('Chưa thể tải dữ liệu phiếu nhập. Vui lòng thử lại.')
   }
   return { orders, suppliers, ingredients, employees }
 }
@@ -59,6 +66,7 @@ export default function PurchaseOrdersPage({ onToast }) {
   const [isWorkflowSaving, setIsWorkflowSaving] = useState(false)
   const [pendingAction, setPendingAction] = useState(null)
   const [detail, setDetail] = useState(null)
+  const detailPagination = usePagination(detail?.items ?? emptyItems)
 
   const loadData = useCallback(async (signal) => {
     setIsLoading(true)
@@ -92,7 +100,7 @@ export default function PurchaseOrdersPage({ onToast }) {
     const matchesQuery = `${order.purchaseCode ?? ''} ${order.supplierName ?? ''} ${order.employeeId ?? ''}`
       .toLocaleLowerCase('vi')
       .includes(query.trim().toLocaleLowerCase('vi'))
-    const status = statusLabels[order.status] ?? order.status
+    const status = getStatusLabel(order.status)
     return matchesQuery && (statusFilter === 'Tất cả trạng thái' || status === statusFilter)
   }), [orders, query, statusFilter])
 
@@ -171,7 +179,7 @@ export default function PurchaseOrdersPage({ onToast }) {
       })
       setFormOpen(false)
       setForm({ ...emptyForm })
-      onToast('Đã tạo phiếu nhập trên máy chủ.')
+      onToast('Đã tạo phiếu nhập hàng.')
       await loadData()
     } catch (error) {
       setFormError(getErrorMessage(error))
@@ -187,7 +195,7 @@ export default function PurchaseOrdersPage({ onToast }) {
     try {
       if (action === 'receive') await receivePurchaseOrder(order.id)
       else await cancelPurchaseOrder(order.id)
-      onToast(action === 'receive' ? 'Đã nhận phiếu; tồn kho được backend cập nhật.' : 'Đã hủy phiếu nhập.')
+      onToast(action === 'receive' ? 'Đã nhận phiếu; tồn kho đã được cập nhật.' : 'Đã hủy phiếu nhập.')
       setPendingAction(null)
       await loadData()
       if (detail?.id === order.id) {
@@ -211,7 +219,7 @@ export default function PurchaseOrdersPage({ onToast }) {
     { key: 'orderDate', label: 'Ngày lập', render: (order) => <span className="whitespace-nowrap">{formatDateTime(order.orderDate)}</span> },
     { key: 'items', label: 'Mặt hàng', render: (order) => `${order.items?.length ?? 0} nguyên liệu` },
     { key: 'totalAmount', label: 'Tổng tiền', render: (order) => <span className="whitespace-nowrap font-bold text-rosewood">{currency.format(Number(order.totalAmount ?? 0))}đ</span> },
-    { key: 'status', label: 'Trạng thái', render: (order) => <StatusBadge status={statusLabels[order.status] ?? order.status} /> },
+    { key: 'status', label: 'Trạng thái', render: (order) => <StatusBadge status={getStatusLabel(order.status)} /> },
     {
       key: 'actions',
       label: 'Thao tác',
@@ -241,7 +249,6 @@ export default function PurchaseOrdersPage({ onToast }) {
         <div>
           <p className="text-[11px] font-semibold tracking-wide text-muted">Nhập hàng & cập nhật kho</p>
           <h2 className="font-display mt-1 text-[28px] text-rosewood sm:text-[32px]">Phiếu nhập hàng</h2>
-          <p className="mt-1 text-xs text-muted">Tồn kho chỉ thay đổi khi phiếu được nhận thành công ở backend.</p>
         </div>
         <Button onClick={openCreate} disabled={!activeSuppliers.length || !activeIngredients.length}>
           <Icon name="plus" size={16} /> Tạo phiếu nhập
@@ -288,7 +295,7 @@ export default function PurchaseOrdersPage({ onToast }) {
       <Modal open={formOpen} title="Tạo phiếu nhập hàng" onClose={() => { if (!isSaving) setFormOpen(false) }} size="max-w-3xl">
         <form className="space-y-5" onSubmit={savePurchaseOrder}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Nhà cung cấp</span><select required value={form.supplierId} onChange={(event) => setForm({ ...form, supplierId: event.target.value })} className={inputClass}><option value="">Chọn nhà cung cấp</option>{activeSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.supplierCode} · {supplier.name}</option>)}</select></label>
+            <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Nhà cung cấp</span><select required value={form.supplierId} onChange={(event) => setForm({ ...form, supplierId: event.target.value })} className={inputClass}><option value="">Chọn nhà cung cấp có sẵn</option>{activeSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.supplierCode} · {supplier.name}</option>)}</select></label>
             <label className="block"><span className="mb-1.5 block text-[11px] font-semibold text-rosewood">Người lập phiếu (tài khoản đang đăng nhập)</span><input type="text" readOnly disabled={!currentEmployee} value={currentEmployee?.fullName ?? ''} className={inputClass} placeholder="Tài khoản chưa có hồ sơ nhân viên" /></label>
           </div>
           {!currentEmployee && <p role="alert" className="text-xs text-danger">Tài khoản chưa được liên kết với hồ sơ nhân viên đang hoạt động. Vui lòng nhờ quản trị viên liên kết trước khi tạo phiếu.</p>}
@@ -302,17 +309,16 @@ export default function PurchaseOrdersPage({ onToast }) {
                   <label className="block"><span className="mb-1 block text-[10px] font-semibold text-muted">Nguyên liệu</span><select required value={item.ingredientId} onChange={(event) => {
                     const selectedIngredient = activeIngredients.find((entry) => String(entry.id) === event.target.value)
                     setForm((current) => ({ ...current, items: current.items.map((line, lineIndex) => lineIndex === index ? { ...line, ingredientId: event.target.value, unitCost: line.unitCost || String(selectedIngredient?.unitPrice ?? '') } : line) }))
-                  }} className={inputClass}><option value="">Chọn nguyên liệu</option>{activeIngredients.filter((entry) => !selectedIds.includes(String(entry.id))).map((entry) => <option key={entry.id} value={entry.id}>{entry.ingredientCode} · {entry.name}</option>)}</select></label>
-                  <label className="block"><span className="mb-1 block text-[10px] font-semibold text-muted">Số lượng{ingredient ? ` (${ingredient.unit})` : ''}</span><input required type="number" min="0.001" step="0.001" value={item.quantity} onChange={(event) => updateLine(index, 'quantity', event.target.value)} className={inputClass} /></label>
-                  <label className="block"><span className="mb-1 block text-[10px] font-semibold text-muted">Đơn giá nhập</span><input required type="number" min="0" step="0.01" value={item.unitCost} onChange={(event) => updateLine(index, 'unitCost', event.target.value)} className={inputClass} /></label>
+                  }} className={inputClass}><option value="">Chọn nguyên liệu có sẵn</option>{activeIngredients.filter((entry) => !selectedIds.includes(String(entry.id))).map((entry) => <option key={entry.id} value={entry.id}>{entry.ingredientCode} · {entry.name}</option>)}</select></label>
+                  <label className="block"><span className="mb-1 block text-[10px] font-semibold text-muted">Số lượng{ingredient ? ` (${ingredient.unit})` : ''}</span><input required type="number" min="0.001" step="0.001" value={item.quantity} onChange={(event) => updateLine(index, 'quantity', event.target.value)} className={inputClass} placeholder="Ví dụ: 10" /></label>
+                  <label className="block"><span className="mb-1 block text-[10px] font-semibold text-muted">Đơn giá nhập</span><input required type="number" min="0" step="0.01" value={item.unitCost} onChange={(event) => updateLine(index, 'unitCost', event.target.value)} className={inputClass} placeholder="Ví dụ: 25000" /></label>
                   <Button aria-label="Xóa dòng nguyên liệu" variant="subtle" className="h-10 px-3 text-danger" disabled={form.items.length <= 1} onClick={() => removeLine(index)}><Icon name="trash" size={15} /></Button>
                 </div>
               )
             })}
           </div>
-          <div className="flex items-center justify-between rounded-xl border border-border bg-petal px-4 py-3"><span className="text-xs font-semibold text-rosewood">Tạm tính (tham khảo)</span><strong className="text-sm text-rosewood">{currency.format(estimatedTotal)}đ</strong></div>
+          <div className="flex items-center justify-between rounded-xl border border-border bg-petal px-4 py-3"><span className="text-xs font-semibold text-rosewood">Tạm tính</span><strong className="text-sm text-rosewood">{currency.format(estimatedTotal)}đ</strong></div>
           {formError && <p role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger">{formError}</p>}
-          <p className="text-[10px] leading-5 text-muted">Backend sẽ tính tổng tiền và lưu phiếu ở trạng thái chờ xử lý; tồn kho chỉ tăng sau khi xác nhận nhận hàng.</p>
           <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="secondary" disabled={isSaving} onClick={() => setFormOpen(false)}>Hủy</Button><Button type="submit" disabled={isSaving || !currentEmployee}>{isSaving ? 'Đang tạo...' : 'Tạo phiếu nhập'}</Button></div>
         </form>
       </Modal>
@@ -324,16 +330,17 @@ export default function PurchaseOrdersPage({ onToast }) {
               <div><dt className="text-muted">Nhà cung cấp</dt><dd className="mt-1 font-semibold text-rosewood">{detail.supplierName || '—'}</dd></div>
               <div><dt className="text-muted">Nhân viên</dt><dd className="mt-1 font-semibold text-rosewood">{employeeName(detail.employeeId)}</dd></div>
               <div><dt className="text-muted">Ngày lập</dt><dd className="mt-1 font-semibold text-rosewood">{formatDateTime(detail.orderDate)}</dd></div>
-              <div><dt className="text-muted">Trạng thái</dt><dd className="mt-1"><StatusBadge status={statusLabels[detail.status] ?? detail.status} /></dd></div>
+              <div><dt className="text-muted">Trạng thái</dt><dd className="mt-1"><StatusBadge status={getStatusLabel(detail.status)} /></dd></div>
             </dl>
-            <div className="overflow-x-auto rounded-xl border border-border"><table className="w-full min-w-[520px] text-left text-xs"><thead className="bg-petal text-rosewood"><tr><th className="px-3 py-2.5">Nguyên liệu</th><th className="px-3 py-2.5 text-right">Số lượng</th><th className="px-3 py-2.5 text-right">Đơn giá</th><th className="px-3 py-2.5 text-right">Thành tiền</th></tr></thead><tbody>{(detail.items ?? []).map((item, index) => <tr key={`${item.ingredientId}-${index}`} className="border-t border-border"><td className="px-3 py-2.5 font-semibold text-rosewood">{item.ingredientName}</td><td className="px-3 py-2.5 text-right">{quantityFormat.format(Number(item.quantity))}</td><td className="px-3 py-2.5 text-right">{currency.format(Number(item.unitCost))}đ</td><td className="px-3 py-2.5 text-right font-semibold">{currency.format(Number(item.lineTotal))}đ</td></tr>)}</tbody></table></div>
+            <div className="overflow-x-auto rounded-xl border border-border"><table className="w-full min-w-[520px] text-left text-xs"><thead className="bg-petal text-rosewood"><tr><th className="px-3 py-2.5">Nguyên liệu</th><th className="px-3 py-2.5 text-right">Số lượng</th><th className="px-3 py-2.5 text-right">Đơn giá</th><th className="px-3 py-2.5 text-right">Thành tiền</th></tr></thead><tbody>{detailPagination.pageItems.map((item, index) => <tr key={`${item.ingredientId}-${index}`} className="border-t border-border"><td className="px-3 py-2.5 font-semibold text-rosewood">{item.ingredientName}</td><td className="px-3 py-2.5 text-right">{quantityFormat.format(Number(item.quantity))}</td><td className="px-3 py-2.5 text-right">{currency.format(Number(item.unitCost))}đ</td><td className="px-3 py-2.5 text-right font-semibold">{currency.format(Number(item.lineTotal))}đ</td></tr>)}</tbody></table></div>
+            <Pagination currentPage={detailPagination.currentPage} pageSize={detailPagination.pageSize} totalItems={detailPagination.totalItems} onPageChange={detailPagination.setCurrentPage} onPageSizeChange={detailPagination.setPageSize} />
             <div className="flex justify-end border-t border-border pt-3 text-sm"><span className="mr-4 text-muted">Tổng tiền</span><strong className="text-rosewood">{currency.format(Number(detail.totalAmount ?? 0))}đ</strong></div>
           </div>
         )}
       </Modal>
 
       <Modal open={Boolean(pendingAction)} title={pendingAction?.action === 'receive' ? 'Xác nhận nhận hàng?' : 'Xác nhận hủy phiếu?'} onClose={() => { if (!isWorkflowSaving) setPendingAction(null) }} size="max-w-md">
-        {pendingAction && <><p className="text-sm leading-6 text-rosewood">{pendingAction.action === 'receive' ? <>Nhận phiếu <strong>{pendingAction.order.purchaseCode}</strong>. Backend sẽ cập nhật tồn kho cho các nguyên liệu trong phiếu.</> : <>Hủy phiếu <strong>{pendingAction.order.purchaseCode}</strong>. Phiếu phải đang chờ xử lý; tồn kho sẽ không thay đổi.</>}</p><div className="mt-5 flex justify-end gap-2"><Button variant="secondary" disabled={isWorkflowSaving} onClick={() => setPendingAction(null)}>Quay lại</Button><Button variant={pendingAction.action === 'receive' ? 'primary' : 'danger'} disabled={isWorkflowSaving} onClick={() => void runWorkflow()}>{isWorkflowSaving ? 'Đang xử lý...' : pendingAction.action === 'receive' ? 'Xác nhận nhận hàng' : 'Xác nhận hủy'}</Button></div></>}
+        {pendingAction && <><p className="text-sm leading-6 text-rosewood">{pendingAction.action === 'receive' ? <>Nhận phiếu <strong>{pendingAction.order.purchaseCode}</strong>. Tồn kho sẽ được cập nhật theo các nguyên liệu trong phiếu.</> : <>Hủy phiếu <strong>{pendingAction.order.purchaseCode}</strong>. Phiếu phải đang chờ xử lý; tồn kho sẽ không thay đổi.</>}</p><div className="mt-5 flex justify-end gap-2"><Button variant="secondary" disabled={isWorkflowSaving} onClick={() => setPendingAction(null)}>Quay lại</Button><Button variant={pendingAction.action === 'receive' ? 'primary' : 'danger'} disabled={isWorkflowSaving} onClick={() => void runWorkflow()}>{isWorkflowSaving ? 'Đang xử lý...' : pendingAction.action === 'receive' ? 'Xác nhận nhận hàng' : 'Xác nhận hủy'}</Button></div></>}
       </Modal>
     </div>
   )
