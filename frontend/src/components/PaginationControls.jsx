@@ -1,6 +1,6 @@
 export default function PaginationControls({
   page = 0,
-  size = 20,
+  size = 5,
   totalElements = 0,
   totalPages = 0,
   onPageChange,
@@ -28,7 +28,7 @@ export default function PaginationControls({
               onChange={(event) => onSizeChange(Number(event.target.value))}
               className="h-8 rounded-lg border border-border bg-white px-2 text-xs text-rosewood"
             >
-              {[10, 20, 50, 100].map((option) => (
+              {[5, 10, 20, 50, 100].map((option) => (
                 <option key={option} value={option}>{option}/trang</option>
               ))}
             </select>

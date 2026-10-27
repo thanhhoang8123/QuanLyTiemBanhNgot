@@ -28,6 +28,7 @@ const ShopCheckoutPage = lazy(() => import('./features/shop/pages/ShopCheckoutPa
 const ShopOrderResultPage = lazy(() => import('./features/shop/pages/ShopOrderResultPage.jsx'))
 const ShopOrdersPage = lazy(() => import('./features/shop/pages/ShopOrdersPage.jsx'))
 const ShopOrderDetailPage = lazy(() => import('./features/shop/pages/ShopOrderDetailPage.jsx'))
+
 const RegisterPage = lazy(() => import('./features/auth/pages/RegisterPage.jsx'))
 const VerifyEmailPage = lazy(() => import('./features/auth/pages/VerifyEmailPage.jsx'))
 const LoginPage = lazy(() => import('./features/auth/pages/LoginPage.jsx'))
@@ -121,6 +122,7 @@ export default function App() {
           <Route path="products" element={<ShopProductsPage />} />
           <Route path="products/:productId" element={<ShopProductDetailPage />} />
           <Route path="cart" element={<ShopCartPage />} />
+          
           <Route path="checkout" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopCheckoutPage /></RequireAuth>} />
           <Route path="order-result" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopOrderResultPage /></RequireAuth>} />
           <Route path="orders" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopOrdersPage /></RequireAuth>} />

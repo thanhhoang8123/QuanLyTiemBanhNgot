@@ -7,9 +7,15 @@ const currency = new Intl.NumberFormat('vi-VN', {
   maximumFractionDigits: 0,
 })
 
-export default function ShopProductCard({ product, onAddToCart }) {
+export default function ShopProductCard({ product, onAddToCart, promotion = null }) {
   const isInStock = product.stock > 0
   const canBuy = isInStock && product.status === 'Đang bán'
+  const originalPrice = Number(product.price) || 0
+  const discountPercent = Math.min(100, Math.max(0, Number(promotion?.discountPercent) || 0))
+  const hasPromotion = Boolean(promotion) && discountPercent > 0
+  const discountedPrice = hasPromotion
+    ? Math.round(originalPrice * (1 - discountPercent / 100))
+    : originalPrice
 
   return (
     <article className="group overflow-hidden rounded-2xl border border-[#EAE3DA] bg-white transition duration-300 hover:-translate-y-1 hover:border-[#D0A263]/60 hover:shadow-[0_18px_40px_rgba(91,61,53,0.10)]">
@@ -25,6 +31,11 @@ export default function ShopProductCard({ product, onAddToCart }) {
           <span className={`absolute left-5 top-5 rounded-full px-3 py-1 text-[10px] font-semibold ${canBuy ? 'bg-white/95 text-[#536B50]' : 'bg-[#F3EFEB] text-[#675650]'}`}>
             {canBuy ? 'Đang bán' : product.status !== 'Đang bán' ? 'Ngừng bán' : 'Tạm hết hàng'}
           </span>
+          {hasPromotion && (
+            <span className="absolute bottom-4 left-4 rounded-full bg-[#B94F35] px-3 py-1.5 text-[10px] font-bold text-white shadow-sm">
+              -{discountPercent}%{promotion.promotionCode ? ` · ${promotion.promotionCode}` : ''}
+            </span>
+          )}
         </div>
         <div className="px-4 pt-1 sm:px-5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9A7972]">
@@ -34,9 +45,13 @@ export default function ShopProductCard({ product, onAddToCart }) {
             {product.name}
           </h3>
           <div className="mt-3 flex items-center justify-between gap-3">
-            <p className="text-sm font-bold text-[#76534D]">{currency.format(product.price)}</p>
+            <div className="flex min-w-0 flex-col">
+              {hasPromotion && <span className="text-xs text-[#9A7972] line-through">{currency.format(originalPrice)}</span>}
+              <p className={`text-sm font-bold ${hasPromotion ? 'text-[#B94F35]' : 'text-[#76534D]'}`}>{currency.format(discountedPrice)}</p>
+            </div>
             <span className="text-[10px] font-medium text-[#806B65]">{product.code}</span>
           </div>
+          {hasPromotion && <p className="mt-1 text-[10px] font-medium text-[#A45B46]">Tiết kiệm {currency.format(originalPrice - discountedPrice)}</p>}
         </div>
       </Link>
       <div className="flex items-center justify-between gap-2 px-4 pb-4 pt-3 sm:px-5 sm:pb-5">

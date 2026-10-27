@@ -27,6 +27,7 @@ import {
   getCustomerVnPayPaymentStatusByOrderId,
   quoteCustomerOrder,
 } from '../services/customerOrderService.js'
+import { normalizeVietnamesePhone } from '../services/vietnamesePhone.js'
 
 const moneyFormat = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -60,6 +61,7 @@ export default function ShopCheckoutPage() {
   const [deliveryAddress, setDeliveryAddress] = useState(
     () => pendingAttempt?.payload.deliveryAddress || '',
   )
+  const [phone, setPhone] = useState(() => pendingAttempt?.payload.phone || '')
   const [paymentMethod, setPaymentMethod] = useState(
     () => pendingAttempt?.paymentMethod || 'CASH',
   )
@@ -122,10 +124,11 @@ export default function ShopCheckoutPage() {
     : promotionCode
   const payload = useMemo(() => pendingAttempt?.payload || ({
     items,
+    phone: normalizeVietnamesePhone(phone),
     deliveryAddress: deliveryAddress.trim() || null,
     promotionCode: promotionCode.trim() || null,
     note: note.trim() || null,
-  }), [deliveryAddress, items, note, pendingAttempt, promotionCode])
+  }), [deliveryAddress, items, note, pendingAttempt, phone, promotionCode])
 
   useEffect(() => {
     if (pendingAttempt || catalogLoading || catalogError || invalidCart || items.length === 0) {
@@ -170,6 +173,10 @@ export default function ShopCheckoutPage() {
     if (submitLock.current || isSubmitting) return
     if (!owner) {
       setSubmitError('Không thể xác nhận tài khoản khách hàng hiện tại. Hãy đăng nhập lại.')
+      return
+    }
+    if (!pendingAttempt && !normalizeVietnamesePhone(phone)) {
+      setSubmitError('Vui lòng nhập số di động Việt Nam hợp lệ (10 số, đầu số 03, 05, 07, 08 hoặc 09).')
       return
     }
     if (!pendingAttempt) {
@@ -497,10 +504,25 @@ export default function ShopCheckoutPage() {
           <div className="space-y-5 rounded-2xl border border-[#EAE3DA] bg-white p-5 sm:p-7">
             <div>
               <h2 className="font-display text-xl text-[#4A302B]">Thông tin nhận hàng</h2>
-              <p className="mt-1 text-xs leading-5 text-[#806B65]">Để trống địa chỉ nếu bạn nhận tại cửa hàng.</p>
+              <p className="mt-1 text-xs leading-5 text-[#806B65]">Áp dụng cho khu vực Việt Nam. Để trống địa chỉ nếu bạn nhận tại cửa hàng.</p>
             </div>
             <label className="grid gap-1.5 text-xs font-semibold text-[#675650]">
-              Địa chỉ giao hàng (không bắt buộc)
+              Số điện thoại người nhận *
+              <input
+                type="tel"
+                required
+                maxLength={20}
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                autoComplete="tel"
+                inputMode="tel"
+                className="h-11 rounded-xl border border-[#EAE3DA] px-3 text-sm font-normal outline-none focus:border-[#D0A263]"
+                placeholder="09xx xxx xxx hoặc +84 9xx xxx xxx"
+              />
+              <span className="font-normal text-[#806B65]">Nhập số di động Việt Nam gồm 10 số; có thể dùng đầu số +84.</span>
+            </label>
+            <label className="grid gap-1.5 text-xs font-semibold text-[#675650]">
+              Địa chỉ giao hàng tại Việt Nam (không bắt buộc)
               <input
                 maxLength={255}
                 value={deliveryAddress}

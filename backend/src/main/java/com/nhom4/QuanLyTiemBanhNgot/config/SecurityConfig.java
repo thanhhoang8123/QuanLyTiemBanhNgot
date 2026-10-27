@@ -87,7 +87,15 @@ public class SecurityConfig {
                     "/api/auth/verify-email",
                     "/api/auth/resend-verification"
                 ).permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**").permitAll()
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/api/products/**",
+                    "/api/categories/**",
+                    "/api/promotions",
+                    "/api/promotions/**",
+                    "/api/promotion-products",
+                    "/api/promotion-products/**"
+                ).permitAll()
                 .requestMatchers(
                     HttpMethod.GET,
                     "/api/payments/vnpay/ipn",

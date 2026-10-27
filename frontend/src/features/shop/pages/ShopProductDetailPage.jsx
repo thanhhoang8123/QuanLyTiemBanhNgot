@@ -3,6 +3,8 @@ import { Link, useOutletContext, useParams } from 'react-router-dom'
 import Icon from '../../../components/Icon.jsx'
 import { ProductArtwork } from '../../products/components/ProductArtwork.jsx'
 import { getProductById } from '../../products/services/productService.js'
+import { getPromotions } from '../../promotions/services/promotionService.js'
+import { getPromotionProducts } from '../../promotion-products/services/promotionProductService.js'
 import { toProductViewModel } from '../../products/adapters/productAdapter.js'
 import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
@@ -20,14 +22,37 @@ export default function ShopProductDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
+  const [activePromotion, setActivePromotion] = useState(null)
   const [reloadVersion, setReloadVersion] = useState(0)
 
   useEffect(() => {
     const controller = new AbortController()
     setIsLoading(true)
     setError('')
-    getProductById(productId, { signal: controller.signal })
-      .then((result) => setProduct(toProductViewModel(result)))
+    Promise.allSettled([
+      getProductById(productId, { signal: controller.signal }),
+      getPromotions({ signal: controller.signal }),
+      getPromotionProducts({ signal: controller.signal }),
+    ])
+      .then(([productResult, promotionsResult, linksResult]) => {
+        if (productResult.status === 'rejected') throw productResult.reason
+        const viewModel = toProductViewModel(productResult.value)
+        setProduct(viewModel)
+        const promotions = promotionsResult.status === 'fulfilled' ? promotionsResult.value : []
+        const promotionLinks = linksResult.status === 'fulfilled' ? linksResult.value : []
+        const today = new Date().toISOString().slice(0, 10)
+        const linkedPromotionIds = new Set((Array.isArray(promotionLinks) ? promotionLinks : [])
+          .filter((link) => String(link.productId) === String(viewModel.id))
+          .map((link) => String(link.promotionId)))
+        const applicablePromotion = (Array.isArray(promotions) ? promotions : [])
+          .filter((promotion) => linkedPromotionIds.has(String(promotion.id))
+            && promotion.status === true
+            && (!promotion.startDate || String(promotion.startDate).slice(0, 10) <= today)
+            && (!promotion.endDate || String(promotion.endDate).slice(0, 10) >= today)
+            && Number(promotion.discountPercent) > 0)
+          .sort((a, b) => Number(b.discountPercent) - Number(a.discountPercent))[0]
+        setActivePromotion(applicablePromotion || null)
+      })
       .catch((loadError) => {
         if (loadError.name !== 'AbortError') {
           setError(getUserFacingErrorMessage(loadError, 'Chưa thể tải thông tin sản phẩm. Vui lòng thử lại.'))
@@ -38,6 +63,11 @@ export default function ShopProductDetailPage() {
       })
     return () => controller.abort()
   }, [productId, reloadVersion])
+
+  const originalPrice = Number(product?.price) || 0
+  const discountPercent = Math.min(100, Math.max(0, Number(activePromotion?.discountPercent) || 0))
+  const hasPromotion = Boolean(activePromotion) && discountPercent > 0
+  const discountedPrice = hasPromotion ? Math.round(originalPrice * (1 - discountPercent / 100)) : originalPrice
 
   const canBuy = product?.status === 'Đang bán'
     && product.stock > 0
@@ -70,7 +100,12 @@ export default function ShopProductDetailPage() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">{product.category || 'Daily Fresh'}</p>
             <h1 className="font-display mt-3 text-3xl font-medium text-[#4A302B] sm:text-4xl">{product.name}</h1>
             <p className="mt-3 text-xs text-[#806B65]">Mã sản phẩm: {product.code || '—'}</p>
-            <p className="mt-6 text-2xl font-bold text-[#76534D]">{currency.format(product.price)}</p>
+            <div className="mt-6 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              {hasPromotion && <span className="text-base text-[#9A7972] line-through">{currency.format(originalPrice)}</span>}
+              <span className={`text-2xl font-bold ${hasPromotion ? 'text-[#B94F35]' : 'text-[#76534D]'}`}>{currency.format(discountedPrice)}</span>
+              {hasPromotion && <span className="rounded-full bg-[#B94F35] px-2.5 py-1 text-xs font-bold text-white">-{discountPercent}%</span>}
+            </div>
+            {hasPromotion && <p className="mt-2 text-sm font-medium text-[#A45B46]">{activePromotion.name || activePromotion.promotionCode || 'Đang khuyến mãi'} · Tiết kiệm {currency.format(originalPrice - discountedPrice)}</p>}
             <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-[#806B65]">{product.description || 'Thông tin mô tả sản phẩm hiện chưa được cập nhật.'}</p>
             <p className={`mt-5 text-xs font-semibold ${canBuy ? 'text-[#536B50]' : 'text-[#914E46]'}`}>
               {product.status !== 'Đang bán' ? 'Sản phẩm hiện không mở bán' : product.stock <= 0 ? 'Sản phẩm tạm hết hàng' : `Còn ${product.stock} ${product.unit || 'sản phẩm'}`}

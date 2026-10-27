@@ -64,7 +64,14 @@ export default function CartPanel({
                           <button type="button" aria-label={`Xóa ${item.name}`} onClick={() => onRemove(item.id)} className="shrink-0 text-muted transition hover:text-danger"><Icon name="trash" size={14} /></button>
                         </div>
                         <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 text-[10px] text-muted">
-                          <span>Đơn giá {currency.format(unitPrice)}đ</span>
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            {Number(item.originalPrice) > unitPrice && (
+                              <span className="line-through">{currency.format(Number(item.originalPrice))}đ</span>
+                            )}
+                            <span className={Number(item.originalPrice) > unitPrice ? 'font-bold text-danger' : ''}>
+                              Đơn giá {currency.format(unitPrice)}đ
+                            </span>
+                          </span>
                           <span className="font-semibold text-rosewood">Thành tiền {currency.format(lineTotal)}đ</span>
                         </div>
                         <div className="mt-2 flex items-center justify-between">

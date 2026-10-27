@@ -61,16 +61,59 @@ public class CustomOrderService {
 
     @Transactional
     public CustomOrderResponse create(CreateCustomOrderRequest request) {
-        validateRequest(request);
+        validateRequest(request, true); // true nghĩa là yêu cầu có employeeId (dành cho nhân viên tạo)
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         validateDeliveryDate(request.deliveryDate(), now);
         validateDeposit(request.estimatedPrice(), request.deposit());
 
         Customer customer = findActiveCustomer(request.customerId());
         Employee employee = findActiveEmployee(request.employeeId());
+        
         CustomOrder customOrder = customOrderMapper.toEntity(request, customer, employee);
         customOrder.setOrderDate(now);
         customOrder.setStatus("PENDING");
+
+        return customOrderMapper.toResponse(customOrderRepository.save(customOrder));
+    }
+
+    /**
+     * Khách hàng tự đặt đơn (không bắt buộc employeeId lúc gửi request, hoặc hệ thống tự xử lý)
+     */
+    @Transactional
+    public CustomOrderResponse createForAuthenticatedCustomer(
+            CreateCustomOrderRequest request,
+            String username) {
+        
+        // Tìm thông tin khách hàng dựa vào tài khoản đang đăng nhập
+        Customer currentCustomer = customerRepository.findByAccount_UsernameAndStatusTrue(username)
+                .orElseThrow(() -> new ConflictException(
+                        "Tài khoản đăng nhập chưa được liên kết với hồ sơ khách hàng đang hoạt động"
+                ));
+
+        if (request == null || !currentCustomer.getId().equals(request.customerId())) {
+            throw new ConflictException(
+                    "Chỉ được tạo đơn bằng hồ sơ khách hàng của tài khoản đang đăng nhập"
+            );
+        }
+
+        // Validate request nhưng KHÔNG bắt buộc employeeId vì khách tự đặt
+        validateRequest(request, false); 
+        
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        validateDeliveryDate(request.deliveryDate(), now);
+        validateDeposit(request.estimatedPrice(), request.deposit());
+
+        Customer customer = findActiveCustomer(request.customerId());
+        
+        // Nếu khách tự đặt, employee có thể để null hoặc gán nhân viên phụ trách mặc định (tuỳ nghiệp vụ)
+        Employee employee = null;
+        if (request.employeeId() != null) {
+            employee = findActiveEmployee(request.employeeId());
+        }
+
+        CustomOrder customOrder = customOrderMapper.toEntity(request, customer, employee);
+        customOrder.setOrderDate(now);
+        customOrder.setStatus("PENDING"); // Đơn do khách tự đặt cũng ở trạng thái chờ xác nhận
 
         return customOrderMapper.toResponse(customOrderRepository.save(customOrder));
     }
@@ -105,7 +148,8 @@ public class CustomOrderService {
         validateDeliveryDate(request.deliveryDate(), LocalDateTime.now(ZoneOffset.UTC));
         validateDeposit(request.estimatedPrice(), request.deposit());
         Customer customer = findActiveCustomer(request.customerId());
-        Employee employee = findActiveEmployee(request.employeeId());
+        Employee employee = request.employeeId() != null ? findActiveEmployee(request.employeeId()) : null;
+        
         customOrderMapper.updateEntity(request, customer, employee, customOrder);
         return customOrderMapper.toResponse(customOrderRepository.save(customOrder));
     }
@@ -160,6 +204,7 @@ public class CustomOrderService {
     }
 
     private Employee findActiveEmployee(Long employeeId) {
+        if (employeeId == null) return null;
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy nhân viên với ID: " + employeeId
@@ -171,6 +216,10 @@ public class CustomOrderService {
     }
 
     private void validateRequest(CreateCustomOrderRequest request) {
+        validateRequest(request, true);
+    }
+
+    private void validateRequest(CreateCustomOrderRequest request, boolean requireEmployee) {
         validateRequest(
                 request == null ? null : request.customerId(),
                 request == null ? null : request.employeeId(),
@@ -178,7 +227,8 @@ public class CustomOrderService {
                 request == null ? null : request.requestDescription(),
                 request == null ? null : request.deliveryDate(),
                 request == null ? null : request.estimatedPrice(),
-                request == null ? null : request.deposit()
+                request == null ? null : request.deposit(),
+                requireEmployee
         );
     }
 
@@ -190,7 +240,8 @@ public class CustomOrderService {
                 request == null ? null : request.requestDescription(),
                 request == null ? null : request.deliveryDate(),
                 request == null ? null : request.estimatedPrice(),
-                request == null ? null : request.deposit()
+                request == null ? null : request.deposit(),
+                false // Cập nhật có thể không bắt buộc employee ngay
         );
     }
 
@@ -201,9 +252,11 @@ public class CustomOrderService {
             String requestDescription,
             LocalDateTime deliveryDate,
             BigDecimal estimatedPrice,
-            BigDecimal deposit) {
+            BigDecimal deposit,
+            boolean requireEmployee) {
+        
         if (customerId == null || customerId <= 0
-                || employeeId == null || employeeId <= 0
+                || (requireEmployee && (employeeId == null || employeeId <= 0))
                 || cakeName == null || cakeName.isBlank() || cakeName.length() > 150
                 || deliveryDate == null
                 || !isValidMoney(estimatedPrice) || estimatedPrice.signum() <= 0
