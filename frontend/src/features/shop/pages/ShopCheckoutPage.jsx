@@ -5,7 +5,7 @@ import { toProductViewModel } from '../../products/adapters/productAdapter.js'
 import { getProducts } from '../../products/services/productService.js'
 import Pagination, { usePagination } from '../../../components/Pagination.jsx'
 import { useShopCart } from '../ShopCartContext.jsx'
-import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
+import { apiRequest, getUserFacingErrorMessage } from '../../../services/apiClient.js'
 import {
   cartMatchesCustomerOrder,
   clearCustomerOrderAttempt,
@@ -62,6 +62,7 @@ export default function ShopCheckoutPage() {
     () => pendingAttempt?.payload.deliveryAddress || '',
   )
   const [phone, setPhone] = useState(() => pendingAttempt?.payload.phone || '')
+  const [buyerProfile, setBuyerProfile] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState(
     () => pendingAttempt?.paymentMethod || 'CASH',
   )
@@ -69,6 +70,8 @@ export default function ShopCheckoutPage() {
     () => pendingAttempt?.payload.promotionCode || '',
   )
   const [note, setNote] = useState(() => pendingAttempt?.payload.note || '')
+  const [useLoyaltyPoints, setUseLoyaltyPoints] = useState(false)
+  const [loyaltyPointsToRedeem, setLoyaltyPointsToRedeem] = useState(0)
   const [products, setProducts] = useState([])
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogError, setCatalogError] = useState('')
@@ -86,6 +89,35 @@ export default function ShopCheckoutPage() {
   useEffect(() => {
     setAttemptState(readCustomerOrderAttempt(window.sessionStorage, owner))
   }, [owner])
+
+  // Pre-fill buyer information from customer profile
+  useEffect(() => {
+    let active = true
+    const controller = new AbortController()
+
+    apiRequest('/customer/profile', { signal: controller.signal })
+      .then((profile) => {
+        if (!active || !profile) return
+        setBuyerProfile(profile)
+        // If not recovering a pending attempt, prefill phone and address
+        if (!pendingAttempt) {
+          if (profile.phone) {
+            setPhone((current) => current || profile.phone)
+          }
+          if (profile.address) {
+            setDeliveryAddress((current) => current || profile.address)
+          }
+        }
+      })
+      .catch(() => {
+        // Silently catch if profile fetch fails
+      })
+
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [pendingAttempt])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -122,13 +154,23 @@ export default function ShopCheckoutPage() {
   const activePromotionCode = pendingAttempt
     ? pendingAttempt.payload.promotionCode || ''
     : promotionCode
+  const availableLoyaltyPoints = Number(buyerProfile?.loyaltyPoints || 0)
+  const subtotalBeforePoints = quote ? Number(quote.finalAmount) : cart.subtotal
+  const maxRedeemablePoints = Math.min(availableLoyaltyPoints, Math.floor(subtotalBeforePoints / 1000))
+  const activeLoyaltyPoints = useLoyaltyPoints
+    ? Math.min(maxRedeemablePoints, Math.max(0, Number(loyaltyPointsToRedeem) || 0))
+    : 0
+  const loyaltyDiscount = activeLoyaltyPoints * 1000
+  const payableAmount = Math.max(0, subtotalBeforePoints - loyaltyDiscount)
+
   const payload = useMemo(() => pendingAttempt?.payload || ({
     items,
     phone: normalizeVietnamesePhone(phone),
     deliveryAddress: deliveryAddress.trim() || null,
     promotionCode: promotionCode.trim() || null,
     note: note.trim() || null,
-  }), [deliveryAddress, items, note, pendingAttempt, phone, promotionCode])
+    loyaltyPointsToRedeem: activeLoyaltyPoints,
+  }), [activeLoyaltyPoints, deliveryAddress, items, note, pendingAttempt, phone, promotionCode])
 
   useEffect(() => {
     if (pendingAttempt || catalogLoading || catalogError || invalidCart || items.length === 0) {
@@ -258,31 +300,13 @@ export default function ShopCheckoutPage() {
       }
       navigate('/shop/order-result', { replace: true, state: { order } })
     } catch (error) {
-      if (vnpayInitiationStarted && activeAttempt && order) {
-        const uncertainAttempt = {
-          ...activeAttempt,
-          orderId: Number(order.id),
-          stage: 'PAYMENT_UNCERTAIN',
-        }
-        if (updateCustomerOrderAttempt(window.sessionStorage, uncertainAttempt)) {
-          setAttemptState({ status: 'pending', attempt: uncertainAttempt })
-        }
-        setSubmitError(getVnPayInitiationErrorMessage(error))
-      } else {
-        if (error.status === 401 || error.status === 403) {
-          setSubmitError(
-            `Không thể tiếp tục với phiên đăng nhập hiện tại. Đơn hàng vẫn được giữ; vui lòng đăng nhập lại rồi kiểm tra đơn hàng. ${getUserFacingErrorMessage(error)}`.trim(),
-          )
-        } else if (error.status === 409) {
-          setSubmitError(
-            `Đơn hàng đã được gửi trước đó. Để tránh tạo đơn trùng, vui lòng kiểm tra lịch sử đơn hàng. ${getUserFacingErrorMessage(error)}`.trim(),
-          )
-        } else {
-          setSubmitError(
-            `Chưa xác định được kết quả đơn hàng. Vui lòng kiểm tra lịch sử đơn hàng trước khi thử lại. ${getUserFacingErrorMessage(error)}`.trim(),
-          )
-        }
+      if (vnpayInitiationStarted) {
+        setSubmitError(
+          `${getVnPayInitiationErrorMessage(error)} Đơn đã được ghi nhận; hãy kiểm tra trạng thái thanh toán trước khi thử lại.`,
+        )
+        return
       }
+      setSubmitError(getUserFacingErrorMessage(error, 'Chưa thể đặt hàng. Vui lòng kiểm tra lại thông tin.'))
     } finally {
       submitLock.current = false
       setIsSubmitting(false)
@@ -291,52 +315,35 @@ export default function ShopCheckoutPage() {
 
   const checkVnPayStatus = async () => {
     if (!pendingAttempt?.orderId || isCheckingPaymentStatus) return
-
     setIsCheckingPaymentStatus(true)
-    setSubmitError('')
     setPaymentStatusError('')
     try {
-      const result = await getCustomerVnPayPaymentStatusByOrderId(pendingAttempt.orderId)
-      setPaymentStatus(result)
-      if (result?.paymentStatus === 'SUCCESS' && result?.attemptStatus === 'SUCCESS') {
-        if (clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)) {
-          setAttemptState({ status: 'none' })
-        } else {
-          setPaymentStatusError('Thanh toán đã được xác nhận nhưng chưa thể cập nhật trạng thái trên thiết bị. Vui lòng kiểm tra lịch sử đơn hàng và không thanh toán lại.')
-        }
+      const status = await getCustomerVnPayPaymentStatusByOrderId(pendingAttempt.orderId)
+      setPaymentStatus(status)
+      if (status.paymentStatus === 'SUCCESS' && status.attemptStatus === 'SUCCESS') {
+        clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)
+        setAttemptState({ status: 'none' })
       }
     } catch (error) {
-      setPaymentStatus(null)
-      if (error.status === 401) {
-        setPaymentStatusError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
-      } else if (error.status === 403) {
-        setPaymentStatusError('Bạn chưa thể xem giao dịch này. Vui lòng liên hệ cửa hàng.')
-      } else if (error.status === 404) {
-        setPaymentStatusError('Chưa tìm thấy thông tin giao dịch của đơn này. Kết quả lần thanh toán trước chưa được xác định; vui lòng kiểm tra lại sau hoặc liên hệ cửa hàng. Không gửi lại yêu cầu thanh toán lúc này.')
-      } else {
-        setPaymentStatusError(getUserFacingErrorMessage(
-          error,
-          'Chưa thể tra cứu trạng thái thanh toán. Không gửi lại yêu cầu thanh toán.',
-        ))
-      }
+      setPaymentStatusError(getUserFacingErrorMessage(error, 'Chưa thể tra cứu trạng thái thanh toán.'))
     } finally {
       setIsCheckingPaymentStatus(false)
     }
   }
 
   const retryVnPayForExistingOrder = async () => {
-    if (
-      paymentRetryLock.current
-      || !pendingAttempt?.orderId
-      || paymentStatus?.paymentStatus !== 'FAILED'
-      || paymentStatus?.attemptStatus !== 'FAILED'
-    ) return
-
+    if (!pendingAttempt?.orderId || paymentRetryLock.current || isRetryingPayment) return
     paymentRetryLock.current = true
     setIsRetryingPayment(true)
-    setPaymentStatus(null)
     setPaymentStatusError('')
     try {
+      const refreshedStatus = await getCustomerVnPayPaymentStatusByOrderId(pendingAttempt.orderId)
+      setPaymentStatus(refreshedStatus)
+      if (refreshedStatus.paymentStatus === 'SUCCESS' && refreshedStatus.attemptStatus === 'SUCCESS') {
+        clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)
+        setAttemptState({ status: 'none' })
+        return
+      }
       const payment = await createCustomerVnPayPayment(pendingAttempt.orderId)
       const paymentUrl = requireVnPayPaymentUrl(payment)
       const redirectedAttempt = {
@@ -488,8 +495,7 @@ export default function ShopCheckoutPage() {
   return (
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-7 sm:py-12 lg:px-10">
       <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Hoàn tất thông tin</p>
-      <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B] sm:text-4xl">Đặt hàng</h1>
-      <p className="mt-2 text-sm text-[#806B65]">Đơn sẽ được tạo ở trạng thái chờ xác nhận. Bạn có thể thanh toán theo hướng dẫn của cửa hàng hoặc chọn VNPay trong môi trường thử nghiệm.</p>
+      <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B] sm:text-4xl">Đặt hàng & Thanh toán</h1>
 
       {catalogLoading ? (
         <p role="status" className="mt-6 rounded-2xl bg-white px-5 py-12 text-center text-sm text-[#806B65]">Đang kiểm tra tồn kho...</p>
@@ -503,9 +509,39 @@ export default function ShopCheckoutPage() {
         <form onSubmit={submitOrder} className="mt-7 grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-5 rounded-2xl border border-[#EAE3DA] bg-white p-5 sm:p-7">
             <div>
-              <h2 className="font-display text-xl text-[#4A302B]">Thông tin nhận hàng</h2>
-              <p className="mt-1 text-xs leading-5 text-[#806B65]">Áp dụng cho khu vực Việt Nam. Để trống địa chỉ nếu bạn nhận tại cửa hàng.</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-display text-xl text-[#4A302B]">Thông tin người mua & nhận hàng</h2>
+                <span className="rounded-full bg-[#EBF3E8] px-2.5 py-1 text-[11px] font-semibold text-[#456B3E]">
+                  ✓ Thông tin đã được điền sẵn
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-5 text-[#806B65]">
+                Dữ liệu được lấy tự động từ tài khoản của bạn. Bạn có thể thay đổi số điện thoại hoặc địa chỉ nhận hàng nếu cần.
+              </p>
             </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="grid gap-1.5 text-xs font-semibold text-[#675650]">
+                Họ và tên người mua
+                <input
+                  type="text"
+                  readOnly
+                  value={buyerProfile?.fullName || account?.username || ''}
+                  className="h-11 rounded-xl border border-[#EAE3DA] bg-[#F7F4F0] px-3 text-sm font-normal text-[#675650] outline-none cursor-not-allowed"
+                />
+              </label>
+
+              <label className="grid gap-1.5 text-xs font-semibold text-[#675650]">
+                Email liên hệ
+                <input
+                  type="email"
+                  readOnly
+                  value={buyerProfile?.email || account?.email || ''}
+                  className="h-11 rounded-xl border border-[#EAE3DA] bg-[#F7F4F0] px-3 text-sm font-normal text-[#675650] outline-none cursor-not-allowed"
+                />
+              </label>
+            </div>
+
             <label className="grid gap-1.5 text-xs font-semibold text-[#675650]">
               Số điện thoại người nhận *
               <input
@@ -521,18 +557,20 @@ export default function ShopCheckoutPage() {
               />
               <span className="font-normal text-[#806B65]">Nhập số di động Việt Nam gồm 10 số; có thể dùng đầu số +84.</span>
             </label>
+
             <label className="grid gap-1.5 text-xs font-semibold text-[#675650]">
-              Địa chỉ giao hàng tại Việt Nam (không bắt buộc)
+              Địa chỉ giao hàng tại Việt Nam
               <input
                 maxLength={255}
                 value={deliveryAddress}
                 onChange={(event) => setDeliveryAddress(event.target.value)}
                 className="h-11 rounded-xl border border-[#EAE3DA] px-3 text-sm font-normal outline-none focus:border-[#D0A263]"
-                placeholder="Số nhà, đường, quận/huyện"
+                placeholder="Số nhà, đường, quận/huyện (để trống nếu nhận tại cửa hàng)"
               />
             </label>
+
             <label className="grid gap-1.5 text-xs font-semibold text-[#675650]">
-              Mã khuyến mãi (không bắt buộc)
+              Mã khuyến mãi
               <input
                 maxLength={30}
                 value={promotionCode}
@@ -541,8 +579,9 @@ export default function ShopCheckoutPage() {
                 placeholder="Nhập mã nếu có"
               />
             </label>
+
             <label className="grid gap-1.5 text-xs font-semibold text-[#675650]">
-              Ghi chú (không bắt buộc)
+              Ghi chú
               <textarea
                 maxLength={500}
                 value={note}
@@ -552,6 +591,45 @@ export default function ShopCheckoutPage() {
                 placeholder="Ghi chú cho cửa hàng"
               />
             </label>
+
+            {availableLoyaltyPoints > 0 && (
+              <div className="rounded-2xl border border-dashed border-[#DDCDB8] bg-[#FAF6F0] p-4 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-[#4A302B]">
+                    Điểm tích lũy hiện có: <strong className="text-emerald-700 font-bold">{availableLoyaltyPoints} điểm</strong>
+                  </span>
+                  <label className="flex items-center gap-1.5 cursor-pointer font-bold text-[#4A302B]">
+                    <input
+                      type="checkbox"
+                      checked={useLoyaltyPoints}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                        setUseLoyaltyPoints(next)
+                        setLoyaltyPointsToRedeem(next ? maxRedeemablePoints : 0)
+                      }}
+                      className="accent-[#B47B68] h-4 w-4 rounded"
+                    />
+                    <span>Đổi điểm giảm giá</span>
+                  </label>
+                </div>
+                {useLoyaltyPoints && (
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max={maxRedeemablePoints}
+                      value={loyaltyPointsToRedeem}
+                      onChange={(e) => setLoyaltyPointsToRedeem(Math.min(maxRedeemablePoints, Math.max(0, Number(e.target.value) || 0)))}
+                      className="h-8 w-24 rounded-lg border border-[#B47B68] bg-white px-2.5 font-bold text-[#4A302B] outline-none"
+                    />
+                    <span className="text-[#806B65]">
+                      Giảm: <strong className="text-emerald-700 font-bold">{moneyFormat.format(loyaltyDiscount)}</strong> (1 điểm = 1.000 ₫)
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <fieldset className="grid gap-3 border-t border-[#EAE3DA] pt-5">
               <legend className="font-display text-xl text-[#4A302B]">Phương thức thanh toán</legend>
               <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#EAE3DA] p-3 text-xs text-[#675650]">
@@ -577,6 +655,7 @@ export default function ShopCheckoutPage() {
                 <span><strong className="block text-[#4A302B]">VNPay QR (thử nghiệm)</strong>Chuyển đến trang thanh toán thử nghiệm của VNPay; giao dịch không phát sinh thanh toán thật.</span>
               </label>
             </fieldset>
+
             {quoteError && (
               <div role="alert" className="rounded-xl bg-[#F6E9E6] p-3 text-xs leading-5 text-[#914E46]">
                 <p>{quoteError}</p>
@@ -591,10 +670,22 @@ export default function ShopCheckoutPage() {
             <div className="mt-4 space-y-3 border-b border-[#EAE3DA] pb-4">
               {cartPagination.pageItems.map((item) => {
                 const product = productById.get(item.productId)
+                const quoteItem = quote?.items?.find(
+                  (line) => Number(line.productId) === Number(item.productId),
+                )
+                const originalLineTotal = product ? product.price * item.quantity : null
+                const lineDiscount = Number(quoteItem?.discountAmount ?? 0)
                 return (
                   <div key={item.productId} className="flex justify-between gap-3 text-xs">
                     <span className="text-[#806B65]">{product?.name || `Sản phẩm #${item.productId}`} × {item.quantity}</span>
-                    <strong className="whitespace-nowrap text-[#4A302B]">{product ? moneyFormat.format(product.price * item.quantity) : '—'}</strong>
+                    <span className="flex shrink-0 items-center gap-2 whitespace-nowrap">
+                      {lineDiscount > 0 && <span className="text-[#9A7972] line-through">{moneyFormat.format(originalLineTotal)}</span>}
+                      <strong className={lineDiscount > 0 ? 'text-[#B94F35]' : 'text-[#4A302B]'}>
+                        {quoteItem
+                          ? moneyFormat.format(Number(quoteItem.lineTotal))
+                          : originalLineTotal == null ? '—' : moneyFormat.format(originalLineTotal)}
+                      </strong>
+                    </span>
                   </div>
                 )
               })}
@@ -611,8 +702,17 @@ export default function ShopCheckoutPage() {
             ) : quote ? (
               <div className="mt-4 space-y-2 text-xs">
                 <div className="flex justify-between gap-3"><span className="text-[#806B65]">Tạm tính</span><span>{moneyFormat.format(Number(quote.totalAmount))}</span></div>
-                <div className="flex justify-between gap-3"><span className="text-[#806B65]">Giảm giá</span><span>{moneyFormat.format(Number(quote.discountAmount))}</span></div>
-                <div className="flex justify-between gap-3 border-t border-[#EAE3DA] pt-3 text-sm font-bold text-[#76534D]"><span>Cần thanh toán</span><span>{moneyFormat.format(Number(quote.finalAmount))}</span></div>
+                <div className="flex justify-between gap-3"><span className="text-[#806B65]">Giảm giá voucher</span><span>{moneyFormat.format(Number(quote.discountAmount))}</span></div>
+                {loyaltyDiscount > 0 && (
+                  <div className="flex justify-between gap-3 text-emerald-700 font-semibold">
+                    <span>Đổi {activeLoyaltyPoints} điểm tích lũy</span>
+                    <span>-{moneyFormat.format(loyaltyDiscount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-3 border-t border-[#EAE3DA] pt-3 text-sm font-bold text-[#76534D]">
+                  <span>Cần thanh toán</span>
+                  <span>{moneyFormat.format(payableAmount)}</span>
+                </div>
               </div>
             ) : !quoteError && <p className="mt-4 text-xs text-[#806B65]">Tổng tiền và ưu đãi sẽ được xác nhận khi đặt hàng.</p>}
             <button

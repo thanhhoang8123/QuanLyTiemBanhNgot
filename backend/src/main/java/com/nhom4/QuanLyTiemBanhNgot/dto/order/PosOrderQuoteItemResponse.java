@@ -9,6 +9,7 @@ public record PosOrderQuoteItemResponse(
         BigDecimal originalUnitPrice,
         BigDecimal effectiveUnitPrice,
         BigDecimal productDiscountAmount,
-        BigDecimal lineTotal
+        BigDecimal lineTotal,
+        String promotionCode
 ) {
 }

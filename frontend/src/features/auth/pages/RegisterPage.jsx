@@ -65,7 +65,7 @@ export default function RegisterPage() {
         <div className="absolute -right-16 -top-10 h-64 w-64 rounded-full bg-[#D0A263]/25 blur-2xl" />
         <div className="relative">
           <span className="flex h-14 w-14 items-center justify-center rounded-full border border-white/30 font-display text-3xl">W</span>
-          <p className="mt-10 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#E8C89D]">Chào mừng đến với Daily Fresh</p>
+          <p className="mt-10 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#E8C89D]">Chào mừng đến với WA Patisserie</p>
           <h1 className="font-display mt-4 text-5xl leading-tight">Niềm vui nhỏ, bắt đầu từ một chiếc bánh.</h1>
           <p className="mt-5 max-w-sm text-sm leading-7 text-white/75">Tạo tài khoản để chuẩn bị cho những chiếc bánh ngọt ngào và đơn hàng dành riêng cho bạn.</p>
         </div>
@@ -78,7 +78,7 @@ export default function RegisterPage() {
             <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#EAF0E8] text-[#536B50]"><Icon name="mail" size={28} /></span>
             <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Kiểm tra hộp thư</p>
             <h2 className="font-display mt-3 text-3xl text-[#4A302B]">Bạn sắp hoàn tất rồi!</h2>
-            <p className="mt-4 text-sm leading-7 text-[#806B65]">Nếu email được gửi thành công, hãy mở thư xác minh từ Daily Fresh. Liên kết có hiệu lực trong 30 phút.</p>
+            <p className="mt-4 text-sm leading-7 text-[#806B65]">Nếu email được gửi thành công, hãy mở thư xác minh từ WA Patisserie. Liên kết có hiệu lực trong 30 phút.</p>
             {resendMessage && <p role="status" className="mt-4 rounded-xl bg-[#EAF0E8] px-4 py-3 text-xs leading-5 text-[#536B50]">{resendMessage}</p>}
             {resendError && <p role="alert" className="mt-4 rounded-xl bg-[#F6E9E6] px-4 py-3 text-xs leading-5 text-[#914E46]">{resendError}</p>}
             <button type="button" disabled={isResending} onClick={resendVerification} className="mt-5 rounded-full border border-[#DDCDB8] px-5 py-3 text-sm font-semibold text-[#76534D] transition hover:bg-[#FCF9F3] disabled:cursor-not-allowed disabled:opacity-60">

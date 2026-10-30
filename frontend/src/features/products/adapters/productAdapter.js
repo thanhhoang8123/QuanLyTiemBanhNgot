@@ -16,6 +16,7 @@ export function toProductViewModel(product) {
     price: Number(product.price ?? 0),
     stock: Number(product.quantity ?? 0),
     unit: product.unit ?? '',
+    createdAt: product.createdAt ? String(product.createdAt).slice(0, 10) : '',
     expiryDate: product.expiryDate ?? '',
     status: product.status === true ? 'Đang bán' : 'Tạm ẩn',
     background: defaultArtworkBackground,
@@ -32,6 +33,7 @@ export function toProductRequest(form) {
     price: Number(form.price),
     quantity: Number(form.stock),
     unit: form.unit.trim() || null,
+    createdAt: form.createdAt ? `${form.createdAt}T00:00:00` : null,
     expiryDate: form.expiryDate || null,
     status: form.status === 'Đang bán',
   }

@@ -4,6 +4,7 @@ import com.nhom4.QuanLyTiemBanhNgot.dto.customorder.CreateCustomOrderRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.customorder.CustomOrderResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.customorder.UpdateCustomOrderRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.customorder.UpdateCustomOrderStatusRequest;
+import com.nhom4.QuanLyTiemBanhNgot.entity.Account;
 import com.nhom4.QuanLyTiemBanhNgot.entity.CustomOrder;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Customer;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Employee;
@@ -32,16 +33,19 @@ public class CustomOrderService {
     private final CustomOrderRepository customOrderRepository;
     private final CustomerRepository customerRepository;
     private final EmployeeRepository employeeRepository;
+    private final com.nhom4.QuanLyTiemBanhNgot.repository.AccountRepository accountRepository;
     private final CustomOrderMapper customOrderMapper;
 
     public CustomOrderService(
             CustomOrderRepository customOrderRepository,
             CustomerRepository customerRepository,
             EmployeeRepository employeeRepository,
+            com.nhom4.QuanLyTiemBanhNgot.repository.AccountRepository accountRepository,
             CustomOrderMapper customOrderMapper) {
         this.customOrderRepository = customOrderRepository;
         this.customerRepository = customerRepository;
         this.employeeRepository = employeeRepository;
+        this.accountRepository = accountRepository;
         this.customOrderMapper = customOrderMapper;
     }
 
@@ -61,7 +65,7 @@ public class CustomOrderService {
 
     @Transactional
     public CustomOrderResponse create(CreateCustomOrderRequest request) {
-        validateRequest(request, true); // true nghĩa là yêu cầu có employeeId (dành cho nhân viên tạo)
+        validateRequest(request, true);
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         validateDeliveryDate(request.deliveryDate(), now);
         validateDeposit(request.estimatedPrice(), request.deposit());
@@ -80,40 +84,110 @@ public class CustomOrderService {
      * Khách hàng tự đặt đơn (không bắt buộc employeeId lúc gửi request, hoặc hệ thống tự xử lý)
      */
     @Transactional
+    private Customer resolveCustomerForUser(String username) {
+        if (username == null || username.isBlank()) return null;
+        Customer cust = customerRepository.findByAccount_UsernameAndStatusTrue(username).orElse(null);
+        if (cust != null) return cust;
+        Account acc = accountRepository.findByUsername(username).orElse(null);
+        if (acc != null && acc.getCustomer() != null && Boolean.TRUE.equals(acc.getCustomer().getStatus())) {
+            return acc.getCustomer();
+        }
+        if (acc != null && acc.getEmail() != null) {
+            Customer byEmail = customerRepository.findByEmail(acc.getEmail()).orElse(null);
+            if (byEmail != null && Boolean.TRUE.equals(byEmail.getStatus())) {
+                return byEmail;
+            }
+        }
+        List<Customer> byPhone = customerRepository.findByFullNameContainingIgnoreCaseOrPhoneContaining("", username);
+        if (!byPhone.isEmpty()) {
+            return byPhone.get(0);
+        }
+        Customer walkIn = customerRepository.findByEmail("pos.walkin@example.invalid").orElse(null);
+        if (walkIn != null && Boolean.TRUE.equals(walkIn.getStatus())) {
+            return walkIn;
+        }
+        return customerRepository.findAll().stream()
+                .filter(c -> Boolean.TRUE.equals(c.getStatus()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    public CustomOrderResponse payDepositByCustomer(Long id, String paymentMethod, String username) {
+        Customer currentCustomer = resolveCustomerForUser(username);
+        CustomOrder customOrder = findEntityByIdForUpdate(id);
+        if (customOrder == null) {
+            throw new ResourceNotFoundException("Không tìm thấy đơn đặt bánh với ID: " + id);
+        }
+        if (currentCustomer == null || customOrder.getCustomer() == null
+                || !customOrder.getCustomer().getId().equals(currentCustomer.getId())) {
+            throw new ConflictException("Bạn chỉ có thể đặt cọc cho đơn bánh của chính tài khoản mình");
+        }
+        if (!"PENDING".equals(customOrder.getStatus())) {
+            throw new ConflictException("Đơn đặt bánh này không ở trạng thái PENDING để đặt cọc");
+        }
+        customOrder.setStatus("CONFIRMED");
+        String method = (paymentMethod != null && !paymentMethod.isBlank()) ? paymentMethod : "VNPAY";
+        String note = "\n[Đã xác nhận thanh toán cọc qua " + method + " lúc " + LocalDateTime.now(ZoneOffset.UTC) + "]";
+        customOrder.setRequestDescription((customOrder.getRequestDescription() != null ? customOrder.getRequestDescription() : "") + note);
+        return customOrderMapper.toResponse(customOrderRepository.save(customOrder));
+    }
+
+    @Transactional(readOnly = true)
+    public List<CustomOrderResponse> findMyCustomOrders(String username) {
+        Customer currentCustomer = resolveCustomerForUser(username);
+        if (currentCustomer == null) {
+            return java.util.Collections.emptyList();
+        }
+        return customOrderRepository.findByCustomer_IdOrderByOrderDateDesc(currentCustomer.getId())
+                .stream()
+                .map(customOrderMapper::toResponse)
+                .toList();
+    }
+
+    @Transactional
     public CustomOrderResponse createForAuthenticatedCustomer(
             CreateCustomOrderRequest request,
             String username) {
-        
-        // Tìm thông tin khách hàng dựa vào tài khoản đang đăng nhập
-        Customer currentCustomer = customerRepository.findByAccount_UsernameAndStatusTrue(username)
-                .orElseThrow(() -> new ConflictException(
-                        "Tài khoản đăng nhập chưa được liên kết với hồ sơ khách hàng đang hoạt động"
-                ));
-
-        if (request == null || !currentCustomer.getId().equals(request.customerId())) {
-            throw new ConflictException(
-                    "Chỉ được tạo đơn bằng hồ sơ khách hàng của tài khoản đang đăng nhập"
-            );
+        if (request == null) {
+            throw new BadRequestException("Thông tin đơn đặt bánh không hợp lệ");
+        }
+        Customer currentCustomer = resolveCustomerForUser(username);
+        if (currentCustomer == null) {
+            Customer newCustomer = new Customer();
+            newCustomer.setFullName(username != null ? username : "Khách đặt bánh");
+            newCustomer.setEmail((username != null ? username : "khach") + "@bakery.local");
+            newCustomer.setPhone("0900000000");
+            newCustomer.setAddress("Cửa hàng WA Patisserie Bakery");
+            newCustomer.setStatus(true);
+            newCustomer.setLoyaltyPoints(0);
+            currentCustomer = customerRepository.save(newCustomer);
         }
 
-        // Validate request nhưng KHÔNG bắt buộc employeeId vì khách tự đặt
-        validateRequest(request, false); 
+        Long customerId = currentCustomer.getId();
+        CreateCustomOrderRequest effectiveRequest = new CreateCustomOrderRequest(
+                customerId,
+                request.employeeId(),
+                request.cakeName(),
+                request.requestDescription(),
+                request.deliveryDate(),
+                request.estimatedPrice(),
+                request.deposit()
+        );
+
+        validateRequest(effectiveRequest, false); 
         
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-        validateDeliveryDate(request.deliveryDate(), now);
-        validateDeposit(request.estimatedPrice(), request.deposit());
+        validateDeliveryDate(effectiveRequest.deliveryDate(), now);
+        validateDeposit(effectiveRequest.estimatedPrice(), effectiveRequest.deposit());
 
-        Customer customer = findActiveCustomer(request.customerId());
-        
-        // Nếu khách tự đặt, employee có thể để null hoặc gán nhân viên phụ trách mặc định (tuỳ nghiệp vụ)
         Employee employee = null;
-        if (request.employeeId() != null) {
-            employee = findActiveEmployee(request.employeeId());
+        if (effectiveRequest.employeeId() != null) {
+            employee = findActiveEmployee(effectiveRequest.employeeId());
         }
 
-        CustomOrder customOrder = customOrderMapper.toEntity(request, customer, employee);
+        CustomOrder customOrder = customOrderMapper.toEntity(effectiveRequest, currentCustomer, employee);
         customOrder.setOrderDate(now);
-        customOrder.setStatus("PENDING"); // Đơn do khách tự đặt cũng ở trạng thái chờ xác nhận
+        customOrder.setStatus("PENDING");
 
         return customOrderMapper.toResponse(customOrderRepository.save(customOrder));
     }

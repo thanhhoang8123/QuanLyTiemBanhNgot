@@ -19,6 +19,12 @@ export function getProducts({ signal } = {}) {
   return apiRequest('/products', { signal })
 }
 
+export function getExpiringProducts({ days = 1, status = '', signal } = {}) {
+  const params = new URLSearchParams({ days: String(days) })
+  if (status !== '') params.set('status', String(status))
+  return apiRequest(`/products/expiring?${params}`, { signal })
+}
+
 export function getProductPage({
   page = 0,
   size = 20,

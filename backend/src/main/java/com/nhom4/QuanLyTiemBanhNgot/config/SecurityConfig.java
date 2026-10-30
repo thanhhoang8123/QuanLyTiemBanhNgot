@@ -88,8 +88,18 @@ public class SecurityConfig {
                     "/api/auth/resend-verification"
                 ).permitAll()
                 .requestMatchers(
+                    HttpMethod.POST,
+                    "/api/shop/newsletter"
+                ).permitAll()
+                .requestMatchers(
+                    "/api/shop/contact",
+                    "/api/shop/contact/**"
+                ).authenticated()
+                .requestMatchers(
                     HttpMethod.GET,
+                    "/api/products",
                     "/api/products/**",
+                    "/api/categories",
                     "/api/categories/**",
                     "/api/promotions",
                     "/api/promotions/**",
@@ -102,31 +112,73 @@ public class SecurityConfig {
                     "/api/payments/vnpay/return"
                 ).permitAll()
                 .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
-                .requestMatchers("/api/customer/orders/**").hasRole("CUSTOMER")
-                .requestMatchers("/api/customer/payments/**").hasRole("CUSTOMER")
-                .requestMatchers("/api/dashboard/**")
-                    .hasAnyRole("ADMIN", "MANAGER", "STAFF")
-                .requestMatchers("/api/management/logs/**").hasAnyRole("ADMIN", "MANAGER")
+                .requestMatchers("/api/customer/profile").hasAnyRole("CUSTOMER", "ADMIN", "MANAGER", "STAFF")
+                .requestMatchers(
+                    "/api/customer/orders",
+                    "/api/customer/orders/**"
+                ).hasAnyRole("CUSTOMER", "ADMIN", "MANAGER", "STAFF")
+                .requestMatchers(
+                    "/api/customer/payments",
+                    "/api/customer/payments/**"
+                ).hasAnyRole("CUSTOMER", "ADMIN", "MANAGER", "STAFF")
+                .requestMatchers(
+                    "/api/custom-orders/customer",
+                    "/api/custom-orders/customer/**"
+                ).authenticated()
+                .requestMatchers(
+                    "/api/contact-messages",
+                    "/api/contact-messages/**"
+                ).hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                .requestMatchers(
+                    "/api/dashboard",
+                    "/api/dashboard/**"
+                ).hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                .requestMatchers(
+                    "/api/management/logs",
+                    "/api/management/logs/**"
+                ).hasAnyRole("ADMIN", "MANAGER")
                 .requestMatchers(HttpMethod.GET, "/api/employees/options")
                     .hasAnyRole("ADMIN", "MANAGER", "STAFF")
-                .requestMatchers("/api/roles/**", "/api/employees/**").hasRole("ADMIN")
-                .requestMatchers("/api/accounts/**").hasRole("ADMIN")
                 .requestMatchers(
-                    "/api/products/**",
-                    "/api/categories/**",
-                    "/api/ingredients/**",
+                    "/api/roles",
+                    "/api/roles/**",
+                    "/api/employees",
+                    "/api/employees/**"
+                ).hasRole("ADMIN")
+                .requestMatchers(
+                    "/api/accounts",
+                    "/api/accounts/**"
+                ).hasRole("ADMIN")
+                .requestMatchers(
+                    "/api/suppliers",
                     "/api/suppliers/**",
+                    "/api/purchase-orders",
                     "/api/purchase-orders/**",
+                    "/api/purchase-order-items",
                     "/api/purchase-order-items/**",
+                    "/api/promotions",
                     "/api/promotions/**",
-                    "/api/promotion-products/**",
-                    "/api/uploads/**"
+                    "/api/promotion-products",
+                    "/api/promotion-products/**"
                 ).hasAnyRole("ADMIN", "MANAGER")
                 .requestMatchers(
+                    "/api/ingredients",
+                    "/api/ingredients/**",
+                    "/api/products",
+                    "/api/products/**",
+                    "/api/categories",
+                    "/api/categories/**",
+                    "/api/uploads",
+                    "/api/uploads/**",
+                    "/api/customers",
                     "/api/customers/**",
+                    "/api/orders",
                     "/api/orders/**",
+                    "/api/order-items",
                     "/api/order-items/**",
+                    "/api/payments",
                     "/api/payments/**",
+                    "/api/custom-orders",
                     "/api/custom-orders/**"
                 ).hasAnyRole("ADMIN", "MANAGER", "STAFF")
                 .requestMatchers("/api/**").denyAll()

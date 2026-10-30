@@ -35,8 +35,7 @@ export default function useShopCatalog() {
         }
 
         setCategories(categoryData)
-setProducts(productData.map(toProductViewModel))
-console.log('Dữ liệu sản phẩm API:', productData)
+        setProducts(productData.map(toProductViewModel))
       } catch (loadError) {
         if (loadError.name !== 'AbortError') setError(getErrorMessage(loadError))
       } finally {

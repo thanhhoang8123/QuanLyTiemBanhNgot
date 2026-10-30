@@ -1,10 +1,14 @@
 package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.CreateOrderItemRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.CustomerOrderRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderPromotionSuggestionResponse;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderResponse;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.PosOrderQuoteRequest;
+import com.nhom4.QuanLyTiemBanhNgot.entity.Order;
+import com.nhom4.QuanLyTiemBanhNgot.entity.OrderItem;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Product;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Promotion;
 import com.nhom4.QuanLyTiemBanhNgot.entity.PromotionProduct;
@@ -34,8 +38,13 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -72,7 +81,7 @@ class OrderServicePromotionTests {
                 List.of(new CreateOrderItemRequest(11L, 3)),
                 null
         );
-        when(productRepository.findAllById(anyCollection()))
+        lenient().when(productRepository.findAllById(anyCollection()))
                 .thenReturn(List.of(product));
     }
 
@@ -200,6 +209,7 @@ class OrderServicePromotionTests {
                 0,
                 new BigDecimal("80000.00").compareTo(quote.catalogPrices().get(0).salePrice())
         );
+        assertEquals("TWENTY", quote.catalogPrices().get(0).promotionCode());
         assertEquals(BigDecimal.ZERO, quote.productDiscountAmount());
     }
 
@@ -339,6 +349,139 @@ class OrderServicePromotionTests {
     }
 
     @Test
+    void catalogUnitPriceStaysStableAsCartQuantityChangesWithMaximumDiscount() {
+        Promotion cappedPromotion = promotion(
+                15L, "CAP15", new BigDecimal("20"), new BigDecimal("15000"),
+                BigDecimal.ZERO, true,
+                LocalDate.now(ZoneOffset.UTC), LocalDate.now(ZoneOffset.UTC));
+        when(promotionRepository.findAll()).thenReturn(List.of(cappedPromotion));
+        when(promotionProductRepository.findByPromotion_IdAndProduct_IdIn(
+                eq(15L), anyCollection()))
+                .thenReturn(List.of(link(cappedPromotion, product)));
+
+        var quantityOne = orderService.quotePos(new PosOrderQuoteRequest(
+                List.of(new CreateOrderItemRequest(11L, 1)),
+                List.of(11L),
+                null,
+                0
+        ));
+        var quantityTwo = orderService.quotePos(new PosOrderQuoteRequest(
+                List.of(new CreateOrderItemRequest(11L, 2)),
+                List.of(11L),
+                null,
+                0
+        ));
+
+        assertEquals(0, new BigDecimal("85000.00").compareTo(
+                quantityOne.catalogPrices().get(0).salePrice()));
+        assertEquals(0, new BigDecimal("85000.00").compareTo(
+                quantityTwo.catalogPrices().get(0).salePrice()));
+        assertEquals(0, new BigDecimal("85000.00").compareTo(
+                quantityOne.items().get(0).effectiveUnitPrice()));
+        assertEquals(0, new BigDecimal("92500.00").compareTo(
+                quantityTwo.items().get(0).effectiveUnitPrice()));
+    }
+
+    @Test
+    void customerQuoteAppliesActiveProductPromotionBeforeCheckout() {
+        Promotion cappedPromotion = promotion(
+                16L, "SHOP15", new BigDecimal("20"), new BigDecimal("15000"),
+                BigDecimal.ZERO, true,
+                LocalDate.now(ZoneOffset.UTC), LocalDate.now(ZoneOffset.UTC));
+        when(promotionRepository.findAll()).thenReturn(List.of(cappedPromotion));
+        when(promotionProductRepository.findByPromotion_IdAndProduct_IdIn(
+                eq(16L), anyCollection()))
+                .thenReturn(List.of(link(cappedPromotion, product)));
+
+        var quote = orderService.quoteCustomer(new OrderQuoteRequest(
+                List.of(new CreateOrderItemRequest(11L, 2)),
+                null
+        ));
+
+        assertEquals(0, new BigDecimal("200000.00").compareTo(quote.totalAmount()));
+        assertEquals(0, new BigDecimal("15000.00").compareTo(quote.discountAmount()));
+        assertEquals(0, new BigDecimal("185000.00").compareTo(quote.finalAmount()));
+        assertEquals(0, new BigDecimal("185000.00").compareTo(
+                quote.items().get(0).lineTotal()));
+    }
+
+    @Test
+    void customerOrderStoresTheDiscountedAmountForPayment() {
+        Customer customer = new Customer();
+        customer.setId(21L);
+        customer.setStatus(true);
+        Promotion promotion = promotion(
+                17L, "SHOP15", new BigDecimal("20"), new BigDecimal("15000"),
+                BigDecimal.ZERO, true,
+                LocalDate.now(ZoneOffset.UTC), LocalDate.now(ZoneOffset.UTC));
+        Order order = new Order();
+        when(orderRepository.findByCustomer_IdAndCustomerRequestKey(21L, "request-key"))
+                .thenReturn(Optional.empty());
+        when(productRepository.findAllByIdForUpdate(anyList())).thenReturn(List.of(product));
+        when(promotionRepository.findAll()).thenReturn(List.of(promotion));
+        when(promotionProductRepository.findByPromotion_IdAndProduct_IdIn(
+                eq(17L), anyCollection()))
+                .thenReturn(List.of(link(promotion, product)));
+        when(orderMapper.toEntity(any(), same(customer), isNull()))
+                .thenAnswer(invocation -> {
+                    var createRequest = invocation.<com.nhom4.QuanLyTiemBanhNgot.dto.order.CreateOrderRequest>getArgument(0);
+                    assertEquals(true, createRequest.applyProductPromotions());
+                    return order;
+                });
+        when(orderRepository.saveAndFlush(any(Order.class))).thenAnswer(invocation -> {
+            Order savedOrder = invocation.getArgument(0);
+            savedOrder.setId(42L);
+            return savedOrder;
+        });
+        when(orderRepository.existsByOrderCode("DH000042")).thenReturn(false);
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderMapper.toEntity(
+                same(order),
+                same(product),
+                any(CreateOrderItemRequest.class),
+                any(BigDecimal.class),
+                any(BigDecimal.class),
+                any(BigDecimal.class)
+        )).thenAnswer(invocation -> {
+            OrderItem item = new OrderItem();
+            item.setOrder(invocation.getArgument(0));
+            item.setProduct(invocation.getArgument(1));
+            item.setQuantity(((CreateOrderItemRequest) invocation.getArgument(2)).quantity());
+            item.setUnitPrice(invocation.getArgument(3));
+            item.setDiscountAmount(invocation.getArgument(4));
+            item.setLineTotal(invocation.getArgument(5));
+            return item;
+        });
+        when(orderItemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderMapper.toResponse(same(order), anyList(), any(BigDecimal.class)))
+                .thenAnswer(invocation -> {
+                    BigDecimal finalAmount = invocation.getArgument(2);
+                    return new OrderResponse(
+                            order.getId(), order.getOrderCode(), customer.getId(), null,
+                            order.getOrderDate(), order.getDeliveryAddress(), order.getDeliveryStatus(),
+                            order.getTotalAmount(), order.getDiscountAmount(), finalAmount,
+                            order.getStatus(), order.getCreatedAt(), List.of(), null, null, null
+                    );
+                });
+
+        OrderResponse response = orderService.createCustomerOrder(
+                customer,
+                new CustomerOrderRequest(
+                        null,
+                        List.of(new CreateOrderItemRequest(11L, 2)),
+                        null,
+                        null,
+                        null
+                ),
+                "request-key"
+        );
+
+        assertEquals(0, new BigDecimal("185000.00").compareTo(order.getTotalAmount()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(order.getDiscountAmount()));
+        assertEquals(0, new BigDecimal("185000.00").compareTo(response.finalAmount()));
+    }
+
+    @Test
     void bestPromotionIsChosenSeparatelyForEachProduct() {
         Product productB = product(12L, "Bánh B", "200000.00");
         Promotion firstForA = promotion(
@@ -378,8 +521,10 @@ class OrderServicePromotionTests {
 
         assertEquals(0, new BigDecimal("20000.00").compareTo(
                 quote.items().get(0).productDiscountAmount()));
+        assertEquals("A_20", quote.items().get(0).promotionCode());
         assertEquals(0, new BigDecimal("10000.00").compareTo(
                 quote.items().get(1).productDiscountAmount()));
+        assertEquals("B_5", quote.items().get(1).promotionCode());
         assertEquals(0, new BigDecimal("270000.00").compareTo(
                 quote.subtotalAfterPromotions()));
     }

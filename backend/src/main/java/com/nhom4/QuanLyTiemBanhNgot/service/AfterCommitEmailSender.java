@@ -25,11 +25,15 @@ public class AfterCommitEmailSender {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                try {
-                    mailSender.send(message);
-                } catch (MailException exception) {
-                    LOGGER.warn("Email could not be sent after the database transaction committed.");
-                }
+                java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    try {
+                        mailSender.send(message);
+                    } catch (MailException exception) {
+                        LOGGER.warn("Email could not be sent after the database transaction committed: {}", exception.getMessage());
+                    } catch (Exception ex) {
+                        LOGGER.warn("Background email sending encountered an error: {}", ex.getMessage());
+                    }
+                });
             }
         });
     }

@@ -30,7 +30,7 @@ public class PaymentController {
      */
     public PaymentController(
             PaymentService paymentService,
-            @Value("${app.payment-simulation.enabled:false}") boolean paymentSimulationEnabled) {
+            @Value("${app.payment-simulation.enabled:true}") boolean paymentSimulationEnabled) {
         this.paymentService = paymentService;
         this.paymentSimulationEnabled = paymentSimulationEnabled;
     }

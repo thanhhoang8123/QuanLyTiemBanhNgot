@@ -268,9 +268,14 @@ export default function PromotionsPage({ onToast }) {
       key: 'promotionCode',
       label: 'Mã / chương trình',
       render: (promotion) => (
-        <div className="min-w-[170px]">
-          <p className="font-bold text-rosewood">{promotion.promotionCode}</p>
-          <p className="mt-1 text-[11px] text-muted">{promotion.name}</p>
+        <div className="min-w-[180px]">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-lg border border-caramel/50 bg-caramel-soft px-2.5 py-0.5 font-mono text-xs font-bold text-rosewood shadow-xs">
+              <Icon name="tag" size={12} />
+              {promotion.promotionCode}
+            </span>
+          </div>
+          <p className="mt-1 text-xs font-medium text-rosewood">{promotion.name}</p>
         </div>
       ),
     },
@@ -343,17 +348,58 @@ export default function PromotionsPage({ onToast }) {
     },
   ]
 
+  const activeCount = useMemo(() => promotions.filter((p) => p.status === true).length, [promotions])
+  const maxDiscount = useMemo(() => promotions.reduce((max, p) => Math.max(max, Number(p.discountPercent ?? 0)), 0), [promotions])
+  const today = new Date().toISOString().slice(0, 10)
+  const expiringSoonCount = useMemo(() => promotions.filter((p) => {
+    if (p.status !== true || !p.endDate) return false
+    const diff = (new Date(p.endDate) - new Date(today)) / (1000 * 60 * 60 * 24)
+    return diff >= 0 && diff <= 7
+  }).length, [promotions, today])
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Khuyến mãi"
-        description="Quản lý mã giảm giá, điều kiện đơn hàng và thời gian áp dụng."
+        title="Chương trình khuyến mãi"
         actions={(
           <Button onClick={openCreate} disabled={isLoading || Boolean(loadError)}>
             <Icon name="plus" size={16} /> Thêm khuyến mãi
           </Button>
         )}
       />
+
+      <section aria-label="Tổng quan khuyến mãi" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: 'Tổng chương trình', value: promotions.length, icon: 'tag' },
+          { label: 'Đang áp dụng', value: activeCount, icon: 'check' },
+          { label: 'Mức giảm cao nhất', value: `${maxDiscount}%`, icon: 'sparkles' },
+          {
+            label: 'Sắp hết hạn (≤ 7 ngày)',
+            value: expiringSoonCount,
+            icon: 'clock',
+            highlight: expiringSoonCount > 0,
+          },
+        ].map((stat) => (
+          <article
+            key={stat.label}
+            className={`soft-shadow flex items-center justify-between rounded-2xl border p-4 sm:p-5 transition hover:shadow-md ${
+              stat.highlight
+                ? 'border-amber-300 bg-amber-50/80'
+                : 'border-border bg-paper'
+            }`}
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-muted">{stat.label}</p>
+              <p className="font-display mt-2 truncate text-2xl font-bold text-rosewood">
+                {stat.value}
+              </p>
+            </div>
+            <span className="ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-caramel-soft text-rosewood">
+              <Icon name={stat.icon} size={18} />
+            </span>
+          </article>
+        ))}
+      </section>
 
       {listError && (
         <div role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-4 py-3 text-sm text-danger">

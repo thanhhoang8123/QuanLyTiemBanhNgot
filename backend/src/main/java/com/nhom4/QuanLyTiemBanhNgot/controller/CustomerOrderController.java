@@ -16,7 +16,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/customer/orders")
-@PreAuthorize("hasRole('CUSTOMER')")
+@PreAuthorize("hasAnyRole('CUSTOMER','ADMIN','MANAGER','STAFF')")
 public class CustomerOrderController {
     private final CustomerOrderService customerOrderService;
     private final OrderService orderService;
@@ -28,7 +28,7 @@ public class CustomerOrderController {
 
     @PostMapping("/quote")
     public OrderQuoteResponse quote(@Valid @RequestBody OrderQuoteRequest request) {
-        return orderService.quote(request);
+        return orderService.quoteCustomer(request);
     }
 
     @PostMapping

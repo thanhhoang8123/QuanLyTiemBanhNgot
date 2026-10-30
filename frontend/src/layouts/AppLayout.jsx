@@ -14,6 +14,9 @@ const pageTitles = {
   '/admin/suppliers': 'Nhà cung cấp',
   '/admin/purchase-orders': 'Phiếu nhập hàng',
   '/admin/orders': 'Đơn hàng',
+  '/admin/contact-messages': 'Tin nhắn hỗ trợ',
+  '/admin/live-chat': 'Chat hỗ trợ khách hàng',
+  '/admin/payments': 'Thanh toán & đối soát',
   '/admin/customers': 'Khách hàng',
   '/admin/custom-orders': 'Đơn đặt bánh riêng',
   '/admin/promotions': 'Khuyến mãi',
@@ -68,8 +71,10 @@ export default function AppLayout() {
         account={account}
         open={mobileMenuOpen}
         onClose={() => setMobileMenuOpen(false)}
+        onLogout={logout}
+        isLoggingOut={isLoggingOut}
       />
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 overflow-x-hidden">
         <Topbar
           title={pageTitles[currentPath] ?? 'Quản lý cửa hàng'}
           account={account}
@@ -83,7 +88,7 @@ export default function AppLayout() {
             {logoutError}
           </p>
         )}
-        <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-7 xl:p-10">
+        <main className={`w-full min-w-0 max-w-full overflow-x-hidden ${currentPath === '/pos' ? 'p-3 sm:p-4 lg:p-5' : 'mx-auto max-w-[1600px] p-4 sm:p-7 xl:p-10'}`}>
           <Outlet />
         </main>
       </div>

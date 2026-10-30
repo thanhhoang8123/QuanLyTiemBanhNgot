@@ -20,6 +20,8 @@ const PromotionsPage = lazy(() => import('./features/promotions/pages/Promotions
 const PromotionProductsPage = lazy(() => import('./features/promotion-products/pages/PromotionProductsPage.jsx'))
 const CustomOrdersPage = lazy(() => import('./features/custom-orders/pages/CustomOrdersPage.jsx'))
 const PaymentsPage = lazy(() => import('./features/payments/pages/PaymentsPage.jsx'))
+const ContactMessagesPage = lazy(() => import('./features/contact-messages/pages/ContactMessagesPage.jsx'))
+const LiveChatPage = lazy(() => import('./features/live-chat/pages/LiveChatPage.jsx'))
 const ShopHomePage = lazy(() => import('./features/shop/pages/ShopHomePage.jsx'))
 const ShopProductsPage = lazy(() => import('./features/shop/pages/ShopProductsPage.jsx'))
 const ShopProductDetailPage = lazy(() => import('./features/shop/pages/ShopProductDetailPage.jsx'))
@@ -28,6 +30,11 @@ const ShopCheckoutPage = lazy(() => import('./features/shop/pages/ShopCheckoutPa
 const ShopOrderResultPage = lazy(() => import('./features/shop/pages/ShopOrderResultPage.jsx'))
 const ShopOrdersPage = lazy(() => import('./features/shop/pages/ShopOrdersPage.jsx'))
 const ShopOrderDetailPage = lazy(() => import('./features/shop/pages/ShopOrderDetailPage.jsx'))
+const ShopAccountPage = lazy(() => import('./features/shop/pages/ShopAccountPage.jsx'))
+const ShopContactPage = lazy(() => import('./features/shop/pages/ShopContactPage.jsx'))
+const ShopArticlesPage = lazy(() => import('./features/shop/pages/ShopArticlesPage.jsx'))
+const ShopArticleDetailPage = lazy(() => import('./features/shop/pages/ShopArticleDetailPage.jsx'))
+const ShopCustomOrderPage = lazy(() => import('./features/shop/pages/ShopCustomOrderPage.jsx'))
 
 const RegisterPage = lazy(() => import('./features/auth/pages/RegisterPage.jsx'))
 const VerifyEmailPage = lazy(() => import('./features/auth/pages/VerifyEmailPage.jsx'))
@@ -121,12 +128,17 @@ export default function App() {
           <Route index element={<ShopHomePage />} />
           <Route path="products" element={<ShopProductsPage />} />
           <Route path="products/:productId" element={<ShopProductDetailPage />} />
+          <Route path="articles" element={<ShopArticlesPage />} />
+          <Route path="articles/:slug" element={<ShopArticleDetailPage />} />
+          <Route path="contact" element={<ShopContactPage />} />
           <Route path="cart" element={<ShopCartPage />} />
+          <Route path="custom-order" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopCustomOrderPage /></RequireAuth>} />
           
           <Route path="checkout" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopCheckoutPage /></RequireAuth>} />
           <Route path="order-result" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopOrderResultPage /></RequireAuth>} />
           <Route path="orders" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopOrdersPage /></RequireAuth>} />
           <Route path="orders/:orderId" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopOrderDetailPage /></RequireAuth>} />
+          <Route path="account" element={<RequireAuth allowedRoles={['CUSTOMER']}><ShopAccountPage /></RequireAuth>} />
           <Route path="register" element={<RegisterPage />} />
           <Route path="verify-email" element={<VerifyEmailPage />} />
         </Route>
@@ -136,7 +148,7 @@ export default function App() {
             path="admin/accounts"
             element={<RequireAuth allowedRoles={ADMIN_ROLES}><AccountsPage onToast={showToast} /></RequireAuth>}
           />
-          <Route path="admin/products" element={<RequireAuth allowedRoles={MANAGER_ROLES}><ProductsPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/products" element={<RequireAuth allowedRoles={STAFF_ROLES}><ProductsPage onToast={showToast} /></RequireAuth>} />
           <Route path="admin/inventory" element={<RequireAuth allowedRoles={MANAGER_ROLES}><InventoryPage onToast={showToast} /></RequireAuth>} />
           <Route path="admin/suppliers" element={<RequireAuth allowedRoles={MANAGER_ROLES}><SuppliersPage onToast={showToast} /></RequireAuth>} />
           <Route path="admin/purchase-orders" element={<RequireAuth allowedRoles={MANAGER_ROLES}><PurchaseOrdersPage onToast={showToast} /></RequireAuth>} />
@@ -144,6 +156,8 @@ export default function App() {
           <Route path="admin/customers" element={<RequireAuth allowedRoles={STAFF_ROLES}><CustomersPage onToast={showToast} /></RequireAuth>} />
           <Route path="admin/custom-orders" element={<RequireAuth allowedRoles={STAFF_ROLES}><CustomOrdersPage onToast={showToast} /></RequireAuth>} />
           <Route path="admin/payments" element={<RequireAuth allowedRoles={STAFF_ROLES}><PaymentsPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/contact-messages" element={<RequireAuth allowedRoles={STAFF_ROLES}><ContactMessagesPage onToast={showToast} /></RequireAuth>} />
+          <Route path="admin/live-chat" element={<RequireAuth allowedRoles={STAFF_ROLES}><LiveChatPage onToast={showToast} /></RequireAuth>} />
           <Route path="admin/promotions" element={<RequireAuth allowedRoles={MANAGER_ROLES}><PromotionsPage onToast={showToast} /></RequireAuth>} />
           <Route path="admin/promotion-products" element={<RequireAuth allowedRoles={MANAGER_ROLES}><PromotionProductsPage onToast={showToast} /></RequireAuth>} />
           <Route path="admin/logs" element={<RequireAuth allowedRoles={MANAGER_ROLES}><ManagementLogsPage /></RequireAuth>} />

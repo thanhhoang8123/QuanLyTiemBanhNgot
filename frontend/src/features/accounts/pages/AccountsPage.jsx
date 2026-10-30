@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Button from '../../../components/Button.jsx'
+import Icon from '../../../components/Icon.jsx'
 import ConfirmDialog from '../../../components/ConfirmDialog.jsx'
 import DataTable from '../../../components/DataTable.jsx'
 import ErrorState from '../../../components/ErrorState.jsx'
@@ -225,25 +226,58 @@ export default function AccountsPage({ onToast }) {
     },
   ]
 
+  const adminManagerCount = useMemo(() => accounts.filter((a) => a.roleCode === 'ADMIN' || a.roleCode === 'MANAGER').length, [accounts])
+  const staffCount = useMemo(() => accounts.filter((a) => a.roleCode === 'STAFF').length, [accounts])
+  const activeCount = useMemo(() => accounts.filter((a) => a.status === 'ACTIVE').length, [accounts])
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Quản lý tài khoản"
-        description="Tạo tài khoản nhân viên, cập nhật vai trò và khóa tài khoản không còn hoạt động."
-        actions={<Button onClick={openCreate}>Tạo tài khoản</Button>}
+        actions={(
+          <Button onClick={openCreate}>
+            <Icon name="plus" size={16} /> Tạo tài khoản
+          </Button>
+        )}
       />
 
-      <SearchFilter
-        value={query}
-        onChange={setQuery}
-        placeholder="Tìm theo username, vai trò hoặc trạng thái..."
-      />
+      <section aria-label="Tổng quan tài khoản" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: 'Tổng tài khoản', value: accounts.length, icon: 'receipt' },
+          { label: 'Quản trị & Quản lý', value: adminManagerCount, icon: 'sparkles' },
+          { label: 'Nhân viên', value: staffCount, icon: 'bag' },
+          { label: 'Đang hoạt động', value: activeCount, icon: 'check' },
+        ].map((stat) => (
+          <article
+            key={stat.label}
+            className="soft-shadow flex items-center justify-between rounded-2xl border border-border bg-paper p-4 sm:p-5 transition hover:shadow-md"
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-muted">{stat.label}</p>
+              <p className="font-display mt-2 truncate text-2xl font-bold text-rosewood">
+                {stat.value}
+              </p>
+            </div>
+            <span className="ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-caramel-soft text-rosewood">
+              <Icon name={stat.icon} size={18} />
+            </span>
+          </article>
+        ))}
+      </section>
+
+      <section className="soft-shadow rounded-2xl border border-border bg-paper p-4 sm:p-5">
+        <SearchFilter
+          value={query}
+          onChange={setQuery}
+          placeholder="Tìm theo tên đăng nhập, vai trò hoặc trạng thái..."
+        />
+      </section>
 
       {loadError && <ErrorState description={loadError} onRetry={() => void loadData()} />}
       {isLoading ? (
         <LoadingState label="Đang tải tài khoản..." />
       ) : !loadError ? (
-        <div className="overflow-hidden rounded-2xl border border-border bg-white">
+        <div className="soft-shadow overflow-hidden rounded-2xl border border-border bg-paper">
           <DataTable
             columns={columns}
             rows={filteredAccounts}

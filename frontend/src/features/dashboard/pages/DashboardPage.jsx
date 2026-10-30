@@ -12,7 +12,10 @@ import SalesTrendChart from '../components/SalesTrendChart.jsx'
 import CategoryDonut from '../components/CategoryDonut.jsx'
 import OrdersTable from '../components/OrdersTable.jsx'
 import LowStockPanel from '../components/LowStockPanel.jsx'
+import ExpiringProductsPanel from '../components/ExpiringProductsPanel.jsx'
+import { isExpiringWithinDays } from '../../products/services/productExpiry.js'
 import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
+import { exportToExcel } from '../../../utils/excelExport.js'
 
 const moneyFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 })
 const categoryColors = [
@@ -139,6 +142,85 @@ export default function DashboardPage() {
     return [...totals.values()].sort((first, second) => second.quantity - first.quantity)[0] ?? null
   }, [paidOrders, productsById])
 
+  const top5BestSellers = useMemo(() => {
+    const totals = new Map()
+    paidOrders.forEach((order) => {
+      ;(order.items ?? []).forEach((item) => {
+        const key = Number(item.productId)
+        const product = productsById.get(key)
+        const current = totals.get(key) ?? {
+          id: key,
+          name: product?.name ?? item.productName ?? 'Sản phẩm',
+          quantity: 0,
+          revenue: 0,
+        }
+        current.quantity += Number(item.quantity ?? 0)
+        current.revenue += Number(item.lineTotal ?? (Number(item.quantity ?? 0) * Number(product?.price ?? 0)))
+        totals.set(key, current)
+      })
+    })
+    return [...totals.values()]
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 5)
+  }, [paidOrders, productsById])
+
+  const paymentMethodStats = useMemo(() => {
+    let cashCount = 0
+    let cashAmount = 0
+    let vnpayCount = 0
+    let vnpayAmount = 0
+    let pointsCount = 0
+    let pointsAmount = 0
+
+    paidOrders.forEach((order) => {
+      const method = (order.paymentMethod || '').toUpperCase()
+      const amount = Number(order.finalAmount ?? 0)
+      if (method.includes('VNPAY') || method === 'CARD' || method === 'EWALLET') {
+        vnpayCount += 1
+        vnpayAmount += amount
+      } else if (method === 'LOYALTY_POINTS' || amount === 0) {
+        pointsCount += 1
+        pointsAmount += amount
+      } else {
+        cashCount += 1
+        cashAmount += amount
+      }
+    })
+
+    const totalAmount = revenue || 1
+    return {
+      cash: { count: cashCount, amount: cashAmount, percent: Math.round((cashAmount / totalAmount) * 100) },
+      vnpay: { count: vnpayCount, amount: vnpayAmount, percent: Math.round((vnpayAmount / totalAmount) * 100) },
+      points: { count: pointsCount, amount: pointsAmount, percent: Math.round((pointsAmount / totalAmount) * 100) },
+    }
+  }, [paidOrders, revenue])
+
+  const handleExportRevenueReport = () => {
+    const headers = [
+      'Mã đơn hàng',
+      'Ngày giờ đặt',
+      'Số tiền gốc (đ)',
+      'Giảm giá voucher (đ)',
+      'Doanh thu thực thu (đ)',
+      'Phương thức thanh toán',
+      'Trạng thái đơn',
+    ]
+    const rows = paidOrders.map((order) => [
+      order.orderCode || `DH-${order.id}`,
+      order.orderDate || '',
+      order.totalAmount ?? 0,
+      order.discountAmount ?? 0,
+      order.finalAmount ?? 0,
+      order.paymentMethod || 'CASH',
+      order.status || 'CONFIRMED',
+    ])
+    exportToExcel({
+      filename: `BaoCao_DoanhThu_${period.replace(/\s+/g, '_')}`,
+      headers,
+      rows,
+    })
+  }
+
   const salesTrend = useMemo(() => {
     const totals = new Map()
     const cursor = new Date(periodStart)
@@ -192,6 +274,11 @@ export default function DashboardPage() {
     .sort((first, second) => Number(first.stockQuantity ?? 0) - Number(second.stockQuantity ?? 0))
     .slice(0, 5), [data.ingredients])
 
+  const expiringProducts = useMemo(() => data.products
+    .filter((item) => item.status !== false && isExpiringWithinDays(item.expiryDate, 1))
+    .sort((a, b) => (a.expiryDate || '').localeCompare(b.expiryDate || ''))
+    .slice(0, 5), [data.products])
+
   const stats = [
     {
       label: 'Doanh thu đã thanh toán',
@@ -219,54 +306,62 @@ export default function DashboardPage() {
       value: errors.orders || errors.products ? '—' : bestSeller?.name ?? 'Chưa có dữ liệu',
       note: bestSeller ? `${bestSeller.quantity} sản phẩm đã bán` : period,
       icon: 'sparkles',
-      tone: 'lavender',
+      tone: 'sand',
     },
   ]
 
-  const recentOrders = [...data.orders]
-    .sort((first, second) => (parseOrderDate(second.orderDate)?.getTime() ?? 0) - (parseOrderDate(first.orderDate)?.getTime() ?? 0))
-    .slice(0, 5)
-    .map((order) => ({
-      ...order,
-      customerName: customersById.get(Number(order.customerId))?.fullName || `Khách hàng #${order.customerId ?? '—'}`,
-    }))
+  const periodLabels = {
+    'Hôm nay': 'Hôm nay',
+    '7 ngày qua': '7 ngày qua',
+    'Tháng này': 'Tháng này',
+  }
 
-  const periodLabels = { 'Hôm nay': 'hôm nay', '7 ngày qua': '7 ngày qua', 'Tháng này': 'tháng này' }
-  const loadError = Object.entries(errors)
-    .map(([key, message]) => `${key}: ${message}`)
-    .join(' · ')
+  const recentOrders = useMemo(() => [...data.orders]
+    .sort((first, second) => {
+      const firstDate = parseOrderDate(first.orderDate)?.getTime() ?? 0
+      const secondDate = parseOrderDate(second.orderDate)?.getTime() ?? 0
+      return secondDate - firstDate
+    })
+    .slice(0, 5), [data.orders])
+
+  if (isLoading) {
+    return <LoadingState message="Đang tải dữ liệu tổng quan..." />
+  }
+
+  const loadError = Object.values(errors).filter(Boolean)[0]
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-[11px] font-semibold tracking-wide text-muted">
-            {new Intl.DateTimeFormat('vi-VN', { dateStyle: 'full' }).format(now)}
-          </p>
-          <h2 className="font-display mt-1 text-[28px] leading-tight text-rosewood sm:text-[34px]">Tổng quan cửa hàng</h2>
-          <p className="mt-2 text-xs text-muted">Số liệu được tổng hợp từ dữ liệu đơn hàng và kho hiện tại.</p>
+          <h1 className="font-display mt-1 text-[28px] text-rosewood sm:text-[32px]">Bảng điều khiển</h1>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="sr-only" htmlFor="dashboard-period">Khoảng thời gian</label>
-          <select
-            id="dashboard-period"
-            value={period}
-            onChange={(event) => setPeriod(event.target.value)}
-            className="h-10 rounded-xl border border-border bg-paper px-3 text-xs font-medium text-rosewood outline-none transition hover:border-caramel-hover focus:border-caramel-hover"
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleExportRevenueReport}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-paper px-3 py-2 text-xs font-semibold text-rosewood shadow-xs transition hover:border-caramel hover:text-caramel"
           >
+            <Icon name="download" size={14} /> Xuất báo cáo doanh thu ({period})
+          </button>
+          <div className="flex rounded-xl border border-border bg-paper p-1 shadow-xs">
             {periodOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setPeriod(option.value)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  period === option.value ? 'bg-caramel text-white shadow-xs' : 'text-muted hover:text-rosewood'
+                }`}
+              >
+                {option.label}
+              </button>
             ))}
-          </select>
-          <Link to="/pos" className="flex h-10 items-center gap-2 rounded-xl bg-caramel px-4 text-xs font-semibold text-action-ink shadow-sm transition hover:bg-caramel-hover">
-            <Icon name="plus" size={15} /> Tạo đơn hàng
-          </Link>
+          </div>
         </div>
       </div>
 
-      {isLoading ? (
-        <LoadingState label="Đang tải số liệu tổng quan..." />
-      ) : loadError ? (
+      {loadError ? (
         <div role="alert" className="flex flex-col gap-3 rounded-xl border border-danger-line bg-danger-soft px-4 py-3 text-xs text-danger sm:flex-row sm:items-center sm:justify-between">
           <span>Không tải được đầy đủ số liệu: {loadError}</span>
           <button type="button" onClick={() => setReloadVersion((version) => version + 1)} className="shrink-0 font-semibold underline">Thử tải lại</button>
@@ -282,9 +377,115 @@ export default function DashboardPage() {
         <CategoryDonut rows={categoryTotals} orderCount={paidOrders.length} />
       </section>
 
+      {/* Biểu đồ Top 5 bánh bán chạy nhất & Tỷ lệ thanh toán (Thesis Feature 6) */}
+      <section className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {/* Top 5 Bánh Bán Chạy Nhất */}
+        <div className="soft-shadow rounded-2xl border border-border bg-paper p-5">
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <div>
+              <h3 className="font-display text-base font-bold text-rosewood">Top 5 Bánh Bán Chạy ({period})</h3>
+              <p className="text-[11px] text-muted">Xếp hạng theo sản lượng bán ra thực tế</p>
+            </div>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 font-bold text-sm">
+              🏆
+            </span>
+          </div>
+          <div className="mt-4 space-y-3.5">
+            {top5BestSellers.length === 0 ? (
+              <p className="py-6 text-center text-xs text-muted">Chưa có dữ liệu bán hàng trong kỳ này.</p>
+            ) : (
+              top5BestSellers.map((item, idx) => {
+                const maxQty = top5BestSellers[0].quantity || 1
+                const percent = Math.round((item.quantity / maxQty) * 100)
+                return (
+                  <div key={item.id} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-rosewood">
+                        <strong className="text-caramel mr-1.5 font-bold">#{idx + 1}</strong> {item.name}
+                      </span>
+                      <span className="text-stone-600 font-medium">
+                        <strong className="text-rosewood">{item.quantity}</strong> cái · {moneyFormat.format(item.revenue)}đ
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-stone-100">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-caramel to-amber-500 transition-all duration-500"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Tỷ lệ thanh toán (Tiền mặt vs VNPay / Chuyển khoản) */}
+        <div className="soft-shadow rounded-2xl border border-border bg-paper p-5">
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <div>
+              <h3 className="font-display text-base font-bold text-rosewood">Tỷ Lệ Phương Thức Thanh Toán</h3>
+              <p className="text-[11px] text-muted">Cơ cấu doanh thu theo cổng thanh toán ({period})</p>
+            </div>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-50 text-teal-600 font-bold text-sm">
+              💳
+            </span>
+          </div>
+          <div className="mt-4 space-y-4">
+            {/* Tiền mặt */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 font-semibold text-stone-700">
+                  <span>💵</span> Tiền mặt tại quầy ({paymentMethodStats.cash.count} đơn)
+                </span>
+                <span className="font-bold text-rosewood">
+                  {moneyFormat.format(paymentMethodStats.cash.amount)}đ ({paymentMethodStats.cash.percent}%)
+                </span>
+              </div>
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-stone-100">
+                <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${paymentMethodStats.cash.percent}%` }} />
+              </div>
+            </div>
+
+            {/* VNPay / Thẻ / Chuyển khoản */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 font-semibold text-stone-700">
+                  <span>📱</span> VNPay / Chuyển khoản / Thẻ ({paymentMethodStats.vnpay.count} đơn)
+                </span>
+                <span className="font-bold text-rosewood">
+                  {moneyFormat.format(paymentMethodStats.vnpay.amount)}đ ({paymentMethodStats.vnpay.percent}%)
+                </span>
+              </div>
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-stone-100">
+                <div className="h-full rounded-full bg-sky-500 transition-all" style={{ width: `${paymentMethodStats.vnpay.percent}%` }} />
+              </div>
+            </div>
+
+            {/* Điểm tích lũy */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 font-semibold text-stone-700">
+                  <span>✨</span> Điểm tích lũy thành viên ({paymentMethodStats.points.count} đơn)
+                </span>
+                <span className="font-bold text-rosewood">
+                  {paymentMethodStats.points.count} lượt ({paymentMethodStats.points.percent}%)
+                </span>
+              </div>
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-stone-100">
+                <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${paymentMethodStats.points.percent}%` }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="grid grid-cols-1 items-start gap-5 2xl:grid-cols-[minmax(0,1.7fr)_minmax(285px,0.8fr)]">
         <OrdersTable orders={recentOrders} totalOrders={data.orders.length} period={periodLabels[period]} error={errors.orders} />
-        {isManager && <LowStockPanel items={lowStockItems} error={errors.ingredients} />}
+        <div className="space-y-5">
+          {isManager && <LowStockPanel items={lowStockItems} error={errors.ingredients} />}
+          <ExpiringProductsPanel items={expiringProducts} error={errors.products} />
+        </div>
       </section>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-petal px-5 py-4">

@@ -12,8 +12,8 @@ public record CreatePaymentRequest(
 
         @NotBlank(message = "Phương thức thanh toán không được để trống")
         @Pattern(
-                regexp = "CASH|CARD|EWALLET",
-                message = "Phương thức thanh toán phải là CASH, CARD hoặc EWALLET"
+                regexp = "CASH|CARD|EWALLET|LOYALTY_POINTS",
+                message = "Phương thức thanh toán phải là CASH, CARD, EWALLET hoặc LOYALTY_POINTS"
         )
         String paymentMethod
 ) {

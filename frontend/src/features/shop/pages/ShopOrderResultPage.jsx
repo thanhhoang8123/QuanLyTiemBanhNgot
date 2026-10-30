@@ -24,6 +24,7 @@ const moneyFormat = new Intl.NumberFormat('vi-VN', {
   maximumFractionDigits: 0,
 })
 const emptyItems = []
+const statusPollDelays = [500, 1000]
 
 export default function ShopOrderResultPage() {
   const location = useLocation()
@@ -47,6 +48,8 @@ export default function ShopOrderResultPage() {
     let timerId
     let pollCount = 0
     let active = true
+    setReconciliationMessage('')
+    setReconciliationError('')
 
     const loadStatus = async () => {
       setStatusLoading(true)
@@ -65,6 +68,30 @@ export default function ShopOrderResultPage() {
           const delay = statusPollDelays[pollCount]
           pollCount += 1
           timerId = window.setTimeout(loadStatus, delay)
+        } else if (!terminal && transactionReference) {
+          setReconciliationLoading(true)
+          try {
+            const reconciliation = await reconcileCustomerVnPayPayment(
+              transactionReference,
+              { signal: controller.signal },
+            )
+            if (!active) return
+            if (reconciliation?.payment) {
+              setPaymentStatus(reconciliation.payment)
+            }
+            if (reconciliation?.message
+                && reconciliation.payment?.paymentStatus !== 'SUCCESS') {
+              setReconciliationMessage(reconciliation.message)
+            }
+          } catch (error) {
+            if (!active || error.name === 'AbortError') return
+            setReconciliationError(getUserFacingErrorMessage(
+              error,
+              'Chưa thể xác minh thanh toán. Vui lòng thử kiểm tra lại.',
+            ))
+          } finally {
+            if (active) setReconciliationLoading(false)
+          }
         }
       } catch (error) {
         if (!active || error.name === 'AbortError') return
@@ -128,40 +155,39 @@ export default function ShopOrderResultPage() {
     <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7 sm:py-16">
       {hasVnPayReturn ? (
         <div role="status" className="rounded-3xl border border-[#EAE3DA] bg-white p-7 text-center shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-10">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Thanh toán thử nghiệm VNPay</p>
           <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B]">
             {verifiedSuccess
-              ? 'Giao dịch thử nghiệm thành công'
+              ? 'Thanh toán thành công'
               : verifiedFailure
-                ? 'Giao dịch thử nghiệm chưa thành công'
+                ? 'Thanh toán chưa thành công'
                 : reconciliationRequired
-                  ? 'Giao dịch cần được đối soát'
-                  : 'Đang xác minh thanh toán'}
+                  ? 'Đang kiểm tra'
+                  : 'Đang xác minh'}
           </h1>
           <p className="mt-3 text-sm leading-6 text-[#806B65]">
             {verifiedSuccess
-              ? 'Kết quả thử nghiệm đã được xác nhận. Giao dịch này không phát sinh thanh toán thật.'
+              ? 'Đơn hàng đã được xác nhận.'
               : verifiedFailure
-                ? 'Giao dịch thử nghiệm chưa thành công. Bạn có thể kiểm tra đơn hàng hoặc liên hệ cửa hàng.'
+                ? 'Bạn có thể xem đơn hàng hoặc thử lại.'
                 : reconciliationRequired
-                  ? 'Giao dịch đang được cửa hàng kiểm tra trước khi xác nhận đơn.'
-                    : 'Chưa thể xác nhận kết quả giao dịch. Vui lòng kiểm tra lại trạng thái đơn hàng.'}
+                  ? 'Cửa hàng đang kiểm tra giao dịch.'
+                  : 'Vui lòng chờ trong giây lát.'}
           </p>
           {paymentStatus && (
             <dl className="mx-auto mt-5 grid max-w-md gap-2 rounded-2xl bg-[#FCF9F3] p-4 text-left text-xs text-[#675650]">
               <div className="flex justify-between gap-3"><dt>Mã đơn</dt><dd className="font-semibold">#{paymentStatus.orderId}</dd></div>
-              <div className="flex justify-between gap-3"><dt>Trạng thái đơn</dt><dd className="font-semibold">{{
+              <div className="flex justify-between gap-3"><dt>Trạng thái</dt><dd className="font-semibold">{{
                 PENDING: 'Chờ xác nhận',
                 CONFIRMED: 'Đã xác nhận',
                 COMPLETED: 'Hoàn tất',
                 CANCELLED: 'Đã hủy',
               }[paymentStatus.orderStatus] ?? 'Đang cập nhật'}</dd></div>
               <div className="flex justify-between gap-3"><dt>Thanh toán</dt><dd className="font-semibold">{{
-                PENDING: 'Đang chờ xác nhận',
+                PENDING: 'Đang chờ',
                 SUCCESS: 'Đã xác nhận',
                 FAILED: 'Chưa thành công',
               }[paymentStatus.paymentStatus] ?? 'Đang cập nhật'}</dd></div>
-              {paymentStatus.paidAt && <div className="flex justify-between gap-3"><dt>Thời điểm thanh toán</dt><dd>{new Date(paymentStatus.paidAt).toLocaleString('vi-VN')}</dd></div>}
+              {paymentStatus.paidAt && <div className="flex justify-between gap-3"><dt>Thời gian</dt><dd>{new Date(paymentStatus.paidAt).toLocaleString('vi-VN')}</dd></div>}
             </dl>
           )}
           {statusError && (
@@ -172,7 +198,7 @@ export default function ShopOrderResultPage() {
               )}
             </p>
           )}
-          {reconciliationMessage && (
+          {reconciliationMessage && !verifiedSuccess && !verifiedFailure && (
             <p role="status" className="mt-4 text-xs leading-5 text-[#536B50]">
               {reconciliationMessage}
             </p>
@@ -182,7 +208,7 @@ export default function ShopOrderResultPage() {
               {reconciliationError}
             </p>
           )}
-          {transactionReference && (
+          {transactionReference && !verifiedSuccess && !verifiedFailure && (
             <div className="mt-5 flex flex-wrap justify-center gap-3">
               <button
                 type="button"
@@ -190,21 +216,19 @@ export default function ShopOrderResultPage() {
                 disabled={statusLoading || reconciliationLoading}
                 className="inline-flex h-10 items-center justify-center rounded-full border border-[#DDCDB8] px-5 text-xs font-semibold text-[#76534D] disabled:opacity-50"
               >
-                {statusLoading ? 'Đang kiểm tra...' : 'Cập nhật trạng thái'}
+                {statusLoading ? 'Đang kiểm tra...' : 'Cập nhật'}
               </button>
-              {!verifiedSuccess && !verifiedFailure && !reconciliationRequired && (
-                <button
-                  type="button"
-                  onClick={reconcilePayment}
-                  disabled={statusLoading || reconciliationLoading}
-                  className="inline-flex h-10 items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:opacity-50"
-                >
-                  {reconciliationLoading ? 'Đang kiểm tra...' : 'Kiểm tra thanh toán'}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={reconcilePayment}
+                disabled={statusLoading || reconciliationLoading}
+                className="inline-flex h-10 items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:opacity-50"
+              >
+                {reconciliationLoading ? 'Đang kiểm tra...' : 'Kiểm tra'}
+              </button>
             </div>
           )}
-          <Link to="/shop/orders" className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white hover:bg-[#4A302B]">Xem đơn hàng</Link>
+          <Link to="/shop/orders" className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white hover:bg-[#4A302B]">Xem đơn</Link>
         </div>
       ) : order ? (
         <div className="rounded-3xl border border-[#EAE3DA] bg-white p-6 text-center shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-10">

@@ -296,7 +296,6 @@ export default function PaymentsPage({ onToast }) {
     <div className="space-y-6">
       <PageHeader
         title="Thanh toán"
-        description="Tạo thanh toán cho đơn hàng và theo dõi trạng thái giao dịch."
         actions={(
           <Button
             onClick={() => {

@@ -2,31 +2,31 @@
 @import "tailwindcss";
 
 :root {
-  --wa-cream: #FCF9F3;
-  --wa-petal: #FAF0EE;
-  --wa-rosewood: #76534D;
-  --wa-action-ink: #4A302B;
-  --wa-caramel: #D0A263;
-  --wa-caramel-hover: #DAB780;
-  --wa-blush: #E8A69A;
+  --wa-cream: #FAF8F5;
+  --wa-petal: #F5EFEB;
+  --wa-rosewood: #2B1D19;
+  --wa-action-ink: #FFFFFF;
+  --wa-caramel: #E07A2B;
+  --wa-caramel-hover: #CA691E;
+  --wa-blush: #F43F5E;
   --wa-paper: #FFFFFF;
-  --wa-border: #EAE3DA;
-  --wa-sand: #DDCDB8;
-  --wa-muted: #806B65;
-  --wa-rosewood-soft: #9A7972;
-  --wa-caramel-soft: #F6EEDF;
-  --wa-blush-soft: #F9EAE7;
-  --wa-success: #536B50;
-  --wa-success-soft: #EAF0E8;
-  --wa-success-line: #CBD8C7;
-  --wa-warning: #80602F;
-  --wa-warning-soft: #F6EEDC;
-  --wa-warning-line: #E6D1A9;
-  --wa-danger: #914E46;
-  --wa-danger-soft: #F6E9E6;
-  --wa-danger-line: #E2C5BF;
-  --wa-neutral-soft: #F3EFEB;
-  --wa-neutral-ink: #675650;
+  --wa-border: #E8E1D7;
+  --wa-sand: #E6D8C8;
+  --wa-muted: #796660;
+  --wa-rosewood-soft: #5C4742;
+  --wa-caramel-soft: #FEF3E2;
+  --wa-blush-soft: #FFF1F2;
+  --wa-success: #15803D;
+  --wa-success-soft: #F0FDF4;
+  --wa-success-line: #BBF7D0;
+  --wa-warning: #B45309;
+  --wa-warning-soft: #FFFBEB;
+  --wa-warning-line: #FDE68A;
+  --wa-danger: #BE123C;
+  --wa-danger-soft: #FFF1F2;
+  --wa-danger-line: #FECDD3;
+  --wa-neutral-soft: #F5F1EB;
+  --wa-neutral-ink: #443530;
 }
 
 @theme {
@@ -121,7 +121,15 @@ textarea:focus-visible {
 }
 
 .soft-shadow {
-  box-shadow: 0 8px 24px rgba(118, 83, 77, 0.055);
+  box-shadow: 0 1px 3px 0 rgba(43, 29, 25, 0.03), 0 6px 18px -3px rgba(43, 29, 25, 0.06);
+}
+
+.card-hover {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(43, 29, 25, 0.09), 0 8px 10px -6px rgba(43, 29, 25, 0.04);
 }
 
 .chart-grid {

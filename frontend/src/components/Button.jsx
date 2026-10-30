@@ -1,8 +1,8 @@
 const variants = {
-  primary: 'bg-caramel text-action-ink shadow-sm hover:bg-caramel-hover disabled:bg-rosewood-soft',
-  secondary: 'border border-border bg-paper text-rosewood hover:border-caramel hover:bg-petal',
-  subtle: 'text-rosewood hover:bg-petal',
-  danger: 'bg-danger text-white hover:bg-danger/90 disabled:bg-rosewood-soft',
+  primary: 'bg-caramel text-white shadow-sm hover:bg-caramel-hover active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100',
+  secondary: 'border border-border bg-paper text-rosewood hover:border-caramel hover:bg-caramel-soft/40 shadow-xs active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100',
+  subtle: 'text-rosewood hover:bg-petal active:scale-[0.98] disabled:opacity-50',
+  danger: 'bg-danger text-white shadow-sm hover:bg-danger/90 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100',
 }
 
 const sizes = {

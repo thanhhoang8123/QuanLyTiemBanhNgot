@@ -37,7 +37,7 @@ export default function VerifyEmailPage() {
         <span className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${status === 'error' ? 'bg-[#F6E9E6] text-[#914E46]' : success ? 'bg-[#EAF0E8] text-[#536B50]' : 'bg-[#F6EEDF] text-[#80602F]'}`}>
           <Icon name={status === 'loading' ? 'mail' : success ? 'check' : 'alertCircle'} size={28} />
         </span>
-        <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Daily Fresh</p>
+        <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">WA Patisserie</p>
         <h1 className="font-display mt-3 text-3xl text-[#4A302B]">{status === 'loading' ? 'Đang xác minh' : success ? 'Xác minh thành công' : 'Chưa thể xác minh'}</h1>
         <p role="status" className="mx-auto mt-4 max-w-md text-sm leading-7 text-[#806B65]">{message}</p>
         {status !== 'loading' && <div className="mt-7 flex flex-wrap justify-center gap-3"><Link to="/shop" className="rounded-full border border-[#DDCDB8] px-5 py-3 text-sm font-semibold text-[#76534D] hover:bg-[#FCF9F3]">Về cửa hàng</Link>{success && <Link to="/shop/login" className="rounded-full bg-[#76534D] px-5 py-3 text-sm font-semibold text-white hover:bg-[#4A302B]">Đăng nhập</Link>}</div>}
