@@ -1,4 +1,3 @@
-
 package com.nhom4.QuanLyTiemBanhNgot.controller;
 
 import com.nhom4.QuanLyTiemBanhNgot.entity.Product;
@@ -43,6 +42,14 @@ public class ProductController {
     @GetMapping("/search")
     public List<Product> search(@RequestParam String keyword) {
         return productService.search(keyword);
+    }
+
+    // Danh sách sản phẩm sắp hết hạn (mặc định trong vòng 1 ngày)
+    @GetMapping("/expiring")
+    public List<Product> getExpiring(
+            @RequestParam(defaultValue = "1") int days,
+            @RequestParam(required = false) Boolean status) {
+        return productService.getExpiringProducts(days, status);
     }
 
     // Lấy chi tiết sản phẩm

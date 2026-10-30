@@ -38,14 +38,34 @@ public class CustomOrderController {
         return ResponseEntity.ok(customOrderService.findById(id));
     }
 
-    // ĐÃ FIX: Cho phép cả Khách hàng (Customer) lẫn Nhân viên gửi yêu cầu đặt bánh riêng vào hệ thống chung
-@PostMapping("/customer/create")
+    @GetMapping("/customer/my-orders")
+    public ResponseEntity<List<CustomOrderResponse>> getMyCustomOrders(Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String username = principal.getName();
+        return ResponseEntity.ok(customOrderService.findMyCustomOrders(username));
+    }
+
+    @PostMapping("/customer/{id}/pay-deposit")
+    public ResponseEntity<CustomOrderResponse> payDeposit(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "VNPAY") String paymentMethod,
+            Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String username = principal.getName();
+        return ResponseEntity.ok(customOrderService.payDepositByCustomer(id, paymentMethod, username));
+    }
+
+    @PostMapping("/customer/create")
     public ResponseEntity<CustomOrderResponse> createByCustomer(
             @RequestBody CreateCustomOrderRequest request,
             Principal principal) {
-        // In ra console xem username lúc này là gì và có truyền lên được không
-        System.out.println("User đang gọi API đặt bánh: " + (principal != null ? principal.getName() : "null"));
-        
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         String username = principal.getName();
         CustomOrderResponse response = customOrderService.createForAuthenticatedCustomer(request, username);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

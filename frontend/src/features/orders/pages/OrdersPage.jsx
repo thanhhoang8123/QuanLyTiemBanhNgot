@@ -7,11 +7,14 @@ import FormField from '../../../components/FormField.jsx'
 import Icon from '../../../components/Icon.jsx'
 import LoadingState from '../../../components/LoadingState.jsx'
 import Modal from '../../../components/Modal.jsx'
+import ReceiptModal from '../../../components/ReceiptModal.jsx'
 import Pagination, { usePagination } from '../../../components/Pagination.jsx'
+import PaginationControls from '../../../components/PaginationControls.jsx'
 import StatusBadge from '../../../components/StatusBadge.jsx'
 import { getCustomers } from '../../customers/services/customerService.js'
 import { getProducts } from '../../products/services/productService.js'
 import {
+  getOrders,
   createOrder,
   cancelOrder,
   getEmployees,
@@ -22,6 +25,7 @@ import {
   getOrderPage,
 } from '../services/orderService.js'
 import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
+import { exportToExcel } from '../../../utils/excelExport.js'
 
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 text-sm text-rosewood outline-none transition focus:border-caramel'
 const emptyOrderItems = []
@@ -64,6 +68,20 @@ function formatDateTime(value) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date)
+}
+
+function getDateKey(value) {
+  if (!value) return ''
+  const str = String(value)
+  if (str.length >= 10 && str.charAt(4) === '-' && str.charAt(7) === '-') {
+    return str.slice(0, 10)
+  }
+  const date = new Date(/(?:Z|[+-]\d{2}:\d{2})$/i.test(str) ? str : `${str}Z`)
+  if (Number.isNaN(date.getTime())) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function getStatusLabel(status) {
@@ -140,6 +158,7 @@ export default function OrdersPage({ onToast }) {
   const [cancelError, setCancelError] = useState('')
   const [updatingOrderStatus, setUpdatingOrderStatus] = useState(false)
   const [orderStatusError, setOrderStatusError] = useState('')
+  const [receiptOpen, setReceiptOpen] = useState(false)
 
   const loadOrders = useCallback(async ({ signal, requestedPage = page } = {}) => {
     setLoading(true)
@@ -226,7 +245,7 @@ export default function OrdersPage({ onToast }) {
     [catalogs.employees],
   )
   const customersById = useMemo(
-    () => new Map(catalogs.customers.map((customer) => [customer.id, customer])),
+    () => new Map(catalogs.customers.map((customer) => [Number(customer.id), customer])),
     [catalogs.customers],
   )
   const currentEmployee = useMemo(
@@ -240,16 +259,16 @@ export default function OrdersPage({ onToast }) {
     [catalogs.products],
   )
   const employeesById = useMemo(
-    () => new Map(catalogs.employees.map((employee) => [employee.id, employee])),
+    () => new Map(catalogs.employees.map((employee) => [Number(employee.id), employee])),
     [catalogs.employees],
   )
   const productsById = useMemo(
-    () => new Map(catalogs.products.map((product) => [product.id, product])),
+    () => new Map(catalogs.products.map((product) => [Number(product.id), product])),
     [catalogs.products],
   )
 
   const filteredOrders = useMemo(() => orders.filter((order) => {
-    const customer = customersById.get(order.customerId)
+    const customer = customersById.get(Number(order.customerId))
     const searchValue = [
       order.orderCode,
       customer?.fullName,
@@ -262,6 +281,11 @@ export default function OrdersPage({ onToast }) {
       && (!dateFrom || dateKey >= dateFrom)
       && (!dateTo || dateKey <= dateTo)
   }), [orders, customersById, query, statusFilter, dateFrom, dateTo])
+
+  const paginatedOrders = useMemo(() => {
+    const start = page * pageSize
+    return filteredOrders.slice(start, start + pageSize)
+  }, [filteredOrders, page, pageSize])
 
   const now = new Date()
   const today = [
@@ -415,6 +439,49 @@ export default function OrdersPage({ onToast }) {
     }
   }
 
+  const handleExportExcel = () => {
+    if (filteredOrders.length === 0) {
+      onToast?.('Không có đơn hàng nào trong khoảng lọc để xuất Excel.')
+      return
+    }
+    const headers = [
+      'Mã đơn hàng',
+      'Ngày đặt',
+      'Khách hàng',
+      'Số điện thoại',
+      'Địa chỉ nhận',
+      'Tổng tiền gốc (đ)',
+      'Giảm giá voucher (đ)',
+      'Tổng thanh toán (đ)',
+      'Trạng thái đơn',
+      'Trạng thái giao hàng',
+      'Ghi chú',
+    ]
+    const rows = filteredOrders.map((order) => {
+      const customer = customersById.get(Number(order.customerId))
+      return [
+        order.orderCode || `DH-${order.id}`,
+        order.orderDate || '',
+        customer?.fullName || 'Khách vãng lai',
+        customer?.phone || '',
+        order.deliveryAddress || 'Nhận tại quầy',
+        order.totalAmount ?? 0,
+        order.discountAmount ?? 0,
+        order.finalAmount ?? (Number(order.totalAmount ?? 0) - Number(order.discountAmount ?? 0)),
+        getStatusLabel(order.status),
+        getDeliveryLabel(order.deliveryStatus),
+        order.note || '',
+      ]
+    })
+    const dateRangeSuffix = dateFrom || dateTo ? `_${dateFrom || 'start'}_den_${dateTo || 'nay'}` : ''
+    exportToExcel({
+      filename: `DanhSach_DonHang_WAPatisserie${dateRangeSuffix}`,
+      headers,
+      rows,
+    })
+    onToast?.(`Đã xuất Excel ${filteredOrders.length} đơn hàng thành công!`)
+  }
+
   const columns = [
     {
       key: 'orderCode',
@@ -496,16 +563,23 @@ export default function OrdersPage({ onToast }) {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-[11px] font-semibold tracking-wide text-muted">Theo dõi bán hàng</p>
-          <h2 className="font-display mt-1 text-[28px] text-rosewood sm:text-[32px]">Đơn hàng</h2>
-          <p className="mt-1 text-xs text-muted">Tạo đơn, tra cứu chi tiết và kiểm tra số tiền do hệ thống tính.</p>
+          <h2 className="font-display text-[28px] text-rosewood sm:text-[32px]">Đơn hàng</h2>
         </div>
-        <Button
-          onClick={openCreateForm}
-          disabled={catalogLoading || Boolean(catalogError) || activeProducts.length === 0}
-        >
-          <Icon name="plus" size={16} /> Tạo đơn hàng
-        </Button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-paper px-3.5 py-2.5 text-xs font-bold text-rosewood shadow-xs transition hover:border-caramel hover:text-caramel hover:bg-caramel-soft/40"
+          >
+            <Icon name="download" size={15} /> Xuất Excel ({filteredOrders.length} đơn)
+          </button>
+          <Button
+            onClick={openCreateForm}
+            disabled={catalogLoading || Boolean(catalogError) || activeProducts.length === 0}
+          >
+            <Icon name="plus" size={16} /> Tạo đơn hàng
+          </Button>
+        </div>
       </div>
 
       <section aria-label="Tổng quan đơn hàng phù hợp" className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 2xl:grid-cols-4">
@@ -540,7 +614,7 @@ export default function OrdersPage({ onToast }) {
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:p-5">
           <div>
             <h3 className="font-display text-lg font-semibold text-rosewood">Danh sách đơn hàng</h3>
-            <p className="mt-1 text-[11px] text-muted">{pageInfo.totalElements} đơn hàng phù hợp</p>
+            <p className="mt-1 text-[11px] text-muted">{filteredOrders.length} đơn hàng phù hợp</p>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-6">
             <label className="relative">
@@ -607,7 +681,7 @@ export default function OrdersPage({ onToast }) {
             : (
               <DataTable
                 columns={columns}
-                rows={filteredOrders}
+                rows={paginatedOrders}
                 rowKey={(order) => order.id}
                 onRowClick={(order) => setSelectedOrderId(order.id)}
                 emptyTitle="Chưa có đơn hàng phù hợp"
@@ -618,8 +692,8 @@ export default function OrdersPage({ onToast }) {
           <PaginationControls
             page={page}
             size={pageSize}
-            totalElements={pageInfo.totalElements}
-            totalPages={pageInfo.totalPages}
+            totalElements={filteredOrders.length}
+            totalPages={Math.ceil(filteredOrders.length / pageSize) || 1}
             onPageChange={setPage}
             onSizeChange={(value) => { setPageSize(value); setPage(0) }}
           />
@@ -649,7 +723,7 @@ export default function OrdersPage({ onToast }) {
                       id="order-customer"
                       required
                       value={form.customerId}
-                      onChange={(event) => setForm((current) => ({ ...current, customerId: event.target.value }))}
+                      onChange={(event) => { const cid = event.target.value; const matched = activeCustomers.find((c) => String(c.id) === cid); setForm((current) => ({ ...current, customerId: cid, deliveryAddress: matched?.address || current.deliveryAddress })); }}
                       className={inputClass}
                     >
                       <option value="">Chọn khách hàng</option>
@@ -930,6 +1004,16 @@ export default function OrdersPage({ onToast }) {
                         <span>Tổng thanh toán</span><span>{formatMoney(displayedOrder.finalAmount)}</span>
                       </div>
                     </div>
+                    <div className="flex justify-end border-t border-border pt-3">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setReceiptOpen(true)}
+                      >
+                        <Icon name="receipt" size={16} />
+                        In hóa đơn
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 {displayedOrder.status === 'PENDING' && (
@@ -977,6 +1061,13 @@ export default function OrdersPage({ onToast }) {
               </div>
             )}
       </Modal>
+      <ReceiptModal
+        open={receiptOpen}
+        onClose={() => setReceiptOpen(false)}
+        order={displayedOrder}
+        customer={customersById.get(Number(displayedOrder?.customerId))}
+        employee={employeesById.get(Number(displayedOrder?.employeeId))}
+      />
       <ConfirmDialog
         open={cancelTarget != null}
         title="Hủy đơn hàng?"

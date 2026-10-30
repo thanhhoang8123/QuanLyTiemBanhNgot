@@ -1,60 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
 import Icon from '../../../components/Icon.jsx'
 import Pagination, { usePagination } from '../../../components/Pagination.jsx'
 import useShopCatalog from '../hooks/useShopCatalog.js'
 import { getPromotions } from '../../promotions/services/promotionService.js'
 import { getPromotionProducts } from '../../promotion-products/services/promotionProductService.js'
+import ShopProductImage from '../components/ShopProductImage.jsx'
+import {
+  findBestShopPromotion,
+  getActiveShopPromotions,
+} from '../services/shopPromotions.js'
 
 const currency = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
   currency: 'VND',
   maximumFractionDigits: 0,
 })
-
-const bakeryPhotos = {
-  cake: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=85',
-  strawberry: 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?auto=format&fit=crop&w=900&q=85',
-  chocolate: 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=900&q=85',
-  bread: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=85',
-  croissant: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=900&q=85',
-  cookie: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&w=900&q=85',
-  default: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=85',
-}
-
-function getFallbackPhoto(product) {
-  const text = `${product.name || ''} ${product.category || ''}`.toLocaleLowerCase('vi')
-  if (text.includes('dâu') || text.includes('strawberry')) return bakeryPhotos.strawberry
-  if (text.includes('chocolate') || text.includes('socola') || text.includes('sô cô la')) return bakeryPhotos.chocolate
-  if (text.includes('croissant') || text.includes('sừng bò')) return bakeryPhotos.croissant
-  if (text.includes('quy') || text.includes('cookie')) return bakeryPhotos.cookie
-  if (text.includes('bánh mì') || text.includes('bread') || text.includes('bơ tỏi') || text.includes('xúc xích')) return bakeryPhotos.bread
-  if (text.includes('bánh kem') || text.includes('mousse') || text.includes('cake')) return bakeryPhotos.cake
-  return bakeryPhotos.default
-}
-
-function ProductPhoto({ product, className = '' }) {
-  const fallback = getFallbackPhoto(product)
-  const source = product.imageUrl || fallback
-
-  return (
-    <img
-      src={source}
-      alt={product.name}
-      loading="lazy"
-      className={className}
-      onError={(event) => {
-        const image = event.currentTarget
-        if (image.dataset.fallbackApplied !== 'true' && image.src !== fallback) {
-          image.dataset.fallbackApplied = 'true'
-          image.src = fallback
-        } else {
-          image.style.opacity = '0'
-        }
-      }}
-    />
-  )
-}
 
 function CatalogError({ message, onRetry }) {
   return (
@@ -68,45 +29,27 @@ function CatalogError({ message, onRetry }) {
   )
 }
 
-function isPromotionActive(promotion, now) {
-  if (promotion?.status !== true || !promotion.startDate || !promotion.endDate) return false
-  const start = new Date(promotion.startDate)
-  const end = new Date(`${String(promotion.endDate).slice(0, 10)}T23:59:59`)
-  return !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && now >= start && now <= end
-}
-
-
-function ProductCard({ product, promotions, onAddToCart, isFavorite, onToggleFavorite }) {
+function ProductCard({ product, promotions, onAddToCart, onBuyNow, isFavorite, onToggleFavorite }) {
   const canBuy = product.stock > 0 && product.status === 'Đang bán'
-  const promotion = promotions[0]
-
   const originalPrice = Number(product.price) || 0
-  const discountPercent = Math.min(
-    100,
-    Math.max(0, Number(promotion?.discountPercent) || 0),
-  )
-  const hasPromotion = Boolean(promotion) && discountPercent > 0
-  const discountedPrice = hasPromotion
-    ? Math.round(originalPrice * (1 - discountPercent / 100))
-    : originalPrice
+  const activePromotions = getActiveShopPromotions(promotions)
+  const bestPromotion = findBestShopPromotion(activePromotions, originalPrice)
+  const promotion = bestPromotion?.promotion ?? null
+  const hasPromotion = Boolean(bestPromotion)
+  const discountedPrice = originalPrice - (bestPromotion?.discountAmount ?? 0)
 
   return (
-    <article className="group min-w-0 overflow-hidden rounded-[20px] border border-[#EAE3DA] bg-white transition duration-300 hover:-translate-y-1 hover:border-[#D0A263]/70 hover:shadow-[0_18px_42px_rgba(91,61,53,0.12)]">
+    <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-[20px] border border-[#EAE3DA] bg-white transition duration-300 hover:-translate-y-1 hover:border-[#D0A263]/70 hover:shadow-[0_18px_42px_rgba(91,61,53,0.12)]">
       <div className="relative m-2 overflow-hidden rounded-[15px] bg-[#F3E3D3]">
         <Link to={`/shop/products/${product.id}`} className="block aspect-[1.24/1] overflow-hidden" aria-label={`Xem ${product.name}`}>
-          <ProductPhoto product={product} className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.06]" />
+          <ShopProductImage product={product} className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.06]" />
         </Link>
 
-        <span className={`absolute left-2.5 top-2.5 rounded-full px-2.5 py-1 text-[9px] font-bold shadow-sm ${canBuy ? 'bg-white/95 text-[#536B50]' : 'bg-white/95 text-[#8B6259]'}`}>
-          {canBuy ? 'Còn hàng' : product.stock <= 0 ? 'Tạm hết hàng' : 'Ngừng bán'}
-        </span>
-
         {hasPromotion && (
-          <span className="absolute bottom-2.5 left-2.5 max-w-[75%] truncate rounded-full bg-[#B94F35] px-2.5 py-1 text-[9px] font-bold text-white shadow-sm">
-            -{discountPercent}% · {promotion.promotionCode}
+          <span className="absolute bottom-2.5 left-2.5 max-w-[calc(100%-1.25rem)] truncate rounded-full bg-[#B94F35] px-2.5 py-1.5 text-[9px] font-bold text-white shadow-sm">
+            Giảm {currency.format(bestPromotion.discountAmount)}{promotion?.promotionCode ? ` · ${promotion.promotionCode}` : ''}
           </span>
         )}
-
         <button
           type="button"
           onClick={() => onToggleFavorite(product.id)}
@@ -118,57 +61,50 @@ function ProductCard({ product, promotions, onAddToCart, isFavorite, onToggleFav
         </button>
       </div>
 
-      <div className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
-        <p className="truncate text-[9px] font-bold uppercase tracking-[0.16em] text-[#A97668]">
-          {product.category || 'Daily Fresh'}
-        </p>
+      <div className="flex flex-1 flex-col px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-[9px] font-bold uppercase tracking-[0.12em] text-[#A97668]">
+            {product.category || 'WA Patisserie'}
+          </p>
+          <p className={`shrink-0 text-[9px] font-medium ${canBuy ? 'text-[#5F805B]' : 'text-[#A97668]'}`}>
+            {canBuy ? `Còn ${product.stock}` : product.stock <= 0 ? 'Hết hàng' : 'Ngừng bán'}
+          </p>
+        </div>
 
         <Link to={`/shop/products/${product.id}`} className="block">
-          <h2 className="font-display mt-1.5 min-h-11 text-[15px] font-medium leading-5 text-[#4A302B] transition group-hover:text-[#9A5E4E] sm:text-base">
+          <h2 className="font-display mt-1 line-clamp-2 text-[15px] font-medium leading-5 text-[#4A302B] transition group-hover:text-[#9A5E4E] sm:text-base">
             {product.name}
           </h2>
         </Link>
 
-        <p className="mt-1 truncate text-[9px] text-[#A18A80]">
-          Mã bánh: {product.code || 'Đang cập nhật'}
-        </p>
-
-        <div className="mt-3 flex min-h-10 items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-col">
-            {hasPromotion && (
-              <span className="text-xs text-[#9A7972] line-through">
-                {currency.format(originalPrice)}
-              </span>
-            )}
-            <span className={`text-sm font-extrabold tracking-tight sm:text-base ${hasPromotion ? 'text-[#B94F35]' : 'text-[#76534D]'}`}>
-              {currency.format(discountedPrice)}
+        <div className="mt-2 flex min-h-6 flex-wrap items-baseline gap-x-2">
+          {hasPromotion && (
+            <span className="whitespace-nowrap text-[10px] text-[#9A7972] line-through sm:text-xs">
+              {currency.format(originalPrice)}
             </span>
-          </div>
-
-          <span className={`shrink-0 text-[9px] ${canBuy ? 'text-[#5F805B]' : 'text-[#A97668]'}`}>
-            {canBuy ? `Còn ${product.stock}` : 'Hết hàng'}
+          )}
+          <span className={`whitespace-nowrap text-sm font-extrabold tracking-tight sm:text-base ${hasPromotion ? 'text-[#B94F35]' : 'text-[#76534D]'}`}>
+            {currency.format(discountedPrice)}
           </span>
         </div>
 
-        {hasPromotion && (
-          <p className="mt-1.5 line-clamp-1 text-[9px] text-[#A45B46]">
-            Tiết kiệm {currency.format(originalPrice - discountedPrice)} · {promotion.promotionCode}
-          </p>
-        )}
-
-        <div className="mt-3 flex items-center gap-2">
-          <Link to={`/shop/products/${product.id}`} className="inline-flex h-9 flex-1 items-center justify-center rounded-full border border-[#DDCDB8] px-2 text-[10px] font-semibold text-[#76534D] transition hover:bg-[#FCF4EA]">
-            Chi tiết
-          </Link>
-
-          <button
-            type="button"
-            disabled={!canBuy}
-            onClick={() => onAddToCart?.(product.id, 1)}
-            className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full bg-[#76534D] px-2 text-[10px] font-bold text-white transition hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:bg-[#C9B9AF]"
-          >
-            <Icon name="cart" size={13} /> Thêm giỏ
-          </button>
+        <div className="mt-auto grid grid-cols-2 gap-2 pt-2">
+            <button
+              type="button"
+              disabled={!canBuy}
+              onClick={() => onAddToCart?.(product.id, 1)}
+              className="inline-flex h-9 min-w-0 items-center justify-center gap-1 rounded-full border border-[#DDCDB8] px-2 text-[9px] font-bold text-[#76534D] transition hover:bg-[#FAF0EE] disabled:cursor-not-allowed disabled:opacity-50 sm:text-[10px]"
+            >
+              <Icon name="cart" size={12} /> <span className="whitespace-nowrap">Thêm giỏ</span>
+            </button>
+            <button
+              type="button"
+              disabled={!canBuy}
+              onClick={() => onBuyNow(product.id, 1)}
+              className="inline-flex h-9 min-w-0 items-center justify-center whitespace-nowrap rounded-full bg-[#76534D] px-2 text-[9px] font-bold text-white transition hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:bg-[#C9B9AF] sm:text-[10px]"
+            >
+              Mua ngay
+            </button>
         </div>
       </div>
     </article>
@@ -179,6 +115,7 @@ function ProductCard({ product, promotions, onAddToCart, isFavorite, onToggleFav
 export default function ShopProductsPage() {
   const { categories, products, isLoading, error, retry } = useShopCatalog()
   const { addToCart } = useOutletContext()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('default')
@@ -205,8 +142,7 @@ export default function ShopProductsPage() {
   }, [])
 
   const activePromotionsByProduct = useMemo(() => {
-    const now = new Date()
-    const activePromotions = promotions.filter((promotion) => isPromotionActive(promotion, now))
+    const activePromotions = getActiveShopPromotions(promotions)
     const promotionById = new Map(activePromotions.map((promotion) => [Number(promotion.id), promotion]))
     const result = new Map()
 
@@ -238,7 +174,7 @@ export default function ShopProductsPage() {
     return filtered
   }, [products, query, selectedCategory, showPromotionsOnly, activePromotionsByProduct, sort])
 
-  const productPagination = usePagination(visibleProducts)
+  const productPagination = usePagination(visibleProducts, 8)
   const promotedCount = products.filter((product) => activePromotionsByProduct.has(Number(product.id))).length
 
   const updateCategory = (value) => {
@@ -257,6 +193,11 @@ export default function ShopProductsPage() {
     })
   }
 
+  const buyNow = (productId, quantity) => {
+    addToCart(productId, quantity)
+    navigate('/shop/checkout')
+  }
+
   return (
     <div className="min-h-screen bg-[#FCF9F3] pb-10">
       <div className="mx-auto max-w-[1380px] px-4 pb-10 pt-6 sm:px-7 sm:pt-8 lg:px-10">
@@ -265,9 +206,9 @@ export default function ShopProductsPage() {
             <Link to="/shop" className="mb-3 inline-flex items-center gap-2 text-[10px] font-semibold text-[#9A7972] transition hover:text-[#4A302B]">
               <span aria-hidden="true">←</span> Về trang chủ
             </Link>
-            <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-[#A97668]">Bộ sưu tập Daily Fresh</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.25em] text-[#A97668]">Bộ sưu tập WA Patisserie</p>
             <h1 className="font-display mt-1.5 text-3xl font-semibold leading-tight text-[#4A302B] sm:text-4xl lg:text-[46px]">Khám phá những chiếc bánh ngọt</h1>
-            <p className="mt-2 max-w-2xl text-xs leading-5 text-[#806B65] sm:text-sm">Từ những công thức truyền thống đến sáng tạo hiện đại, mỗi chiếc bánh tại Daily Fresh đều được làm bằng sự chăm chút và tình yêu với ẩm thực.</p>
+            <p className="mt-2 max-w-2xl text-xs leading-5 text-[#806B65] sm:text-sm">Từ những công thức truyền thống đến sáng tạo hiện đại, mỗi chiếc bánh tại WA Patisserie đều được làm bằng sự chăm chút và tình yêu với ẩm thực.</p>
           </div>
           <div className="hidden shrink-0 pb-1 text-right md:block">
             <span className="font-display block rotate-[-5deg] text-lg italic text-[#B7835E]">Bánh ngon</span>
@@ -275,7 +216,7 @@ export default function ShopProductsPage() {
           </div>
         </div>
 
-        <section aria-label="Ưu đãi Daily Fresh" className="relative mb-5 overflow-hidden rounded-2xl bg-[#E9C8A9] shadow-sm">
+        <section aria-label="Ưu đãi WA Patisserie" className="relative mb-5 overflow-hidden rounded-2xl bg-[#E9C8A9] shadow-sm">
           <div className="absolute inset-0">
             <img
               src="https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=1800&q=90"
@@ -289,7 +230,7 @@ export default function ShopProductsPage() {
             <div className="max-w-xl">
               <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#A45B46]">Một chút ngọt ngào dành cho bạn</p>
               <h2 className="font-display mt-1 text-2xl font-semibold leading-tight text-[#4A302B] sm:text-3xl">Ưu đãi ngọt ngào mỗi ngày</h2>
-              <p className="mt-1.5 max-w-lg text-xs leading-5 text-[#76534D]">Khám phá những chiếc bánh đang được áp dụng mã khuyến mãi tại Daily Fresh.</p>
+              <p className="mt-1.5 max-w-lg text-xs leading-5 text-[#76534D]">Khám phá những chiếc bánh đang được áp dụng mã khuyến mãi tại WA Patisserie.</p>
               <button
                 type="button"
                 onClick={() => setShowPromotionsOnly(true)}
@@ -376,18 +317,19 @@ export default function ShopProductsPage() {
           <>
             <div className="mb-4 flex items-end justify-between gap-3">
               <div>
-                <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#A97668]">{showPromotionsOnly ? 'Ưu đãi dành riêng cho bạn' : 'Từ gian bếp Daily Fresh'}</p>
+                <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#A97668]">{showPromotionsOnly ? 'Ưu đãi dành riêng cho bạn' : 'Từ gian bếp WA Patisserie'}</p>
                 <h2 className="font-display mt-1 text-xl font-semibold text-[#4A302B] sm:text-2xl">{showPromotionsOnly ? 'Những chiếc bánh đang ưu đãi' : 'Chọn vị ngọt bạn yêu'}</h2>
               </div>
               {!promotionLoading && promotedCount > 0 && !showPromotionsOnly && <button type="button" onClick={() => setShowPromotionsOnly(true)} className="shrink-0 text-[10px] font-bold text-[#A45B46] hover:underline">Xem {promotedCount} bánh ưu đãi ↗</button>}
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
               {productPagination.pageItems.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}
                   promotions={activePromotionsByProduct.get(Number(product.id)) || []}
                   onAddToCart={addToCart}
+                  onBuyNow={buyNow}
                   isFavorite={favoriteIds.has(product.id)}
                   onToggleFavorite={toggleFavorite}
                 />
@@ -399,11 +341,14 @@ export default function ShopProductsPage() {
               totalItems={productPagination.totalItems}
               onPageChange={productPagination.setCurrentPage}
               onPageSizeChange={productPagination.setPageSize}
+              pageSizeOptions={[4, 8, 12, 16]}
+              itemLabel="sản phẩm"
+              pageSizeLabel="Sản phẩm/trang"
             />
           </>
         )}
 
-        <section aria-label="Cam kết Daily Fresh" className="mt-10 grid gap-3 rounded-2xl border border-[#EAE3DA] bg-[#F8F0E6] p-4 sm:grid-cols-3 sm:p-5">
+        <section aria-label="Cam kết WA Patisserie" className="mt-10 grid gap-3 rounded-2xl border border-[#EAE3DA] bg-[#F8F0E6] p-4 sm:grid-cols-3 sm:p-5">
           <div className="flex items-center gap-3 px-2 py-1">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#A97668]">✦</span>
             <div><p className="text-xs font-bold text-[#4A302B]">Bánh tươi mỗi ngày</p><p className="mt-1 text-[10px] leading-4 text-[#806B65]">Chọn lọc nguyên liệu, chăm chút chất lượng.</p></div>

@@ -19,6 +19,7 @@ test('refreshes cart product data and restores the current catalog price', () =>
     stock: 5,
     status: true,
     category: 'Mới',
+    imageUrl: 'https://example.test/product.jpg',
   }]
 
   assert.deepEqual(reconcilePosCartWithCatalog(cart, products), [{
@@ -28,6 +29,7 @@ test('refreshes cart product data and restores the current catalog price', () =>
     quantity: 2,
     stock: 5,
   }])
+  assert.equal(reconcilePosCartWithCatalog(cart, products)[0].imageUrl, products[0].imageUrl)
 })
 
 test('marks missing or inactive catalog products unavailable in the cart', () => {

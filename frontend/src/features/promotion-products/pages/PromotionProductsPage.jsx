@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Button from '../../../components/Button.jsx'
+import Icon from '../../../components/Icon.jsx'
 import ConfirmDialog from '../../../components/ConfirmDialog.jsx'
 import DataTable from '../../../components/DataTable.jsx'
 import EmptyState from '../../../components/EmptyState.jsx'
@@ -248,20 +249,50 @@ export default function PromotionProductsPage({ onToast }) {
     },
   ]
 
+  const linkedPromotionsCount = useMemo(() => new Set(links.map((l) => l.promotionId)).size, [links])
+  const linkedProductsCount = useMemo(() => new Set(links.map((l) => l.productId)).size, [links])
+  const activeProductsCount = useMemo(() => links.filter((l) => {
+    const prod = productById.get(Number(l.productId))
+    return prod?.status === true
+  }).length, [links, productById])
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Sản phẩm áp dụng khuyến mãi"
-        description="Quản lý các sản phẩm đang áp dụng trong từng chương trình khuyến mãi."
         actions={(
           <Button
             onClick={openCreateForm}
             disabled={isLoading || promotions.length === 0 || products.length === 0}
           >
-            Thêm liên kết
+            <Icon name="plus" size={16} /> Thêm liên kết
           </Button>
         )}
       />
+
+      <section aria-label="Tổng quan liên kết khuyến mãi" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: 'Tổng số liên kết', value: links.length, icon: 'tag' },
+          { label: 'Chương trình có sản phẩm', value: linkedPromotionsCount, icon: 'sparkles' },
+          { label: 'Sản phẩm được ưu đãi', value: linkedProductsCount, icon: 'package' },
+          { label: 'Sản phẩm đang kinh doanh', value: activeProductsCount, icon: 'check' },
+        ].map((stat) => (
+          <article
+            key={stat.label}
+            className="soft-shadow flex items-center justify-between rounded-2xl border border-border bg-paper p-4 sm:p-5 transition hover:shadow-md"
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-muted">{stat.label}</p>
+              <p className="font-display mt-2 truncate text-2xl font-bold text-rosewood">
+                {stat.value}
+              </p>
+            </div>
+            <span className="ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-caramel-soft text-rosewood">
+              <Icon name={stat.icon} size={18} />
+            </span>
+          </article>
+        ))}
+      </section>
 
       {isLoading ? (
         <LoadingState label="Đang tải khuyến mãi, sản phẩm và liên kết..." />

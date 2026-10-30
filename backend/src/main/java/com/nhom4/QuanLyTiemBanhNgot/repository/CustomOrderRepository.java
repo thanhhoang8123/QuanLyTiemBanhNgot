@@ -17,6 +17,8 @@ public interface CustomOrderRepository
 
     boolean existsByCustomer_Id(Long customerId);
 
+    java.util.List<CustomOrder> findByCustomer_IdOrderByOrderDateDesc(Long customerId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select customOrder from CustomOrder customOrder where customOrder.id = :id")
     Optional<CustomOrder> findByIdForUpdate(@Param("id") Long id);

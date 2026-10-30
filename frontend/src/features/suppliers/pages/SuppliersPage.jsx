@@ -192,7 +192,6 @@ export default function SuppliersPage({ onToast }) {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-[11px] font-semibold tracking-wide text-muted">Đối tác cung ứng</p>
           <h2 className="font-display mt-1 text-[28px] text-rosewood sm:text-[32px]">Nhà cung cấp</h2>
         </div>
         <div className="flex flex-wrap gap-2">

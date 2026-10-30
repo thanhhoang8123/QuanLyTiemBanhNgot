@@ -32,10 +32,10 @@ export function getCustomerVnPayPaymentStatus(transactionReference, { signal } =
   )
 }
 
-export function reconcileCustomerVnPayPayment(transactionReference) {
+export function reconcileCustomerVnPayPayment(transactionReference, { signal } = {}) {
   return apiRequest(
     `/customer/payments/vnpay/${encodeURIComponent(transactionReference)}/reconcile`,
-    { method: 'POST' },
+    { method: 'POST', signal },
   )
 }
 

@@ -247,7 +247,6 @@ export default function PurchaseOrdersPage({ onToast }) {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-[11px] font-semibold tracking-wide text-muted">Nhập hàng & cập nhật kho</p>
           <h2 className="font-display mt-1 text-[28px] text-rosewood sm:text-[32px]">Phiếu nhập hàng</h2>
         </div>
         <Button onClick={openCreate} disabled={!activeSuppliers.length || !activeIngredients.length}>

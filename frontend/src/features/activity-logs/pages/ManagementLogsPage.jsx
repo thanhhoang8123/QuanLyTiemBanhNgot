@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Button from '../../../components/Button.jsx'
+import Icon from '../../../components/Icon.jsx'
 import DataTable from '../../../components/DataTable.jsx'
 import ErrorState from '../../../components/ErrorState.jsx'
 import LoadingState from '../../../components/LoadingState.jsx'
@@ -84,17 +85,42 @@ export default function ManagementLogsPage() {
       { key: 'note', label: 'Ghi chú', render: (record) => record.note || '—' },
     ]
 
+  const usersCount = useMemo(() => new Set(records.map((r) => r.username || r.changedBy).filter(Boolean)).size, [records])
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Nhật ký hoạt động & lịch sử đơn hàng"
-        description="Tra cứu gần đây các hoạt động và thay đổi trạng thái đơn. Dữ liệu chỉ đọc để bảo toàn dấu vết kiểm toán."
         actions={(
           <Button variant="secondary" onClick={() => setRefreshVersion((version) => version + 1)}>
-            Tải lại
+            <Icon name="refresh" size={15} /> Tải lại
           </Button>
         )}
       />
+
+      <section aria-label="Tổng quan kiểm toán nhật ký" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: 'Bản ghi tải về', value: records.length, icon: 'receipt' },
+          { label: 'Tài khoản ghi nhận', value: usersCount, icon: 'sparkles' },
+          { label: 'Chế độ truy vết', value: 'Thời gian thực', icon: 'clock' },
+          { label: 'Toàn vẹn dữ liệu', value: 'Bảo toàn', icon: 'check' },
+        ].map((stat) => (
+          <article
+            key={stat.label}
+            className="soft-shadow flex items-center justify-between rounded-2xl border border-border bg-paper p-4 sm:p-5 transition hover:shadow-md"
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-muted">{stat.label}</p>
+              <p className="font-display mt-2 truncate text-2xl font-bold text-rosewood">
+                {stat.value}
+              </p>
+            </div>
+            <span className="ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-caramel-soft text-rosewood">
+              <Icon name={stat.icon} size={18} />
+            </span>
+          </article>
+        ))}
+      </section>
 
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Loại nhật ký">
         {tabs.map((item) => (
@@ -107,10 +133,13 @@ export default function ManagementLogsPage() {
               setTab(item.id)
               setQuery('')
             }}
-            className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-              tab === item.id ? 'bg-rosewood text-white' : 'border border-border bg-white text-rosewood hover:bg-petal'
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold shadow-xs transition ${
+              tab === item.id
+                ? 'bg-rosewood text-white shadow-sm'
+                : 'border border-border bg-paper text-rosewood hover:bg-petal'
             }`}
           >
+            <Icon name={item.id === 'activity' ? 'receipt' : 'sparkles'} size={14} />
             {item.label}
           </button>
         ))}

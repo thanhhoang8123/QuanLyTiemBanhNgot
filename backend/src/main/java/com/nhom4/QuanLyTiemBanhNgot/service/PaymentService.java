@@ -134,18 +134,32 @@ public class PaymentService {
             );
         }
         BigDecimal paymentAmount = totalAmount.subtract(discountAmount);
-        if (paymentAmount.signum() <= 0) {
+        if (paymentAmount.signum() < 0) {
             throw new ConflictException(
-                    "Số tiền thanh toán phải lớn hơn 0"
+                    "Số tiền thanh toán không được âm"
             );
         }
 
         Payment payment = new Payment();
         payment.setOrder(order);
-        payment.setPaymentMethod(request.paymentMethod());
+        payment.setPaymentMethod(paymentAmount.signum() == 0 ? "LOYALTY_POINTS" : request.paymentMethod());
         payment.setAmount(paymentAmount);
-        payment.setStatus("PENDING");
-        payment.setPaidAt(null);
+        if (paymentAmount.signum() == 0) {
+            payment.setStatus("SUCCESS");
+            payment.setPaidAt(LocalDateTime.now(ZoneOffset.UTC));
+            settleLoyaltyPoints(order, BigDecimal.ZERO);
+            if ("PENDING".equals(order.getStatus())) {
+                String oldStatus = order.getStatus();
+                order.setStatus("CONFIRMED");
+                orderRepository.save(order);
+                orderStatusHistoryService.recordStatusChangeAfterCommit(
+                        order.getId(), oldStatus, "CONFIRMED", "Thanh toán hoàn tất bằng điểm thưởng"
+                );
+            }
+        } else {
+            payment.setStatus("PENDING");
+            payment.setPaidAt(null);
+        }
         try {
             // Flush tại đây để bắt xung đột UNIQUE ngay trong transaction này.
             return paymentMapper.toResponse(paymentRepository.saveAndFlush(payment));
@@ -189,6 +203,9 @@ public class PaymentService {
             );
         }
         if ("SUCCESS".equals(payment.getStatus())) {
+            if (payment.getAmount() != null && payment.getAmount().signum() == 0) {
+                return paymentMapper.toResponse(payment);
+            }
             throw new ConflictException(
                     "Payment đã thành công và không thể xử lý lại"
             );

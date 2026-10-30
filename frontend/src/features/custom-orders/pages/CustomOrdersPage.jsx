@@ -449,11 +449,17 @@ export default function CustomOrdersPage({ onToast }) {
     },
   ]
 
+  const pendingCount = useMemo(() => orders.filter((o) => o.status === 'PENDING').length, [orders])
+  const confirmedCount = useMemo(() => orders.filter((o) => o.status === 'CONFIRMED' || o.status === 'IN_PROGRESS').length, [orders])
+  const completedCount = useMemo(() => orders.filter((o) => o.status === 'COMPLETED').length, [orders])
+  const totalDepositCollected = useMemo(() => orders
+    .filter((o) => o.status !== 'PENDING' && o.status !== 'CANCELLED')
+    .reduce((sum, o) => sum + Number(o.deposit ?? 0), 0), [orders])
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Đơn đặt bánh riêng"
-        description="Tiếp nhận yêu cầu bánh thiết kế riêng, theo dõi tiền cọc và tiến độ giao. Đơn được quản lý độc lập với bán hàng POS."
         actions={(
           <Button
             onClick={openCreateForm}
@@ -463,6 +469,34 @@ export default function CustomOrdersPage({ onToast }) {
           </Button>
         )}
       />
+
+      <section aria-label="Tổng quan đơn đặt bánh" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: 'Tổng đơn đặt riêng', value: orders.length, icon: 'receipt' },
+          { label: 'Chờ xác nhận & cọc', value: pendingCount, icon: 'clock', highlight: pendingCount > 0 },
+          { label: 'Đang chuẩn bị bánh', value: confirmedCount, icon: 'sparkles' },
+          { label: 'Tiền cọc đã thu', value: formatMoney(totalDepositCollected), icon: 'creditCard' },
+        ].map((stat) => (
+          <article
+            key={stat.label}
+            className={`soft-shadow flex items-center justify-between rounded-2xl border p-4 sm:p-5 transition hover:shadow-md ${
+              stat.highlight
+                ? 'border-amber-300 bg-amber-50/70'
+                : 'border-border bg-paper'
+            }`}
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-muted">{stat.label}</p>
+              <p className="font-display mt-2 truncate text-2xl font-bold text-rosewood">
+                {stat.value}
+              </p>
+            </div>
+            <span className="ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-caramel-soft text-rosewood">
+              <Icon name={stat.icon} size={18} />
+            </span>
+          </article>
+        ))}
+      </section>
 
       {listError && (
         <div role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-4 py-3 text-sm text-danger">

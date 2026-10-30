@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Button from '../../../components/Button.jsx'
 import ConfirmDialog from '../../../components/ConfirmDialog.jsx'
 import DataTable from '../../../components/DataTable.jsx'
@@ -16,6 +16,7 @@ import {
   deleteCustomer,
   getCustomerById,
   getCustomerPage,
+  getCustomers,
   updateCustomer,
 } from '../services/customerService.js'
 import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
@@ -89,8 +90,19 @@ export default function CustomersPage({ onToast }) {
     setIsLoading(true)
     setLoadError('')
     try {
-      const result = await getCustomers({ signal })
-      if (!Array.isArray(result)) {
+      const result = await getCustomerPage({
+        page: requestedPage,
+        size: pageSize,
+        keyword: query,
+        sort,
+        direction,
+        signal,
+      })
+      if (!Array.isArray(result?.content)
+        || !Number.isInteger(result.page)
+        || !Number.isInteger(result.size)
+        || !Number.isInteger(result.totalPages)
+        || !Number.isInteger(result.totalElements)) {
         throw new Error('Chưa thể tải danh sách khách hàng. Vui lòng thử lại.')
       }
       if (result.totalPages === 0 ? requestedPage > 0 : requestedPage >= result.totalPages) {
@@ -212,12 +224,26 @@ export default function CustomersPage({ onToast }) {
     {
       key: 'fullName',
       label: 'Khách hàng',
-      render: (customer) => (
-        <div className="min-w-[160px]">
-          <p className="font-semibold text-rosewood">{customer.fullName || 'Chưa có tên'}</p>
-          <p className="mt-1 text-[10px] text-muted">{customer.phone || 'Chưa có số điện thoại'}</p>
-        </div>
-      ),
+      render: (customer) => {
+        const initials = (customer.fullName || 'KH')
+          .trim()
+          .split(/\s+/)
+          .slice(-2)
+          .map((s) => s[0])
+          .join('')
+          .toUpperCase()
+        return (
+          <div className="flex min-w-[170px] items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-caramel-soft text-xs font-bold text-rosewood shadow-sm">
+              {initials}
+            </span>
+            <div className="min-w-0">
+              <p className="font-bold text-rosewood truncate">{customer.fullName || 'Chưa có tên'}</p>
+              <p className="mt-0.5 text-[11px] text-muted">{customer.phone || 'Chưa có số điện thoại'}</p>
+            </div>
+          </div>
+        )
+      },
     },
     {
       key: 'email',
@@ -273,11 +299,15 @@ export default function CustomersPage({ onToast }) {
     },
   ]
 
+  const totalCustomers = pageInfo.totalElements || customers.length
+  const activeCount = useMemo(() => customers.filter((c) => c.status !== false).length, [customers])
+  const totalPoints = useMemo(() => customers.reduce((sum, c) => sum + Number(c.loyaltyPoints ?? 0), 0), [customers])
+  const loyalCount = useMemo(() => customers.filter((c) => Number(c.loyaltyPoints ?? 0) >= 100).length, [customers])
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Khách hàng"
-        description="Tra cứu hồ sơ, thông tin liên hệ và điểm tích lũy khách hàng."
         actions={(
           <Button onClick={openCreate} disabled={isLoading || Boolean(loadError)}>
             <Icon name="plus" size={16} /> Thêm khách hàng
@@ -285,34 +315,62 @@ export default function CustomersPage({ onToast }) {
         )}
       />
 
+      <section aria-label="Tổng quan khách hàng" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: 'Tổng khách hàng', value: totalCustomers, icon: 'receipt' },
+          { label: 'Đang hoạt động', value: activeCount, icon: 'check' },
+          { label: 'Điểm tích lũy trang này', value: pointsFormat.format(totalPoints), icon: 'sparkles' },
+          { label: 'Khách thân thiết (≥100 điểm)', value: loyalCount, icon: 'tag' },
+        ].map((stat) => (
+          <article
+            key={stat.label}
+            className="soft-shadow flex items-center justify-between rounded-2xl border border-border bg-paper p-4 sm:p-5 transition hover:shadow-md"
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-muted">{stat.label}</p>
+              <p className="font-display mt-2 truncate text-2xl font-bold text-rosewood">
+                {stat.value}
+              </p>
+            </div>
+            <span className="ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-caramel-soft text-rosewood">
+              <Icon name={stat.icon} size={18} />
+            </span>
+          </article>
+        ))}
+      </section>
+
       {listError && (
         <div role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-4 py-3 text-sm text-danger">
           {listError}
         </div>
       )}
 
-      <SearchFilter
-        value={query}
-        onChange={(event) => { setQuery(event.target.value); setPage(0) }}
-        label="Tìm theo tên, số điện thoại hoặc email"
-        placeholder="Nhập tên, số điện thoại hoặc email..."
-      />
-      <div className="flex flex-wrap gap-2">
-        <label className="flex items-center gap-2 text-xs text-muted">
-          <span>Sắp xếp theo</span>
-          <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(0) }} className="h-9 rounded-xl border border-border bg-white px-3 text-xs text-rosewood">
-            <option value="fullName">Tên</option>
-            <option value="phone">Điện thoại</option>
-            <option value="email">Email</option>
-            <option value="loyaltyPoints">Điểm tích lũy</option>
-            <option value="status">Trạng thái</option>
+      <section className="soft-shadow flex flex-col gap-3 rounded-2xl border border-border bg-paper p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex-1">
+          <SearchFilter
+            value={query}
+            onChange={(event) => { setQuery(event.target.value); setPage(0) }}
+            label="Tìm theo tên, số điện thoại hoặc email"
+            placeholder="Nhập tên, số điện thoại hoặc email..."
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-muted">
+            <span className="font-medium text-rosewood">Sắp xếp</span>
+            <select value={sort} onChange={(event) => { setSort(event.target.value); setPage(0) }} className="h-10 rounded-xl border border-border bg-white px-3 text-xs text-rosewood outline-none focus:border-caramel">
+              <option value="fullName">Họ và tên</option>
+              <option value="phone">Số điện thoại</option>
+              <option value="email">Email</option>
+              <option value="loyaltyPoints">Điểm tích lũy</option>
+              <option value="status">Trạng thái</option>
+            </select>
+          </label>
+          <select aria-label="Chiều sắp xếp khách hàng" value={direction} onChange={(event) => { setDirection(event.target.value); setPage(0) }} className="h-10 rounded-xl border border-border bg-white px-3 text-xs text-rosewood outline-none focus:border-caramel">
+            <option value="ASC">Tăng dần (A-Z)</option>
+            <option value="DESC">Giảm dần (Z-A)</option>
           </select>
-        </label>
-        <select aria-label="Chiều sắp xếp khách hàng" value={direction} onChange={(event) => { setDirection(event.target.value); setPage(0) }} className="h-9 rounded-xl border border-border bg-white px-3 text-xs text-rosewood">
-          <option value="ASC">Tăng dần</option>
-          <option value="DESC">Giảm dần</option>
-        </select>
-      </div>
+        </div>
+      </section>
 
       {isLoading ? (
         <LoadingState label="Đang tải danh sách khách hàng..." />

@@ -79,6 +79,8 @@ chuyển sang MongoDB local. SMTP không bắt buộc để khởi động, như
 `MAIL_USERNAME` và `MAIL_PASSWORD` để gửi email xác minh. Mô phỏng thanh toán
 mặc định tắt ở mọi profile; dev chỉ bật khi chủ động đặt
 `PAYMENT_SIMULATION_ENABLED=true`.
+Form liên hệ cần thêm biến `SHOP_CONTACT_EMAIL` để gửi tin đến hộp thư cửa
+hàng; API sẽ báo lỗi cấu hình rõ ràng nếu biến này chưa được đặt.
 
 ### Chuẩn bị Atlas một lần
 
@@ -99,6 +101,7 @@ rồi chạy profile `dev`:
 Set-Location D:\QuanLyTiemBanhNgot\backend
 $env:SPRING_PROFILES_ACTIVE = "dev"
 $env:MONGODB_URI = "mongodb+srv://<database-user>:<password>@<cluster-host>/quanlytiembanh_logs?retryWrites=true&w=majority"
+$env:SHOP_CONTACT_EMAIL = "support@example.com"
 .\mvnw.cmd spring-boot:run
 ```
 
@@ -168,6 +171,7 @@ localhost hoặc credential trống:
 | `MAIL_USERNAME` | Tài khoản SMTP gửi email xác minh |
 | `MAIL_PASSWORD` | SMTP password/App Password |
 | `FRONTEND_URL` | Origin frontend production dùng trong email xác minh |
+| `SHOP_CONTACT_EMAIL` | Hộp thư cửa hàng nhận tin từ trang liên hệ |
 | `VNPAY_TMN_CODE` | Mã merchant VNPay production |
 | `VNPAY_HASH_SECRET` | Khóa ký callback VNPay production |
 | `VNPAY_PAYMENT_URL` | URL thanh toán do VNPay production cung cấp |
@@ -195,6 +199,7 @@ $env:MONGODB_URI = "mongodb+srv://user:password@cluster.example.invalid/quanlyti
 $env:MAIL_USERNAME = "your-email@example.com"
 $env:MAIL_PASSWORD = "set-from-secret-manager"
 $env:FRONTEND_URL = "https://shop.example.invalid"
+$env:SHOP_CONTACT_EMAIL = "support@example.invalid"
 $env:VNPAY_TMN_CODE = "set-from-secret-manager"
 $env:VNPAY_HASH_SECRET = "set-from-secret-manager"
 $env:VNPAY_PAYMENT_URL = "https://provider-production.example.invalid/payment"

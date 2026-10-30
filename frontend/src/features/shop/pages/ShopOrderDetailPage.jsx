@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Pagination, { usePagination } from '../../../components/Pagination.jsx'
+import ReceiptModal from '../../../components/ReceiptModal.jsx'
 import { getCustomerOrderById } from '../services/customerOrderService.js'
 import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
@@ -23,6 +24,7 @@ export default function ShopOrderDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [reloadVersion, setReloadVersion] = useState(0)
+  const [receiptOpen, setReceiptOpen] = useState(false)
   const itemPagination = usePagination(order?.items ?? emptyItems)
 
   useEffect(() => {
@@ -94,11 +96,25 @@ export default function ShopOrderDetailPage() {
             <div className="flex justify-between gap-3"><dt className="text-[#806B65]">Giảm giá</dt><dd>−{moneyFormat.format(Number(order.discountAmount ?? 0))}</dd></div>
             <div className="flex justify-between gap-3 border-t border-[#EAE3DA] pt-3 font-bold text-[#76534D]"><dt>Cần thanh toán</dt><dd>{moneyFormat.format(Number(order.finalAmount ?? 0))}</dd></div>
           </dl>
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setReceiptOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl border border-[#76534D] bg-[#76534D] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#5a3e39]"
+            >
+              🖨️ In / Tải hóa đơn
+            </button>
+          </div>
           <p className="mt-5 text-xs leading-5 text-[#806B65]"><span className="font-semibold text-[#675650]">Địa chỉ nhận hàng:</span> {order.deliveryAddress || 'Nhận tại cửa hàng'}</p>
           {order.note && <p className="mt-2 text-xs leading-5 text-[#806B65]"><span className="font-semibold text-[#675650]">Ghi chú:</span> {order.note}</p>}
           <p className="mt-4 rounded-xl bg-[#FCF9F3] p-3 text-xs leading-5 text-[#806B65]">Trạng thái đơn hàng không đồng nghĩa với đã thanh toán. Thông tin thanh toán được cập nhật riêng bởi hệ thống.</p>
         </article>
       ) : null}
+      <ReceiptModal
+        open={receiptOpen}
+        onClose={() => setReceiptOpen(false)}
+        order={order}
+      />
     </section>
   )
 }

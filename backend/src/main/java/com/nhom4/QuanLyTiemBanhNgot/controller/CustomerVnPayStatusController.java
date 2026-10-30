@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/customer/payments/vnpay")
-@PreAuthorize("hasRole('CUSTOMER')")
+@PreAuthorize("hasAnyRole('CUSTOMER','ADMIN','MANAGER','STAFF')")
 public class CustomerVnPayStatusController {
 
     private final CustomerVnPayStatusService statusService;

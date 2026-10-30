@@ -27,17 +27,24 @@ public class OrderConfirmationEmailService {
     }
 
     public void sendOrderConfirmation(Order order, List<OrderItem> orderItems) {
-        String recipient = order.getCustomer() == null ? null : order.getCustomer().getEmail();
-        if (!isValidEmail(recipient)) {
-            LOGGER.warn("Order confirmation email was skipped because the customer email is missing or invalid.");
+        if (order == null || order.getCustomer() == null) {
+            return;
+        }
+        String recipientEmail = order.getCustomer().getEmail();
+        if (!isValidEmail(recipientEmail)) {
             return;
         }
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(recipient.trim());
-        message.setSubject("Xác nhận tiếp nhận đơn hàng " + order.getOrderCode());
-        message.setText(buildMessage(order, orderItems));
-        afterCommitEmailSender.sendAfterCommit(message);
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(recipientEmail.trim());
+            message.setSubject("WA PÂTISSERIE - Xác nhận đơn hàng " + order.getOrderCode());
+            message.setText(buildMessage(order, orderItems));
+            afterCommitEmailSender.sendAfterCommit(message);
+            LOGGER.info("Đã lên lịch gửi email xác nhận nền không chặn (non-blocking) cho đơn hàng {}", order.getOrderCode());
+        } catch (Exception ex) {
+            LOGGER.warn("Không thể lên lịch gửi email xác nhận cho đơn hàng {}: {}", order.getOrderCode(), ex.getMessage());
+        }
     }
 
     private boolean isValidEmail(String email) {

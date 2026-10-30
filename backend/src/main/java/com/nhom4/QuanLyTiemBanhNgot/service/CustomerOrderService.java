@@ -34,6 +34,10 @@ public class CustomerOrderService {
         if (request.phone() != null && !request.phone().isBlank()) {
             customer.setPhone(request.phone());
         }
+        if (request.deliveryAddress() != null && !request.deliveryAddress().isBlank()
+                && (customer.getAddress() == null || customer.getAddress().isBlank())) {
+            customer.setAddress(request.deliveryAddress());
+        }
         return order;
     }
 
@@ -57,5 +61,4 @@ public class CustomerOrderService {
         }
         return orderService.findByCustomerIdAndRequestKey(customer.getId(), requestKey);
     }
-
 }

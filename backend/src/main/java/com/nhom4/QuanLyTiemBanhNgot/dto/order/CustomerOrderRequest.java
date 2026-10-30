@@ -24,6 +24,16 @@ public record CustomerOrderRequest(
                 regexp = "^0(?:32|33|34|35|36|37|38|39|52|56|58|59|70|76|77|78|79|81|82|83|84|85|86|88|89|90|91|92|93|94|96|97|98|99)[0-9]{7}$",
                 message = "Số điện thoại phải là số di động Việt Nam hợp lệ"
         )
-        String phone
+        String phone,
+
+        Integer loyaltyPointsToRedeem
 ) {
+    public CustomerOrderRequest(
+            String deliveryAddress,
+            List<CreateOrderItemRequest> items,
+            String promotionCode,
+            String note,
+            String phone) {
+        this(deliveryAddress, items, promotionCode, note, phone, 0);
+    }
 }

@@ -12,7 +12,7 @@ function validatePaymentResponse(payment, expected = {}) {
       || !Number.isInteger(Number(payment.orderId))
       || Number(payment.orderId) <= 0
       || !Number.isFinite(amount)
-      || amount <= 0
+      || amount < 0
       || !['PENDING', 'SUCCESS', 'FAILED'].includes(payment.status)) {
     throw new Error('Chưa thể xác nhận thông tin thanh toán. Vui lòng tải lại trang.')
   }

@@ -1,4 +1,3 @@
-
 package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import com.nhom4.QuanLyTiemBanhNgot.entity.Category;
@@ -19,6 +18,8 @@ import com.nhom4.QuanLyTiemBanhNgot.exception.DuplicateResourceException;
 import com.nhom4.QuanLyTiemBanhNgot.exception.ResourceNotFoundException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -57,7 +58,7 @@ public class ProductService {
             String direction) {
         Pageable pageable = PaginationSupport.pageRequest(
                 page, size, sort, direction, "name",
-                Set.of("id", "productCode", "name", "price", "quantity", "status", "createdAt"));
+                Set.of("id", "productCode", "name", "price", "quantity", "status", "createdAt", "expiryDate"));
         String value = keyword == null || keyword.isBlank() ? null : keyword.trim();
         return productRepository.findPageByFilters(value, categoryId, status, pageable);
     }
@@ -79,6 +80,11 @@ public class ProductService {
                 );
     }
 
+    public List<Product> getExpiringProducts(int days, Boolean status) {
+        LocalDate targetDate = LocalDate.now().plusDays(days);
+        return productRepository.findExpiringProducts(targetDate, status);
+    }
+
     @Transactional
     public Product create(Product product) {
         validateProduct(product);
@@ -90,11 +96,21 @@ public class ProductService {
             );
         }
 
+        if (product.getCreatedAt() == null) {
+            product.setCreatedAt(LocalDateTime.now());
+        }
+
+        if (product.getExpiryDate().isBefore(product.getCreatedAt().toLocalDate())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Hạn sử dụng không được trước ngày tạo"
+            );
+        }
+
         product.setId(null);
         product.setProductCode(product.getProductCode().trim());
         product.setName(product.getName().trim());
         product.setCategory(findCategory(product));
-        product.setCreatedAt(java.time.LocalDateTime.now());
 
         return productRepository.save(product);
     }
@@ -126,6 +142,20 @@ public class ProductService {
             );
         }
 
+        if (product.getCreatedAt() != null) {
+            existing.setCreatedAt(product.getCreatedAt());
+        }
+
+        LocalDate referenceCreated = existing.getCreatedAt() != null
+                ? existing.getCreatedAt().toLocalDate()
+                : LocalDate.now();
+        if (product.getExpiryDate().isBefore(referenceCreated)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Hạn sử dụng không được trước ngày tạo"
+            );
+        }
+
         existing.setCategory(findCategory(product));
         existing.setProductCode(code);
         existing.setName(product.getName().trim());
@@ -137,16 +167,15 @@ public class ProductService {
         existing.setExpiryDate(product.getExpiryDate());
         existing.setStatus(product.getStatus());
 
-        // Giữ nguyên id và createdAt của sản phẩm cũ.
         return productRepository.save(existing);
     }
 
     @Transactional
     public Product deactivate(Long id) {
         Product product = productRepository.findByIdForUpdate(id)
-.orElseThrow(() -> new ResourceNotFoundException(
-        "Không tìm thấy sản phẩm"
-));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy sản phẩm"
+                ));
 
         product.setStatus(false);
         return productRepository.save(product);
@@ -229,6 +258,13 @@ public class ProductService {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Trạng thái sản phẩm không được để trống"
+            );
+        }
+
+        if (product.getExpiryDate() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Hạn sử dụng không được để trống"
             );
         }
     }

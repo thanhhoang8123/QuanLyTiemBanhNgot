@@ -13,19 +13,19 @@ export default function DataTable({
   const pagination = usePagination(rows)
 
   return (
-    <div>
+    <div className="overflow-hidden">
       <div className="overflow-x-auto">
         <table aria-label={ariaLabel} className="w-full min-w-[720px] text-left">
           <thead>
-            <tr className="bg-petal text-[10px] font-bold uppercase tracking-wide text-rosewood">
+            <tr className="border-b border-border bg-petal/70 text-[11px] font-bold uppercase tracking-wider text-rosewood">
               {columns.map((column) => (
-                <th key={column.key} className={`whitespace-nowrap px-4 py-3 font-semibold first:pl-5 last:pr-5 ${column.headerClassName ?? ''}`}>
+                <th key={column.key} className={`whitespace-nowrap px-4 py-3.5 font-bold first:pl-5 last:pr-5 ${column.headerClassName ?? ''}`}>
                   {column.label}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border/60">
             {pagination.pageItems.map((row) => (
               <tr
                 key={rowKey(row)}
@@ -37,7 +37,7 @@ export default function DataTable({
                   }
                 } : undefined}
                 tabIndex={onRowClick ? 0 : undefined}
-                className={`border-t border-border text-[11px] text-rosewood transition-colors hover:bg-cream ${onRowClick ? 'cursor-pointer' : ''}`}
+                className={`text-xs text-rosewood transition-colors hover:bg-caramel-soft/40 ${onRowClick ? 'cursor-pointer' : ''}`}
               >
                 {columns.map((column) => (
                   <td key={column.key} className={`px-4 py-3.5 first:pl-5 last:pr-5 ${column.cellClassName ?? ''}`}>
@@ -52,7 +52,7 @@ export default function DataTable({
           <EmptyState
             title={emptyTitle}
             description={emptyDescription}
-            descriptionClassName="text-[11px]"
+            descriptionClassName="text-xs"
           />
         )}
       </div>

@@ -26,6 +26,10 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     boolean existsByEmailIgnoreCase(String email);
 
+    Optional<Customer> findByEmail(String email);
+
+    Optional<Customer> findByEmailIgnoreCase(String email);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select customer from Customer customer where customer.id = :id")
     Optional<Customer> findByIdForUpdate(@Param("id") Long id);

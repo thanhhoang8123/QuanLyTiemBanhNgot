@@ -45,7 +45,7 @@ export default function LoginPage() {
           <span className="mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-[#D0A263]/70 bg-white font-display text-2xl text-[#76534D]">W</span>
           <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#9A7972]">Welcome back</p>
           <h1 className="mt-3 font-display text-3xl font-semibold leading-tight text-[#4A302B]">Chào mừng bạn trở lại</h1>
-          <p className="mt-4 text-sm leading-7 text-[#806B65]">Đăng nhập để tiếp tục khám phá bánh ngọt và thức uống tươi ngon từ Daily Fresh.</p>
+          <p className="mt-4 text-sm leading-7 text-[#806B65]">Đăng nhập để tiếp tục khám phá bánh ngọt và thức uống tươi ngon từ WA Patisserie.</p>
         </div>
         <form onSubmit={handleSubmit} className="p-8 sm:p-10">
           <h2 className="font-display text-2xl font-semibold text-[#4A302B]">Đăng nhập</h2>

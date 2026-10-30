@@ -5,6 +5,7 @@ import ShopProductCard from '../components/ShopProductCard.jsx'
 import useShopCatalog from '../hooks/useShopCatalog.js'
 import { getPromotions } from '../../promotions/services/promotionService.js'
 import { getPromotionProducts } from '../../promotion-products/services/promotionProductService.js'
+import { getActiveShopPromotions } from '../services/shopPromotions.js'
 
 const photos = {
   hero: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=1400&q=88',
@@ -32,7 +33,7 @@ const heroSlides = [
     alt: 'Bánh mì thủ công mới ra lò trong tiệm bánh',
     eyebrow: 'Lò bánh thủ công · Tươi mới mỗi ngày',
     title: <>Đánh thức vị giác<br className="hidden sm:block" /> với bánh mới ra lò</>,
-    description: 'Bánh mì thủ công, bánh ngọt tinh tế và những món tráng miệng được làm bằng sự chăm chút — thơm ngon mỗi ngày tại Daily Fresh.',
+    description: 'Bánh mì thủ công, bánh ngọt tinh tế và những món tráng miệng được làm bằng sự chăm chút — thơm ngon mỗi ngày tại WA Patisserie.',
   },
   {
     image: 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?auto=format&fit=crop&w=2200&q=90',
@@ -72,7 +73,7 @@ function HeroSlideshow() {
     onFocus={() => setIsPaused(true)}
     onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setIsPaused(false) }}
     aria-roledescription="carousel"
-    aria-label="Bộ ảnh giới thiệu tiệm bánh Daily Fresh"
+    aria-label="Bộ ảnh giới thiệu tiệm bánh WA Patisserie"
   >
     {heroSlides.map((item, index) => <div key={item.image} className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === activeSlide ? 'opacity-100' : 'pointer-events-none opacity-0'}`} aria-hidden={index !== activeSlide}>
       <img src={item.image} alt={item.alt} className={`absolute inset-0 h-full w-full object-cover object-center transition-transform duration-[6000ms] ${index === activeSlide ? 'scale-105' : 'scale-100'}`} fetchPriority={index === 0 ? 'high' : 'auto'} loading={index === 0 ? 'eager' : 'lazy'} onError={(event) => { event.currentTarget.style.opacity = '0' }} />
@@ -92,7 +93,7 @@ function HeroSlideshow() {
         <a href="#danh-muc-banh" className="inline-flex h-12 items-center gap-2 rounded-full border border-white/70 bg-white/10 px-6 text-xs font-bold uppercase tracking-wide text-white backdrop-blur-sm transition hover:bg-white/20">Xem bộ sưu tập <Icon name="arrowDown" size={15} /></a>
       </div>
       <div className="absolute bottom-5 left-5 right-5 flex items-center justify-between border-t border-white/40 pt-4 text-left sm:bottom-7 sm:left-8 sm:right-8 lg:bottom-8 lg:left-10 lg:right-10">
-        <div><p className="font-display text-base sm:text-lg">The Daily Fresh Bakery</p><p className="mt-1 text-[9px] uppercase tracking-[.2em] text-white/80 sm:text-[10px]">Bánh ngon · Nguyên liệu chọn lọc · Làm bằng yêu thương</p></div>
+        <div><p className="font-display text-base sm:text-lg">WA Patisserie</p><p className="mt-1 text-[9px] uppercase tracking-[.2em] text-white/80 sm:text-[10px]">Bánh ngon · Nguyên liệu chọn lọc · Làm bằng yêu thương</p></div>
         <Link to="/shop/products" className="hidden items-center gap-2 rounded-full bg-[#F8F1E4] px-4 py-2.5 text-xs font-semibold text-[#60382B] transition hover:bg-white sm:inline-flex">Đặt bánh online <Icon name="arrowUpRight" size={14}/></Link>
       </div>
       <div className="absolute bottom-[92px] left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 sm:bottom-[104px]" aria-label="Chọn ảnh banner">
@@ -132,20 +133,27 @@ export default function ShopHomePage() {
     return () => controller.abort()
   }, [])
 
-  const today = new Date().toISOString().slice(0, 10)
-  const activePromotions = promotions.filter((promotion) => (
-    promotion.status === true
-    && (!promotion.startDate || String(promotion.startDate).slice(0, 10) <= today)
-    && (!promotion.endDate || String(promotion.endDate).slice(0, 10) >= today)
-  ))
+  const activePromotions = getActiveShopPromotions(promotions)
   const activePromotionById = new Map(activePromotions.map((promotion) => [String(promotion.id), promotion]))
-  const promotionalProducts = promotionLinks.flatMap((link) => {
+  const promotionsByProductId = new Map()
+  promotionLinks.forEach((link) => {
     const promotion = activePromotionById.get(String(link.promotionId))
-    if (!promotion) return []
-    const product = products.find((item) => String(item.id) === String(link.productId))
-    if (!product || product.status !== 'Đang bán' || product.stock <= 0) return []
-    return [{ ...product, promotion }]
-  }).filter((item, index, list) => list.findIndex((candidate) => String(candidate.id) === String(item.id)) === index).slice(0, 8)
+    if (!promotion) return
+    const productId = String(link.productId)
+    promotionsByProductId.set(productId, [
+      ...(promotionsByProductId.get(productId) ?? []),
+      promotion,
+    ])
+  })
+  const promotionalProducts = products
+    .filter((product) => product.status === 'Đang bán' && product.stock > 0)
+    .flatMap((product) => {
+      const productPromotions = promotionsByProductId.get(String(product.id))
+      return productPromotions?.length
+        ? [{ product, promotions: productPromotions }]
+        : []
+    })
+    .slice(0, 8)
 
 const availableProducts = products.filter(
   (product) =>
@@ -153,8 +161,14 @@ const availableProducts = products.filter(
     Number(product.stock) > 0
 )
 
-const featuredProducts = availableProducts.slice(0, 4)
-const newProducts = [...availableProducts].slice(-4).reverse()
+const featuredProducts = availableProducts.slice(0, 4).map((product) => ({
+  ...product,
+  shopBadge: 'Sản phẩm nổi bật',
+}))
+const newProducts = [...availableProducts].slice(-4).reverse().map((product) => ({
+  ...product,
+  shopBadge: 'Sản phẩm mới',
+}))
 const bestSellers = featuredProducts
 
   return <div className="bg-[#FCF9F4] text-[#452D27]">
@@ -177,17 +191,13 @@ const bestSellers = featuredProducts
     {/* PRODUCTS WITH ACTIVE PROMOTIONS */}
     {promotionalProducts.length > 0 && <section className="border-y border-[#EDE4D9] bg-[#FFF9F2]">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-7 sm:py-16 lg:px-10">
-        <SectionHeading eyebrow="Ưu đãi đang áp dụng" title="Sản phẩm khuyến mãi" description="Những chiếc bánh đang nằm trong chương trình ưu đãi của Daily Fresh." link="/shop/products" linkText="Xem tất cả bánh" />
+        <SectionHeading eyebrow="Ưu đãi đang áp dụng" title="Sản phẩm khuyến mãi" description="Những chiếc bánh đang nằm trong chương trình ưu đãi của WA Patisserie." link="/shop/products" linkText="Xem tất cả bánh" />
         <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
-          {promotionalProducts.map(({ promotion, ...product }) => <div key={`${promotion.id}-${product.id}`} className="relative">
-            <div className="absolute left-4 top-4 z-20 max-w-[calc(100%-2rem)] rounded-full bg-[#B94F20] px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-wide text-white shadow-md">
-              -{Number(promotion.discountPercent) || 0}% · {promotion.promotionCode}
-            </div>
-            <ShopProductCard product={product} promotion={promotion} onAddToCart={addToCart} />
-            <p className="mt-2 line-clamp-1 text-center text-[11px] font-semibold text-[#9B6654]">{promotion.name}</p>
+          {promotionalProducts.map(({ product, promotions: productPromotions }) => <div key={product.id}>
+            <ShopProductCard product={product} promotion={productPromotions} onAddToCart={addToCart} />
           </div>)}
         </div>
-        <p className="mt-4 text-[10px] leading-5 text-[#907C73]">Ưu đãi được hiển thị theo chương trình đang bật và thời hạn khuyến mãi. Giá giảm cuối cùng sẽ được xác nhận theo quy tắc áp dụng mã tại bước đặt hàng.</p>
+        <p className="mt-4 text-[10px] leading-5 text-[#907C73]">Giá ưu đãi được tính theo điều kiện chương trình và sẽ được xác nhận khi đặt hàng.</p>
       </div>
     </section>}
 
@@ -195,10 +205,10 @@ const bestSellers = featuredProducts
     <section className="mx-auto max-w-7xl px-4 py-12 sm:px-7 sm:py-16 lg:px-10"><div className="relative overflow-hidden rounded-[28px] bg-[#76534D] px-6 py-8 text-white sm:px-10 sm:py-11 lg:px-14"><div className="absolute -right-8 -top-20 h-64 w-64 rounded-full border border-white/15"/><div className="absolute -right-1 top-4 h-44 w-44 rounded-full border border-white/10"/><div className="relative flex flex-col items-start justify-between gap-7 sm:flex-row sm:items-center"><div className="max-w-2xl"><p className="text-[10px] font-bold uppercase tracking-[.24em] text-[#E8C89D]">Một món quà thật ngọt</p><h2 className="font-display mt-3 text-3xl leading-tight sm:text-4xl">Dịp đặc biệt xứng đáng có một chiếc bánh đặc biệt.</h2><p className="mt-3 max-w-xl text-sm leading-6 text-white/75">Khám phá các lựa chọn hiện có và tìm hương vị dành riêng cho khoảnh khắc của bạn.</p></div><Link to="/shop/products" className="inline-flex h-12 shrink-0 items-center gap-2 rounded-full bg-[#FCF9F3] px-6 text-sm font-bold text-[#563A32] transition hover:-translate-y-0.5 hover:bg-white">Chọn bánh ngay <Icon name="arrowUpRight" size={16}/></Link></div></div></section>
 
     {/* NEW ARRIVALS */}
-    {newProducts.length>0&&<section className="border-y border-[#EDE4D9] bg-[#F7F0E8]"><div className="mx-auto max-w-7xl px-4 py-12 sm:px-7 sm:py-16 lg:px-10"><SectionHeading eyebrow="Mới từ lò bánh" title="Có gì mới hôm nay?" description="Khám phá thêm những hương vị đang có tại Daily Fresh." linkText="Khám phá thêm"/>{error?<CatalogError message={error} onRetry={retry}/>:isLoading?<div className="h-64 animate-pulse rounded-2xl bg-white/70"/>:<div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">{newProducts.map(product=><ShopProductCard key={product.id} product={product} onAddToCart={addToCart}/>)}</div>}</div></section>}
+    {newProducts.length>0&&<section className="border-y border-[#EDE4D9] bg-[#F7F0E8]"><div className="mx-auto max-w-7xl px-4 py-12 sm:px-7 sm:py-16 lg:px-10"><SectionHeading eyebrow="Mới từ lò bánh" title="Có gì mới hôm nay?" description="Khám phá thêm những hương vị đang có tại WA Patisserie." linkText="Khám phá thêm"/>{error?<CatalogError message={error} onRetry={retry}/>:isLoading?<div className="h-64 animate-pulse rounded-2xl bg-white/70"/>:<div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">{newProducts.map(product=><ShopProductCard key={product.id} product={product} onAddToCart={addToCart}/>)}</div>}</div></section>}
 
     {/* BRAND STORY */}
-    <section className="mx-auto grid max-w-7xl items-center gap-8 px-4 py-14 sm:px-7 sm:py-20 lg:grid-cols-2 lg:gap-16 lg:px-10"><div className="relative"><div className="absolute -bottom-4 -left-4 h-28 w-28 rounded-full bg-[#EAD6C2]"/><img src={photos.story} alt="Bánh mì mới ra lò tại Daily Fresh" loading="lazy" className="relative h-[280px] w-full rounded-[26px] object-cover shadow-xl shadow-[#76534D]/10 sm:h-[390px]"/></div><div><p className="text-[10px] font-bold uppercase tracking-[.24em] text-[#B47B68]">Câu chuyện Daily Fresh</p><h2 className="font-display mt-3 text-3xl leading-tight text-[#452D27] sm:text-4xl">Làm bánh bằng sự chăm chút, gửi đi bằng yêu thương.</h2><p className="mt-4 text-sm leading-7 text-[#806B65]">Chúng tôi tin rằng niềm vui đôi khi bắt đầu từ những điều giản dị: mùi bánh mới ra lò, một miếng bánh mềm thơm hay món quà nhỏ dành cho người thân. Daily Fresh mong mỗi lựa chọn của bạn đều góp thêm chút ngọt ngào cho ngày thường.</p><Link to="/shop/products" className="mt-6 inline-flex h-11 items-center gap-2 rounded-full border border-[#DDCDB8] bg-white px-5 text-xs font-bold text-[#76534D] transition hover:border-[#76534D]">Ghé thăm tủ bánh <Icon name="arrowUpRight" size={15}/></Link></div></section>
+    <section className="mx-auto grid max-w-7xl items-center gap-8 px-4 py-14 sm:px-7 sm:py-20 lg:grid-cols-2 lg:gap-16 lg:px-10"><div className="relative"><div className="absolute -bottom-4 -left-4 h-28 w-28 rounded-full bg-[#EAD6C2]"/><img src={photos.story} alt="Bánh mì mới ra lò tại WA Patisserie" loading="lazy" className="relative h-[280px] w-full rounded-[26px] object-cover shadow-xl shadow-[#76534D]/10 sm:h-[390px]"/></div><div><p className="text-[10px] font-bold uppercase tracking-[.24em] text-[#B47B68]">Câu chuyện WA Patisserie</p><h2 className="font-display mt-3 text-3xl leading-tight text-[#452D27] sm:text-4xl">Làm bánh bằng sự chăm chút, gửi đi bằng yêu thương.</h2><p className="mt-4 text-sm leading-7 text-[#806B65]">Chúng tôi tin rằng niềm vui đôi khi bắt đầu từ những điều giản dị: mùi bánh mới ra lò, một miếng bánh mềm thơm hay món quà nhỏ dành cho người thân. WA Patisserie mong mỗi lựa chọn của bạn đều góp thêm chút ngọt ngào cho ngày thường.</p><Link to="/shop/products" className="mt-6 inline-flex h-11 items-center gap-2 rounded-full border border-[#DDCDB8] bg-white px-5 text-xs font-bold text-[#76534D] transition hover:border-[#76534D]">Ghé thăm tủ bánh <Icon name="arrowUpRight" size={15}/></Link></div></section>
 
     {/* TESTIMONIAL / TRUST */}
     <section className="bg-[#F7F0E8]"><div className="mx-auto max-w-7xl px-4 py-12 sm:px-7 sm:py-14 lg:px-10"><div className="mx-auto max-w-3xl text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#B47B68]"><Icon name="heart" size={21}/></span><p className="mt-4 text-[10px] font-bold uppercase tracking-[.24em] text-[#B47B68]">Một chút dịu dàng mỗi ngày</p><h2 className="font-display mt-2 text-3xl text-[#452D27] sm:text-4xl">Niềm vui nằm trong từng miếng bánh.</h2><p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-[#806B65]">Dành cho buổi trà chiều, sinh nhật, buổi gặp gỡ thân quen hoặc đơn giản là một ngày bạn muốn tự thưởng cho mình.</p><div className="mt-6 flex flex-wrap justify-center gap-2"><span className="rounded-full border border-[#E4D4C4] bg-white px-4 py-2 text-[10px] font-semibold text-[#76534D]">Bánh kem</span><span className="rounded-full border border-[#E4D4C4] bg-white px-4 py-2 text-[10px] font-semibold text-[#76534D]">Bánh mì</span><span className="rounded-full border border-[#E4D4C4] bg-white px-4 py-2 text-[10px] font-semibold text-[#76534D]">Bánh ngọt</span><span className="rounded-full border border-[#E4D4C4] bg-white px-4 py-2 text-[10px] font-semibold text-[#76534D]">Bánh quy</span></div></div></div></section>
