@@ -368,7 +368,24 @@ export default function ShopCheckoutPage() {
     return (
       <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
         <div role="alert" className="rounded-2xl border border-[#E2C5BF] bg-white p-6 text-sm leading-6 text-[#914E46]">
-          Có đơn hàng chưa hoàn tất trên trình duyệt này. Vui lòng đăng nhập tài khoản đã dùng để đặt đơn và kiểm tra trạng thái trước khi tạo đơn mới.
+          <p>
+            Có yêu cầu đặt hàng chưa hoàn tất được lưu trên trình duyệt này. Để tránh tạo đơn trùng, vui lòng đăng nhập tài khoản đã dùng để đặt đơn và kiểm tra trạng thái trước khi tạo đơn mới.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              to="/shop/login"
+              state={{ from: { pathname: '/shop/checkout' } }}
+              className="inline-flex h-10 items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white transition hover:bg-[#4A302B]"
+            >
+              Đăng nhập tài khoản đã dùng
+            </Link>
+            <Link
+              to="/shop/orders"
+              className="inline-flex h-10 items-center justify-center rounded-full border border-[#DDCDB8] px-5 text-xs font-semibold text-[#76534D] transition hover:bg-[#FCF9F3]"
+            >
+              Xem lịch sử đơn hàng
+            </Link>
+          </div>
         </div>
       </section>
     )

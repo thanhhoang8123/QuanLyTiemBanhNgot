@@ -66,21 +66,51 @@ Endpoint upload tiếp tục chỉ nhận JPG, PNG hoặc WEBP, giới hạn fil
 
 ## Chạy backend ở local bằng profile `dev`
 
-Profile mặc định là `dev`. Profile này bật SQL logging và thêm migration seed
-tài khoản test; chỉ dùng cho máy phát triển, không dùng profile này trên môi
-trường công khai.
+`dev` là profile mặc định, chỉ dành cho máy local. Trên database mới, Hibernate
+tạo các bảng từ Entity rồi Spring chạy `data.sql` để nạp dữ liệu và tài khoản
+kiểm thử. Seed dùng `INSERT IGNORE`/`NOT EXISTS`, không xóa dữ liệu khi chạy lại.
 
-MySQL local trong `application.properties` tiếp tục là database nghiệp vụ.
-MongoDB của profile `dev` kết nối Atlas thông qua biến môi trường `MONGODB_URI`,
-được tham chiếu bởi `spring.mongodb.uri` trong cấu hình chung. Profile `dev`
-không ghi đè URI này. Nếu biến thiếu, rỗng hoặc sai định dạng, ứng dụng dừng
-sớm với thông báo hướng dẫn; URI không được ghi vào log. Cấu hình không tự
-chuyển sang MongoDB local. SMTP không bắt buộc để khởi động, nhưng cần
-`MAIL_USERNAME` và `MAIL_PASSWORD` để gửi email xác minh. Mô phỏng thanh toán
-mặc định tắt ở mọi profile; dev chỉ bật khi chủ động đặt
-`PAYMENT_SIMULATION_ENABLED=true`.
-Form liên hệ cần thêm biến `SHOP_CONTACT_EMAIL` để gửi tin đến hộp thư cửa
-hàng; API sẽ báo lỗi cấu hình rõ ràng nếu biến này chưa được đặt.
+### Chạy lần đầu trên Windows
+
+1. Cài và bật MySQL. Tài khoản kết nối cần quyền tạo database.
+2. Chạy backend:
+
+   ```powershell
+   Set-Location D:\QuanLyTiemBanhNgot\backend
+   .\mvnw.cmd spring-boot:run
+   ```
+
+3. Chạy frontend trong terminal khác:
+
+   ```powershell
+   Set-Location D:\QuanLyTiemBanhNgot\frontend
+   npm install
+   npm run dev
+   ```
+
+Không cần tạo bảng, chạy SQL thủ công, cấu hình Atlas hay SMTP để mở các luồng
+cơ bản. Database MySQL `quanlytiembanhngot` được tự tạo; MongoDB mặc định dùng
+local `localhost:27017`. Đặt `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` hoặc
+`MONGODB_URI` nếu muốn dùng dịch vụ khác. MongoDB, SMTP, Cloudinary, email liên
+hệ và VNPay chỉ cần cấu hình khi kiểm thử các tích hợp tương ứng.
+
+Tài khoản local dùng chung mật khẩu `Banh@123`: `test_admin`, `test_manager`,
+`test_staff`, `test_customer`.
+
+Chế độ tự tạo/cập nhật schema và seed chỉ thuộc profile `dev`. Không dùng
+profile này trên database dùng chung hoặc production. Môi trường production
+phải dùng Flyway và cấu hình database riêng.
+
+### VNPay sandbox callback
+
+VNPay chỉ xác nhận thanh toán cho backend qua IPN hoặc truy vấn giao dịch phía
+server; trang người dùng quay về không tự xác nhận thanh toán. Khi dùng ngrok
+hoặc tunnel khác, `VNPAY_RETURN_URL` phải trỏ đến backend đang chạy. Đồng thời,
+cấu hình URL IPN công khai kết thúc bằng
+`/api/payments/vnpay/ipn` trong phần cấu hình merchant/test của VNPay. Biến
+`VNPAY_IPN_URL` trong ứng dụng chỉ lưu URL tham chiếu, không tự đăng ký callback
+với VNPay. Tunnel cần tiếp tục hoạt động và trỏ đúng cổng backend trong suốt
+quá trình kiểm thử.
 
 ### Chuẩn bị Atlas một lần
 
@@ -91,24 +121,6 @@ hàng; API sẽ báo lỗi cấu hình rõ ràng nếu biến này chưa đượ
    hướng dẫn của Atlas.
 4. Không gửi URI/mật khẩu qua chat, không ghi vào file cấu hình/repository và
    không commit giá trị thật.
-
-### Khởi động trên Windows PowerShell
-
-Mở PowerShell tại thư mục backend, đặt URI Atlas cho phiên terminal hiện tại,
-rồi chạy profile `dev`:
-
-```powershell
-Set-Location D:\QuanLyTiemBanhNgot\backend
-$env:SPRING_PROFILES_ACTIVE = "dev"
-$env:MONGODB_URI = "mongodb+srv://<database-user>:<password>@<cluster-host>/quanlytiembanh_logs?retryWrites=true&w=majority"
-$env:SHOP_CONTACT_EMAIL = "support@example.com"
-.\mvnw.cmd spring-boot:run
-```
-
-Thay phần trong dấu `<...>` bằng thông tin Atlas của bạn; không lưu dòng chứa
-URI thật vào tài liệu, script hoặc Git. Các biến đặt bằng `$env:` chỉ được tiến
-trình backend khởi chạy từ terminal này kế thừa. Muốn chạy từ một terminal mới,
-cần đặt lại biến hoặc cấu hình biến môi trường cá nhân trên Windows.
 
 ### Khởi chạy bằng VS Code Java debugger
 
@@ -158,7 +170,7 @@ nhập. Không chia sẻ URI thật hoặc đưa URI vào repository.
 ## Cấu hình production
 
 Production phải chạy với `SPRING_PROFILES_ACTIVE=prod`. Profile này không nạp
-migration seed dev, tắt SQL logging, bật cookie session `Secure` và yêu cầu các
+seed dev, tắt SQL logging, bật cookie session `Secure` và yêu cầu các
 biến cấu hình sau; nếu thiếu, Spring Boot sẽ dừng khi khởi động thay vì dùng
 localhost hoặc credential trống:
 

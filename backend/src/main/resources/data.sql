@@ -1,30 +1,7 @@
 -- =========================================================
 -- DATA MẪU - HỆ THỐNG QUẢN LÝ TIỆM BÁNH NGỌT
--- Dữ liệu cho các bảng nghiệp vụ trong ERD và bảng payment attempts.
--- CHỈ chạy thủ công trên database thử nghiệm: script xóa dữ liệu
--- hiện có trong các bảng nghiệp vụ bên dưới trước khi nạp lại mẫu.
--- Không xóa schema hoặc lịch sử Flyway. Spring SQL init hiện đang tắt.
+-- Chỉ dùng profile dev. Chèn bản ghi còn thiếu, không xóa dữ liệu hiện có.
 -- =========================================================
-
-START TRANSACTION;
-
-DELETE FROM payment_transaction_attempts;
-DELETE FROM payments;
-DELETE FROM order_items;
-DELETE FROM orders;
-DELETE FROM custom_orders;
-DELETE FROM purchase_order_items;
-DELETE FROM purchase_orders;
-DELETE FROM promotion_products;
-DELETE FROM products;
-DELETE FROM categories;
-DELETE FROM ingredients;
-DELETE FROM suppliers;
-DELETE FROM employees;
-DELETE FROM accounts;
-DELETE FROM customers;
-DELETE FROM promotions;
-DELETE FROM roles;
 
 -- =========================================================
 -- 1. ROLES
@@ -40,11 +17,11 @@ INSERT IGNORE INTO roles (id, role_code, name, description) VALUES
 -- Mật khẩu mẫu: HappyMart@123
 -- =========================================================
 INSERT IGNORE INTO accounts
-(id, username, password_hash, role_id, status, created_at, updated_at) VALUES
-(1, 'admin', '$2a$10$4iyrzR3kE80yajsk4JvqeeiHyTdWxBFNZFOVL8bzolzMpWtqw0i4.', 1, 'ACTIVE', NOW(), NOW()),
-(2, 'manager', '$2a$10$4iyrzR3kE80yajsk4JvqeeiHyTdWxBFNZFOVL8bzolzMpWtqw0i4.', 2, 'ACTIVE', NOW(), NOW()),
-(3, 'staff01', '$2a$10$4iyrzR3kE80yajsk4JvqeeiHyTdWxBFNZFOVL8bzolzMpWtqw0i4.', 3, 'ACTIVE', NOW(), NOW()),
-(4, 'staff02', '$2a$10$4iyrzR3kE80yajsk4JvqeeiHyTdWxBFNZFOVL8bzolzMpWtqw0i4.', 3, 'ACTIVE', NOW(), NOW());
+(id, username, password_hash, role_id, email, email_verified, customer_id, status, created_at, updated_at) VALUES
+(1, 'admin', '$2a$10$4iyrzR3kE80yajsk4JvqeeiHyTdWxBFNZFOVL8bzolzMpWtqw0i4.', 1, 'admin.seed@example.invalid', FALSE, NULL, 'ACTIVE', NOW(), NOW()),
+(2, 'manager', '$2a$10$4iyrzR3kE80yajsk4JvqeeiHyTdWxBFNZFOVL8bzolzMpWtqw0i4.', 2, 'manager.seed@example.invalid', FALSE, NULL, 'ACTIVE', NOW(), NOW()),
+(3, 'staff01', '$2a$10$4iyrzR3kE80yajsk4JvqeeiHyTdWxBFNZFOVL8bzolzMpWtqw0i4.', 3, 'staff01.seed@example.invalid', FALSE, NULL, 'ACTIVE', NOW(), NOW()),
+(4, 'staff02', '$2a$10$4iyrzR3kE80yajsk4JvqeeiHyTdWxBFNZFOVL8bzolzMpWtqw0i4.', 3, 'staff02.seed@example.invalid', FALSE, NULL, 'ACTIVE', NOW(), NOW());
 -- 3. EMPLOYEES
 -- =========================================================
 INSERT IGNORE INTO employees
@@ -82,16 +59,16 @@ INSERT IGNORE INTO categories
 -- =========================================================
 INSERT IGNORE INTO products
 (id, category_id, product_code, name, description, image_url, price, quantity, unit, expiry_date, status, created_at) VALUES
-(1, 1, 'BK001', 'Bánh kem dâu tây', 'Bánh kem dâu tây size 20cm', '/images/products/banh-kem-dau.jpg', 350000.00, 10, 'cái', '2026-10-10', TRUE, NOW()),
-(2, 1, 'BK002', 'Bánh kem chocolate', 'Bánh kem chocolate size 20cm', '/images/products/banh-kem-chocolate.jpg', 380000.00, 8, 'cái', '2026-10-10', TRUE, NOW()),
-(3, 2, 'BM001', 'Bánh mì bơ tỏi', 'Bánh mì bơ tỏi nướng giòn', '/images/products/banh-mi-bo-toi.jpg', 45000.00, 30, 'cái', '2026-10-05', TRUE, NOW()),
-(4, 2, 'BM002', 'Bánh mì xúc xích', 'Bánh mì xúc xích phô mai', '/images/products/banh-mi-xuc-xich.jpg', 40000.00, 25, 'cái', '2026-10-05', TRUE, NOW()),
-(5, 3, 'BN001', 'Croissant bơ', 'Bánh croissant nhân bơ truyền thống', '/images/products/croissant.jpg', 35000.00, 20, 'cái', '2026-10-06', TRUE, NOW()),
-(6, 3, 'BN002', 'Tiramisu', 'Tiramisu vị cà phê truyền thống', '/images/products/tiramisu.jpg', 65000.00, 15, 'hộp', '2026-10-07', TRUE, NOW()),
-(7, 3, 'BN003', 'Bánh su kem', 'Bánh su kem nhân vanilla', '/images/products/su-kem.jpg', 30000.00, 25, 'hộp', '2026-10-06', TRUE, NOW()),
-(8, 4, 'BQ001', 'Bánh quy chocolate', 'Bánh quy chocolate chip', '/images/products/quy-chocolate.jpg', 55000.00, 18, 'hộp', '2026-11-01', TRUE, NOW()),
-(9, 4, 'BQ002', 'Bánh quy bơ', 'Bánh quy bơ hộp 200g', '/images/products/quy-bo.jpg', 50000.00, 20, 'hộp', '2026-11-01', TRUE, NOW()),
-(10, 5, 'BMU001', 'Mousse xoài', 'Bánh mousse xoài tươi', '/images/products/mousse-xoai.jpg', 75000.00, 12, 'hộp', '2026-10-08', TRUE, NOW());
+(1, 1, 'BK001', 'Bánh kem dâu tây', 'Bánh kem dâu tây size 20cm', '/images/products/banh-kem-dau.jpg', 350000.00, 10, 'cái', DATE_ADD(CURDATE(), INTERVAL 30 DAY), TRUE, NOW()),
+(2, 1, 'BK002', 'Bánh kem chocolate', 'Bánh kem chocolate size 20cm', '/images/products/banh-kem-chocolate.jpg', 380000.00, 8, 'cái', DATE_ADD(CURDATE(), INTERVAL 30 DAY), TRUE, NOW()),
+(3, 2, 'BM001', 'Bánh mì bơ tỏi', 'Bánh mì bơ tỏi nướng giòn', '/images/products/banh-mi-bo-toi.jpg', 45000.00, 30, 'cái', DATE_ADD(CURDATE(), INTERVAL 7 DAY), TRUE, NOW()),
+(4, 2, 'BM002', 'Bánh mì xúc xích', 'Bánh mì xúc xích phô mai', '/images/products/banh-mi-xuc-xich.jpg', 40000.00, 25, 'cái', DATE_ADD(CURDATE(), INTERVAL 7 DAY), TRUE, NOW()),
+(5, 3, 'BN001', 'Croissant bơ', 'Bánh croissant nhân bơ truyền thống', '/images/products/croissant.jpg', 35000.00, 20, 'cái', DATE_ADD(CURDATE(), INTERVAL 10 DAY), TRUE, NOW()),
+(6, 3, 'BN002', 'Tiramisu', 'Tiramisu vị cà phê truyền thống', '/images/products/tiramisu.jpg', 65000.00, 15, 'hộp', DATE_ADD(CURDATE(), INTERVAL 10 DAY), TRUE, NOW()),
+(7, 3, 'BN003', 'Bánh su kem', 'Bánh su kem nhân vanilla', '/images/products/su-kem.jpg', 30000.00, 25, 'hộp', DATE_ADD(CURDATE(), INTERVAL 7 DAY), TRUE, NOW()),
+(8, 4, 'BQ001', 'Bánh quy chocolate', 'Bánh quy chocolate chip', '/images/products/quy-chocolate.jpg', 55000.00, 18, 'hộp', DATE_ADD(CURDATE(), INTERVAL 60 DAY), TRUE, NOW()),
+(9, 4, 'BQ002', 'Bánh quy bơ', 'Bánh quy bơ hộp 200g', '/images/products/quy-bo.jpg', 50000.00, 20, 'hộp', DATE_ADD(CURDATE(), INTERVAL 60 DAY), TRUE, NOW()),
+(10, 5, 'BMU001', 'Mousse xoài', 'Bánh mousse xoài tươi', '/images/products/mousse-xoai.jpg', 75000.00, 12, 'hộp', DATE_ADD(CURDATE(), INTERVAL 10 DAY), TRUE, NOW());
 
 -- =========================================================
 -- 7. INGREDIENTS
@@ -151,12 +128,12 @@ INSERT IGNORE INTO purchase_order_items
 -- final_amount = total_amount - discount_amount (không lưu DB)
 -- =========================================================
 INSERT IGNORE INTO orders
-(id, order_code, customer_id, employee_id, order_date, delivery_address, delivery_status, total_amount, discount_amount, status, created_at) VALUES
-(1, 'DH001', 1, 3, '2026-09-26 09:15:00', NULL, 'NOT_REQUIRED', 380000.00, 0.00, 'COMPLETED', '2026-09-26 09:15:00'),
-(2, 'DH002', 2, 4, '2026-09-26 10:30:00', 'Quận 3, TP.HCM', 'DELIVERED', 410000.00, 41000.00, 'COMPLETED', '2026-09-26 10:30:00'),
-(3, 'DH003', 3, 3, '2026-09-27 14:00:00', 'Quận 10, TP.HCM', 'PENDING', 750000.00, 75000.00, 'CONFIRMED', '2026-09-27 14:00:00'),
-(4, 'DH004', 4, 4, '2026-09-28 16:20:00', NULL, 'NOT_REQUIRED', 200000.00, 0.00, 'COMPLETED', '2026-09-28 16:20:00'),
-(5, 'DH005', 5, 3, '2026-09-29 11:10:00', 'Quận 7, TP.HCM', 'PENDING', 350000.00, 35000.00, 'PENDING', '2026-09-29 11:10:00');
+(id, order_code, customer_id, employee_id, order_date, delivery_address, delivery_status, total_amount, discount_amount, status, created_at, stock_reserved) VALUES
+(1, 'DH001', 1, 3, '2026-09-26 09:15:00', NULL, 'NOT_REQUIRED', 380000.00, 0.00, 'COMPLETED', '2026-09-26 09:15:00', FALSE),
+(2, 'DH002', 2, 4, '2026-09-26 10:30:00', 'Quận 3, TP.HCM', 'DELIVERED', 410000.00, 41000.00, 'COMPLETED', '2026-09-26 10:30:00', FALSE),
+(3, 'DH003', 3, 3, '2026-09-27 14:00:00', 'Quận 10, TP.HCM', 'PENDING', 750000.00, 75000.00, 'CONFIRMED', '2026-09-27 14:00:00', FALSE),
+(4, 'DH004', 4, 4, '2026-09-28 16:20:00', NULL, 'NOT_REQUIRED', 200000.00, 0.00, 'COMPLETED', '2026-09-28 16:20:00', FALSE),
+(5, 'DH005', 5, 3, '2026-09-29 11:10:00', 'Quận 7, TP.HCM', 'PENDING', 350000.00, 35000.00, 'PENDING', '2026-09-29 11:10:00', FALSE);
 
 -- =========================================================
 -- 12. ORDER_ITEMS
@@ -206,10 +183,10 @@ INSERT IGNORE INTO custom_orders
 -- =========================================================
 INSERT IGNORE INTO promotions
 (id, promotion_code, name, discount_percent, max_discount, min_order_value, start_date, end_date, status) VALUES
-(1, 'KM001', 'Ưu đãi khách hàng mới', 10.00, 50000.00, 200000.00, '2026-01-01', '2026-12-31', TRUE),
-(2, 'KM002', 'Khuyến mãi bánh kem', 15.00, 100000.00, 300000.00, '2026-09-01', '2026-10-31', TRUE),
-(3, 'KM003', 'Mua bánh nhận ưu đãi', 5.00, 50000.00, 150000.00, '2026-09-15', '2026-10-15', TRUE),
-(4, 'KM004', 'Khuyến mãi cuối tuần', 20.00, 80000.00, 250000.00, '2026-10-01', '2026-10-31', TRUE);
+(1, 'KM001', 'Ưu đãi khách hàng mới', 10.00, 50000.00, 200000.00, DATE_SUB(CURDATE(), INTERVAL 1 DAY), DATE_ADD(CURDATE(), INTERVAL 30 DAY), TRUE),
+(2, 'KM002', 'Khuyến mãi bánh kem', 15.00, 100000.00, 300000.00, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY), TRUE),
+(3, 'KM003', 'Mua bánh nhận ưu đãi', 5.00, 50000.00, 150000.00, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY), TRUE),
+(4, 'KM004', 'Khuyến mãi cuối tuần', 20.00, 80000.00, 250000.00, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 30 DAY), TRUE);
 
 -- =========================================================
 -- 16. PROMOTION_PRODUCTS
@@ -232,6 +209,76 @@ INSERT IGNORE INTO promotion_products
 (4, 6);
 
 -- =========================================================
+-- 17. TÀI KHOẢN KIỂM THỬ LOCAL (mật khẩu: Banh@123)
+-- =========================================================
+SET @test_password_hash = '$2a$10$cSVq6XBPXON5bmOxxpxRx.kzwBsz1zlyqbJHGo1KeRh4lZpgPKZlm';
+
+INSERT INTO customers (full_name, phone, email, address, loyalty_points, status)
+SELECT 'Khách hàng kiểm thử', '0900000004', 'test.customer@example.invalid',
+       'Địa chỉ mẫu phục vụ kiểm thử', 0, TRUE
+WHERE NOT EXISTS (
+    SELECT 1 FROM customers WHERE email = 'test.customer@example.invalid'
+);
+
+INSERT INTO accounts
+    (username, password_hash, role_id, email, email_verified, customer_id, status, created_at, updated_at)
+SELECT 'test_admin', @test_password_hash, r.id, 'test.admin@example.invalid',
+       TRUE, NULL, 'ACTIVE', NOW(), NOW()
+FROM roles r
+WHERE r.role_code = 'ADMIN'
+  AND NOT EXISTS (SELECT 1 FROM accounts WHERE username = 'test_admin')
+  AND NOT EXISTS (SELECT 1 FROM accounts WHERE email = 'test.admin@example.invalid');
+
+INSERT INTO accounts
+    (username, password_hash, role_id, email, email_verified, customer_id, status, created_at, updated_at)
+SELECT 'test_manager', @test_password_hash, r.id, 'test.manager@example.invalid',
+       TRUE, NULL, 'ACTIVE', NOW(), NOW()
+FROM roles r
+WHERE r.role_code = 'MANAGER'
+  AND NOT EXISTS (SELECT 1 FROM accounts WHERE username = 'test_manager')
+  AND NOT EXISTS (SELECT 1 FROM accounts WHERE email = 'test.manager@example.invalid');
+
+INSERT INTO accounts
+    (username, password_hash, role_id, email, email_verified, customer_id, status, created_at, updated_at)
+SELECT 'test_staff', @test_password_hash, r.id, 'test.staff@example.invalid',
+       TRUE, NULL, 'ACTIVE', NOW(), NOW()
+FROM roles r
+WHERE r.role_code = 'STAFF'
+  AND NOT EXISTS (SELECT 1 FROM accounts WHERE username = 'test_staff')
+  AND NOT EXISTS (SELECT 1 FROM accounts WHERE email = 'test.staff@example.invalid');
+
+INSERT INTO accounts
+    (username, password_hash, role_id, email, email_verified, customer_id, status, created_at, updated_at)
+SELECT 'test_customer', @test_password_hash, r.id, 'test.customer@example.invalid',
+       TRUE, c.id, 'ACTIVE', NOW(), NOW()
+FROM roles r
+CROSS JOIN customers c
+WHERE r.role_code = 'CUSTOMER'
+  AND c.email = 'test.customer@example.invalid'
+  AND NOT EXISTS (SELECT 1 FROM accounts WHERE username = 'test_customer')
+  AND NOT EXISTS (SELECT 1 FROM accounts WHERE email = 'test.customer@example.invalid');
+
+INSERT INTO employees (account_id, full_name, phone, email, salary, status)
+SELECT a.id, 'Nhân viên kiểm thử', '0900000003', 'test.staff@example.invalid', 0, TRUE
+FROM accounts a
+WHERE a.username = 'test_staff'
+  AND NOT EXISTS (SELECT 1 FROM employees e WHERE e.account_id = a.id);
+
+INSERT INTO employees (account_id, full_name, phone, email, salary, status)
+SELECT a.id, 'Quản trị viên kiểm thử', '0900000001',
+       'test.admin@example.invalid', 0, TRUE
+FROM accounts a
+WHERE a.username = 'test_admin'
+  AND NOT EXISTS (SELECT 1 FROM employees e WHERE e.account_id = a.id);
+
+INSERT INTO employees (account_id, full_name, phone, email, salary, status)
+SELECT a.id, 'Quản lý kiểm thử', '0900000002',
+       'test.manager@example.invalid', 0, TRUE
+FROM accounts a
+WHERE a.username = 'test_manager'
+  AND NOT EXISTS (SELECT 1 FROM employees e WHERE e.account_id = a.id);
+
+-- =========================================================
 -- KIỂM TRA NHANH SAU KHI INSERT
 -- =========================================================
 -- SELECT COUNT(*) FROM roles;
@@ -250,5 +297,3 @@ INSERT IGNORE INTO promotion_products
 -- SELECT COUNT(*) FROM custom_orders;
 -- SELECT COUNT(*) FROM promotions;
 -- SELECT COUNT(*) FROM promotion_products;
-
-COMMIT;
