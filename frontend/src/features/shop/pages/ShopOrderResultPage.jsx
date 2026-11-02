@@ -25,6 +25,14 @@ const moneyFormat = new Intl.NumberFormat('vi-VN', {
 })
 const emptyItems = []
 const statusPollDelays = [500, 1000]
+const reconciliationRetryDelay = 15_000
+const maxAutomaticReconciliations = 6
+
+function isTerminalPaymentStatus(status) {
+  return status?.paymentStatus === 'SUCCESS'
+    || status?.paymentStatus === 'FAILED'
+    || status?.attemptStatus === 'RECONCILIATION_REQUIRED'
+}
 
 export default function ShopOrderResultPage() {
   const location = useLocation()
@@ -47,6 +55,7 @@ export default function ShopOrderResultPage() {
     const controller = new AbortController()
     let timerId
     let pollCount = 0
+    let reconciliationAttempts = 0
     let active = true
     setReconciliationMessage('')
     setReconciliationError('')
@@ -61,15 +70,17 @@ export default function ShopOrderResultPage() {
         )
         if (!active) return
         setPaymentStatus(result)
-        const terminal = result?.paymentStatus === 'SUCCESS'
-          || result?.paymentStatus === 'FAILED'
-          || result?.attemptStatus === 'RECONCILIATION_REQUIRED'
+        const terminal = isTerminalPaymentStatus(result)
         if (!terminal && pollCount < statusPollDelays.length) {
           const delay = statusPollDelays[pollCount]
           pollCount += 1
           timerId = window.setTimeout(loadStatus, delay)
-        } else if (!terminal && transactionReference) {
+        } else if (!terminal
+            && transactionReference
+            && reconciliationAttempts < maxAutomaticReconciliations) {
+          reconciliationAttempts += 1
           setReconciliationLoading(true)
+          setReconciliationError('')
           try {
             const reconciliation = await reconcileCustomerVnPayPayment(
               transactionReference,
@@ -79,16 +90,36 @@ export default function ShopOrderResultPage() {
             if (reconciliation?.payment) {
               setPaymentStatus(reconciliation.payment)
             }
-            if (reconciliation?.message
-                && reconciliation.payment?.paymentStatus !== 'SUCCESS') {
-              setReconciliationMessage(reconciliation.message)
+            const reconciledPayment = reconciliation?.payment ?? result
+            if (!isTerminalPaymentStatus(reconciledPayment)) {
+              const providerMessage = reconciliation?.message
+              const isProviderPending = providerMessage
+                && !providerMessage.startsWith('Vừa kiểm tra giao dịch')
+              setReconciliationMessage(
+                isProviderPending
+                  ? `${providerMessage} Hệ thống sẽ tự kiểm tra lại sau 15 giây.`
+                  : 'Chưa nhận được xác nhận cuối cùng từ VNPay. Hệ thống sẽ tự kiểm tra lại sau 15 giây.',
+              )
+              if (reconciliationAttempts < maxAutomaticReconciliations) {
+                timerId = window.setTimeout(loadStatus, reconciliationRetryDelay)
+              } else {
+                setReconciliationMessage(
+                  'VNPay chưa gửi xác nhận cuối cùng. Đơn hàng vẫn được giữ; vui lòng kiểm tra lại sau hoặc liên hệ cửa hàng.',
+                )
+              }
             }
           } catch (error) {
             if (!active || error.name === 'AbortError') return
             setReconciliationError(getUserFacingErrorMessage(
               error,
-              'Chưa thể xác minh thanh toán. Vui lòng thử kiểm tra lại.',
+              reconciliationAttempts < maxAutomaticReconciliations
+                ? 'Chưa thể xác minh thanh toán. Hệ thống sẽ thử lại sau 15 giây.'
+                : 'Chưa thể xác minh thanh toán tự động. Vui lòng liên hệ cửa hàng.',
             ))
+            if (![401, 403, 404].includes(error.status)
+                && reconciliationAttempts < maxAutomaticReconciliations) {
+              timerId = window.setTimeout(loadStatus, reconciliationRetryDelay)
+            }
           } finally {
             if (active) setReconciliationLoading(false)
           }
@@ -171,7 +202,9 @@ export default function ShopOrderResultPage() {
                 ? 'Bạn có thể xem đơn hàng hoặc thử lại.'
                 : reconciliationRequired
                   ? 'Cửa hàng đang kiểm tra giao dịch.'
-                  : 'Vui lòng chờ trong giây lát.'}
+                    : paymentStatus?.paymentStatus === 'PENDING'
+                      ? 'Giao dịch đang được xác minh. Vui lòng không thanh toán lại trong lúc chờ kết quả.'
+                    : 'Vui lòng chờ trong giây lát.'}
           </p>
           {paymentStatus && (
             <dl className="mx-auto mt-5 grid max-w-md gap-2 rounded-2xl bg-[#FCF9F3] p-4 text-left text-xs text-[#675650]">
