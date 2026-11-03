@@ -81,7 +81,8 @@ public class SecurityConfig {
         configuration.setAllowedMethods(List.of(
                 "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of(
-                "Accept", "Content-Type", "Idempotency-Key", "X-CSRF-Token", "X-XSRF-TOKEN"));
+                "Accept", "Content-Type", "Idempotency-Key", "X-CSRF-Token", "X-XSRF-TOKEN",
+                "X-Expected-Quantity"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 

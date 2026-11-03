@@ -129,6 +129,18 @@ class AuthSecurityWebTests {
                 .andExpect(result1 -> assertEquals("true",
                         result1.getResponse().getHeader("Access-Control-Allow-Credentials")));
 
+        mockMvc.perform(options("/api/products/2")
+                        .header("Origin", ORIGIN)
+                        .header("Access-Control-Request-Method", "PUT")
+                        .header("Access-Control-Request-Headers",
+                                "content-type,x-csrf-token,x-xsrf-token,x-expected-quantity"))
+                .andExpect(status().isOk())
+                .andExpect(result1 -> assertEquals(ORIGIN,
+                        result1.getResponse().getHeader("Access-Control-Allow-Origin")))
+                .andExpect(result1 -> assertTrue(result1.getResponse()
+                        .getHeader("Access-Control-Allow-Headers").toLowerCase()
+                        .contains("x-expected-quantity")));
+
         mockMvc.perform(options("/api/products")
                         .header("Origin", "https://attacker.example")
                         .header("Access-Control-Request-Method", "GET"))

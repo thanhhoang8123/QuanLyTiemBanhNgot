@@ -867,10 +867,10 @@ export default function ProductsPage({ onToast }) {
           <section aria-label="Tổng quan sản phẩm" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { label: 'Tổng sản phẩm', value: pageInfo.totalElements, icon: 'package' },
-              { label: 'Đang kinh doanh', value: activeCount, icon: 'check' },
-              { label: 'Tồn kho thấp (≤ 5)', value: lowStockCount, icon: 'receipt' },
+              { label: 'Đang kinh doanh (trang này)', value: activeCount, icon: 'check' },
+              { label: 'Tồn kho thấp (≤ 5, trang này)', value: lowStockCount, icon: 'receipt' },
               {
-                label: 'Sắp hết hạn (≤ 1 ngày)',
+                label: 'Sắp hết hạn (≤ 1 ngày, trang này)',
                 value: expiringItems.length,
                 icon: 'bell',
                 highlight: expiringItems.length > 0,
