@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const bakeryPhotos = {
   cake: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=85',
@@ -25,6 +25,11 @@ export default function ShopProductImage({ product, className = '' }) {
   const fallback = getFallbackPhoto(product)
   const [source, setSource] = useState(product.imageUrl || fallback)
   const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    setSource(product.imageUrl || fallback)
+    setFailed(false)
+  }, [product.imageUrl, fallback])
 
   if (failed) {
     return <div role="img" aria-label={`Ảnh ${product.name} không khả dụng`} className={`bg-[#F3E3D3] ${className}`} />

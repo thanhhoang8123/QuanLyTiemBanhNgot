@@ -583,6 +583,11 @@ public class OrderService {
 
     @Transactional
     public OrderResponse cancel(Long id) {
+        return cancel(id, "Hủy đơn hàng");
+    }
+
+    @Transactional
+    public OrderResponse cancel(Long id, String reason) {
         Order order = orderRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> notFound("Không tìm thấy đơn hàng", id));
         if (!"PENDING".equals(order.getStatus())) {
@@ -629,7 +634,7 @@ public class OrderService {
         order.setStatus("CANCELLED");
         orderRepository.saveAndFlush(order);
         orderStatusHistoryService.recordStatusChangeAfterCommit(
-                order.getId(), oldStatus, order.getStatus(), "Hủy đơn hàng");
+                order.getId(), oldStatus, order.getStatus(), reason);
         return toResponse(order, orderItems);
     }
 

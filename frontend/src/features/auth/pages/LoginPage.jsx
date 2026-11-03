@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { apiRequest } from '../../../services/apiClient.js'
+import { canAccessPath } from '../permissions.js'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -26,11 +27,16 @@ export default function LoginPage() {
       })
 
       const roleCode = (account?.roleCode || '').toUpperCase()
-      const requestedPath = location.state?.from?.pathname
-      const returnPath = roleCode === 'CUSTOMER' && requestedPath?.startsWith('/shop/')
-        ? requestedPath
+      const requestedLocation = location.state?.from
+      const requestedPath = requestedLocation?.pathname
+      const customerReturnPath = roleCode === 'CUSTOMER' && requestedPath?.startsWith('/shop/')
+      const staffReturnPath = roleCode !== 'CUSTOMER'
+        && typeof requestedPath === 'string'
+        && canAccessPath(roleCode, requestedPath)
+      const returnPath = customerReturnPath || staffReturnPath
+        ? `${requestedPath}${requestedLocation.search || ''}${requestedLocation.hash || ''}`
         : null
-      navigate(roleCode === 'CUSTOMER' ? returnPath || '/shop' : '/admin', { replace: true })
+      navigate(returnPath || (roleCode === 'CUSTOMER' ? '/shop' : '/admin'), { replace: true })
     } catch (err) {
       setError(err.message || 'Đăng nhập chưa thành công. Vui lòng thử lại.')
     } finally {

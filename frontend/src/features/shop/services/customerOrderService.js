@@ -54,6 +54,12 @@ export function getCustomerOrderById(id, { signal } = {}) {
   return apiRequest(`/customer/orders/${encodeURIComponent(id)}`, { signal })
 }
 
+export function cancelCustomerOrder(id) {
+  return apiRequest(`/customer/orders/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+  })
+}
+
 export function getCustomerOrderByRequestKey(key) {
   return apiRequest(`/customer/orders/by-request-key/${encodeURIComponent(key)}`)
 }

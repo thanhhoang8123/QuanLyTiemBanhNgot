@@ -21,6 +21,7 @@ import {
 } from '../services/customerVnPayPayment.js'
 import { resolveCustomerOrderAttempt } from '../services/customerOrderRecovery.js'
 import {
+  cancelCustomerOrder,
   createCustomerOrder,
   createCustomerVnPayPayment,
   getCustomerOrderByRequestKey,
@@ -83,6 +84,8 @@ export default function ShopCheckoutPage() {
   const [submitError, setSubmitError] = useState('')
   const [isCheckingPaymentStatus, setIsCheckingPaymentStatus] = useState(false)
   const [isRetryingPayment, setIsRetryingPayment] = useState(false)
+  const [isCancellingOrder, setIsCancellingOrder] = useState(false)
+  const [orderCancellationNotice, setOrderCancellationNotice] = useState('')
   const [paymentStatus, setPaymentStatus] = useState(null)
   const [paymentStatusError, setPaymentStatusError] = useState('')
 
@@ -306,6 +309,12 @@ export default function ShopCheckoutPage() {
         )
         return
       }
+      if ((activeAttempt?.paymentMethod || paymentMethod) === 'VNPAY' && error.status == null) {
+        setSubmitError(
+          'Chưa kết nối được máy chủ để xác nhận đơn. Đơn có thể đã được ghi nhận; hãy thử lại an toàn, hệ thống sẽ kiểm tra mã yêu cầu trước để tránh tạo đơn trùng.',
+        )
+        return
+      }
       setSubmitError(getUserFacingErrorMessage(error, 'Chưa thể đặt hàng. Vui lòng kiểm tra lại thông tin.'))
     } finally {
       submitLock.current = false
@@ -320,6 +329,17 @@ export default function ShopCheckoutPage() {
     try {
       const status = await getCustomerVnPayPaymentStatusByOrderId(pendingAttempt.orderId)
       setPaymentStatus(status)
+      if (status.orderStatus === 'CANCELLED') {
+        if (clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)) {
+          setAttemptState({ status: 'none' })
+          setOrderCancellationNotice(
+            `Đơn #${pendingAttempt.orderId} đã hủy. Tồn kho đã được hoàn lại; bạn có thể đặt đơn mới.`,
+          )
+        } else {
+          setPaymentStatusError('Đơn đã được hủy nhưng trình duyệt chưa thể xóa yêu cầu đang lưu. Tải lại trang để đồng bộ trạng thái.')
+        }
+        return
+      }
       if (status.paymentStatus === 'SUCCESS' && status.attemptStatus === 'SUCCESS') {
         clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)
         setAttemptState({ status: 'none' })
@@ -339,6 +359,17 @@ export default function ShopCheckoutPage() {
     try {
       const refreshedStatus = await getCustomerVnPayPaymentStatusByOrderId(pendingAttempt.orderId)
       setPaymentStatus(refreshedStatus)
+      if (refreshedStatus.orderStatus === 'CANCELLED') {
+        if (clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)) {
+          setAttemptState({ status: 'none' })
+          setOrderCancellationNotice(
+            `Đơn #${pendingAttempt.orderId} đã hủy. Tồn kho đã được hoàn lại; bạn có thể đặt đơn mới.`,
+          )
+        } else {
+          setPaymentStatusError('Đơn đã được hủy nhưng trình duyệt chưa thể xóa yêu cầu đang lưu. Tải lại trang để đồng bộ trạng thái.')
+        }
+        return
+      }
       if (refreshedStatus.paymentStatus === 'SUCCESS' && refreshedStatus.attemptStatus === 'SUCCESS') {
         clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)
         setAttemptState({ status: 'none' })
@@ -361,6 +392,32 @@ export default function ShopCheckoutPage() {
     } finally {
       paymentRetryLock.current = false
       setIsRetryingPayment(false)
+    }
+  }
+
+  const cancelPendingOrder = async () => {
+    if (!pendingAttempt?.orderId || isCancellingOrder) return
+    setIsCancellingOrder(true)
+    setPaymentStatusError('')
+    try {
+      await cancelCustomerOrder(pendingAttempt.orderId)
+      if (!clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)) {
+        setPaymentStatusError(
+          'Đơn đã được hủy nhưng trình duyệt chưa thể xóa yêu cầu đang lưu. Tải lại trang để đồng bộ trạng thái.',
+        )
+        return
+      }
+      setAttemptState({ status: 'none' })
+      setOrderCancellationNotice(
+        `Đơn #${pendingAttempt.orderId} đã hủy. Tồn kho đã được hoàn lại; bạn có thể đặt đơn mới.`,
+      )
+    } catch (error) {
+      setPaymentStatusError(getUserFacingErrorMessage(
+        error,
+        'Chưa thể hủy đơn. Nếu giao dịch vẫn đang được VNPay xác minh, vui lòng kiểm tra trạng thái trước.',
+      ))
+    } finally {
+      setIsCancellingOrder(false)
     }
   }
 
@@ -411,11 +468,13 @@ export default function ShopCheckoutPage() {
       <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
         <div className="rounded-3xl border border-[#EAE3DA] bg-white p-6 shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-9">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Đơn hàng cần được xác nhận</p>
-          <h1 className="font-display mt-2 text-2xl font-medium text-[#4A302B]">Chưa rõ lần gửi trước đã hoàn tất chưa</h1>
+          <h1 className="font-display mt-2 text-2xl font-medium text-[#4A302B]">
+            {isVnPayAttempt ? 'Đang xác minh đơn hàng' : 'Đang xác minh yêu cầu đặt hàng'}
+          </h1>
           <p className="mt-3 text-sm leading-6 text-[#806B65]">
             {paymentInitiationUncertain
               ? 'Đơn hàng đã được tạo và yêu cầu thanh toán đã bắt đầu. Vui lòng kiểm tra trạng thái đơn; không gửi lại yêu cầu thanh toán khi kết quả lần trước chưa rõ.'
-              : 'Chọn nút bên dưới để kiểm tra kết quả. Nếu đơn chưa được tạo, yêu cầu sẽ được gửi lại an toàn để tránh tạo đơn trùng.'}
+              : 'Hệ thống sẽ kiểm tra mã yêu cầu trước. Nếu chưa có đơn, hệ thống mới gửi lại yêu cầu; bước này giúp tránh tạo đơn trùng.'}
           </p>
           {isVnPayAttempt && pendingAttempt.orderId && (
             <p className="mt-3 rounded-xl bg-[#FCF9F3] p-3 text-xs text-[#675650]">
@@ -459,6 +518,16 @@ export default function ShopCheckoutPage() {
             </>
           )}
           {submitError && <p role="alert" className="mt-4 rounded-xl bg-[#F6E9E6] p-3 text-xs leading-5 text-[#914E46]">{submitError}</p>}
+          {isVnPayAttempt && pendingAttempt.orderId && (
+            <button
+              type="button"
+              onClick={cancelPendingOrder}
+              disabled={isCancellingOrder || isCheckingPaymentStatus || isRetryingPayment}
+              className="mt-3 flex h-11 w-full items-center justify-center rounded-full border border-[#E2C5BF] px-5 text-xs font-semibold text-[#914E46] hover:bg-[#FDF6F4] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isCancellingOrder ? 'Đang hủy đơn...' : 'Hủy đơn hàng'}
+            </button>
+          )}
           {!paymentInitiationUncertain && (
             <button
               type="button"
@@ -467,9 +536,9 @@ export default function ShopCheckoutPage() {
               className="mt-6 flex h-11 w-full items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting
-                ? 'Đang kiểm tra đơn hàng...'
+                ? 'Đang xác minh...'
                 : isVnPayAttempt
-                  ? 'Kiểm tra đơn và tiếp tục thanh toán'
+                  ? 'Tiếp tục an toàn'
                   : 'Kiểm tra kết quả đơn hàng'}
             </button>
           )}
@@ -494,6 +563,20 @@ export default function ShopCheckoutPage() {
           </p>
           <Link to="/shop/orders" className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white hover:bg-[#4A302B]">
             Mở lịch sử đơn hàng
+          </Link>
+        </div>
+      </section>
+    )
+  }
+
+  if (orderCancellationNotice) {
+    return (
+      <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
+        <div role="status" className="rounded-3xl border border-[#EAE3DA] bg-white p-7 text-center shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-10">
+          <h1 className="font-display text-2xl font-medium text-[#4A302B]">Đơn hàng đã được hủy</h1>
+          <p className="mt-3 text-sm leading-6 text-[#806B65]">{orderCancellationNotice}</p>
+          <Link to="/shop/products" className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white hover:bg-[#4A302B]">
+            Quay lại cửa hàng
           </Link>
         </div>
       </section>

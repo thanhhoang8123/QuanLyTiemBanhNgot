@@ -51,7 +51,9 @@ class AuthFlowConfigurationTests {
         assertEquals(FRONTEND_ORIGIN, cors.checkOrigin(FRONTEND_ORIGIN));
         assertNull(cors.checkOrigin("https://attacker.example"));
         assertTrue(cors.getAllowCredentials());
-        assertTrue(cors.checkHeaders(List.of("Content-Type", "X-CSRF-Token", "X-XSRF-TOKEN")).size() == 3);
+        assertTrue(cors.checkHeaders(List.of(
+                "Content-Type", "Idempotency-Key", "X-CSRF-Token", "X-XSRF-TOKEN"
+        )).size() == 4);
     }
 
     @Test

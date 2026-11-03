@@ -199,7 +199,9 @@ export default function ShopOrderResultPage() {
             {verifiedSuccess
               ? 'Đơn hàng đã được xác nhận.'
               : verifiedFailure
-                ? 'Bạn có thể xem đơn hàng hoặc thử lại.'
+                ? paymentStatus?.orderStatus === 'CANCELLED'
+                  ? 'Đơn hàng đã được hủy và tồn kho đã được hoàn lại. Bạn có thể đặt đơn mới.'
+                  : 'Bạn có thể xem đơn hàng hoặc thử lại.'
                 : reconciliationRequired
                   ? 'Cửa hàng đang kiểm tra giao dịch.'
                     : paymentStatus?.paymentStatus === 'PENDING'
