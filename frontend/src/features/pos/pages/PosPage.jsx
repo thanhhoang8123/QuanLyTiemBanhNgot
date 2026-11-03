@@ -259,7 +259,7 @@ export default function PosPage({
     })
   }, [activeProducts, category, search])
 
-  const productPagination = usePagination(filteredProducts, { initialPageSize: 12 })
+  const productPagination = usePagination(filteredProducts, 10)
 
   useEffect(() => {
     productPagination.setCurrentPage(1)
