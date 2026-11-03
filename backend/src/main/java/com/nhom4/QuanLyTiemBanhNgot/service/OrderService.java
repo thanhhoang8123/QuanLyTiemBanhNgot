@@ -400,23 +400,19 @@ public class OrderService {
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dữ liệu đơn hàng không hợp lệ");
         }
-        Employee currentEmployee = employeeRepository.findByAccount_UsernameAndStatusTrue(username).orElse(null);
-        Long effectiveEmployeeId;
-        if (currentEmployee != null) {
-            effectiveEmployeeId = currentEmployee.getId();
-        } else if (request.employeeId() != null) {
-            effectiveEmployeeId = request.employeeId();
-        } else {
-            effectiveEmployeeId = employeeRepository.findAll().stream()
-                    .filter(e -> Boolean.TRUE.equals(e.getStatus()))
-                    .map(Employee::getId)
-                    .findFirst()
-                    .orElse(null);
+        Employee currentEmployee = employeeRepository.findByAccount_UsernameAndStatusTrue(username)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Tài khoản đăng nhập chưa được liên kết với hồ sơ nhân viên đang hoạt động"));
+        if (request.employeeId() != null && !currentEmployee.getId().equals(request.employeeId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Chỉ được tạo đơn hàng bằng hồ sơ nhân viên của tài khoản đang đăng nhập");
         }
 
         CreateOrderRequest effectiveRequest = new CreateOrderRequest(
                 request.customerId(),
-                effectiveEmployeeId,
+                currentEmployee.getId(),
                 request.deliveryAddress(),
                 request.items(),
                 request.promotionCode(),

@@ -1,6 +1,7 @@
 package com.nhom4.QuanLyTiemBanhNgot.service;
 
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.CreateOrderItemRequest;
+import com.nhom4.QuanLyTiemBanhNgot.dto.order.CreateOrderRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.CustomerOrderRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteRequest;
 import com.nhom4.QuanLyTiemBanhNgot.dto.order.OrderQuoteResponse;
@@ -13,6 +14,7 @@ import com.nhom4.QuanLyTiemBanhNgot.entity.Product;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Promotion;
 import com.nhom4.QuanLyTiemBanhNgot.entity.PromotionProduct;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Customer;
+import com.nhom4.QuanLyTiemBanhNgot.entity.Employee;
 import com.nhom4.QuanLyTiemBanhNgot.repository.CustomerRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.EmployeeRepository;
 import com.nhom4.QuanLyTiemBanhNgot.repository.OrderItemRepository;
@@ -29,6 +31,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -111,6 +115,36 @@ class OrderServicePromotionTests {
         assertEquals(0, new BigDecimal("270000.00").compareTo(suggestions.get(0).finalAmount()));
         assertEquals(0, new BigDecimal("20000.00").compareTo(suggestions.get(1).discountAmount()));
         assertEquals(0, new BigDecimal("280000.00").compareTo(suggestions.get(1).finalAmount()));
+    }
+
+    @Test
+    void authenticatedPosOrderRejectsEmployeeIdDifferentFromCurrentAccount() {
+        Employee currentEmployee = new Employee();
+        currentEmployee.setId(7L);
+        when(employeeRepository.findByAccount_UsernameAndStatusTrue("staff01"))
+                .thenReturn(Optional.of(currentEmployee));
+        CreateOrderRequest createRequest = new CreateOrderRequest(
+                1L, 8L, null, List.of(new CreateOrderItemRequest(11L, 1)),
+                null, null, false, 0);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> orderService.createForAuthenticatedEmployee(createRequest, "staff01"));
+
+        assertEquals(HttpStatus.FORBIDDEN, exception.getStatusCode());
+    }
+
+    @Test
+    void authenticatedPosOrderRejectsAccountWithoutActiveEmployeeProfile() {
+        when(employeeRepository.findByAccount_UsernameAndStatusTrue("staff01"))
+                .thenReturn(Optional.empty());
+        CreateOrderRequest createRequest = new CreateOrderRequest(
+                1L, 8L, null, List.of(new CreateOrderItemRequest(11L, 1)),
+                null, null, false, 0);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> orderService.createForAuthenticatedEmployee(createRequest, "staff01"));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
     }
 
     @Test
