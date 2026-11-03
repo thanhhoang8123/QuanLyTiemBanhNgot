@@ -46,21 +46,7 @@ export class ApiError extends Error {
   }
 }
 
-function readCookie(name) {
-  if (typeof document === 'undefined') return ''
-
-  const prefix = `${name}=`
-  const cookie = document.cookie
-    .split('; ')
-    .find((entry) => entry.startsWith(prefix))
-
-  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : ''
-}
-
-async function getCsrfCookieToken() {
-  let token = readCookie('XSRF-TOKEN')
-  if (token) return token
-
+async function getCsrfToken() {
   const response = await fetch(`${apiBaseUrl}/auth/csrf`, {
     headers: { Accept: 'application/json' },
     credentials: 'include',
@@ -70,12 +56,18 @@ async function getCsrfCookieToken() {
     throw new ApiError('Phiên làm việc đã hết hạn. Vui lòng tải lại trang.', response.status)
   }
 
-  token = readCookie('XSRF-TOKEN')
-  if (!token) {
+  let data
+  try {
+    data = await response.json()
+  } catch {
     throw new ApiError('Không thể bắt đầu phiên làm việc. Vui lòng tải lại trang.')
   }
 
-  return token
+  if (typeof data?.csrfToken !== 'string' || !data.csrfToken) {
+    throw new ApiError('Không thể bắt đầu phiên làm việc. Vui lòng tải lại trang.')
+  }
+
+  return data.csrfToken
 }
 
 export async function apiRequest(
@@ -95,7 +87,7 @@ export async function apiRequest(
   if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(requestMethod)
         && (!headers.has('X-XSRF-TOKEN') || !headers.has('X-CSRF-Token'))) {
     try {
-        const csrfToken = await getCsrfCookieToken()
+        const csrfToken = await getCsrfToken()
         if (!headers.has('X-XSRF-TOKEN')) headers.set('X-XSRF-TOKEN', csrfToken)
         if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', csrfToken)
     } catch (error) {

@@ -62,13 +62,26 @@ public class SecurityConfig {
     }
 
     @Bean
+    public CookieCsrfTokenRepository csrfTokenRepository(
+            @Value("${server.servlet.session.cookie.same-site:Lax}") String sameSite,
+            @Value("${server.servlet.session.cookie.secure:false}") boolean secure) {
+        CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repository.setCookieCustomizer(cookie -> cookie
+                .path("/")
+                .sameSite(sameSite)
+                .secure(secure));
+        return repository;
+    }
+
+    @Bean
     public CorsConfigurationSource corsConfigurationSource(
             @Value("${app.frontend-url:http://localhost:5173}") String frontendUrl) {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(frontendUrl.trim()));
         configuration.setAllowedMethods(List.of(
                 "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowedHeaders(List.of(
+                "Accept", "Content-Type", "X-CSRF-Token", "X-XSRF-TOKEN"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
@@ -80,11 +93,12 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            SecurityContextRepository securityContextRepository) throws Exception {
+            SecurityContextRepository securityContextRepository,
+            CookieCsrfTokenRepository csrfTokenRepository) throws Exception {
         http
             .cors(Customizer.withDefaults())
             .csrf(csrf -> csrf
-                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                .csrfTokenRepository(csrfTokenRepository)
                 .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
             )
             .securityContext(context -> context.securityContextRepository(securityContextRepository))
