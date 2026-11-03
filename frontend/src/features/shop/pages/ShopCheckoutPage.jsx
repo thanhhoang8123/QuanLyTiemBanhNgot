@@ -423,6 +423,24 @@ export default function ShopCheckoutPage() {
     }
   }
 
+  const startNewOrder = () => {
+    if (!pendingAttempt?.orderId) return
+    const confirmed = window.confirm(
+      `Đơn #${pendingAttempt.orderId} vẫn chưa có kết quả thanh toán và sẽ không bị hủy. ` +
+      'Nếu ngân hàng xác nhận giao dịch sau đó, bạn vẫn có thể bị trừ tiền cho đơn cũ. ' +
+      'Bạn chỉ nên tiếp tục nếu chắc chắn không thanh toán đơn cũ. Tạo đơn mới?',
+    )
+    if (!confirmed) return
+    if (!clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)) {
+      setPaymentStatusError(
+        'Chưa thể mở phiên đặt hàng mới trên trình duyệt. Vui lòng tải lại trang rồi thử lại.',
+      )
+      return
+    }
+    setAttemptState({ status: 'none' })
+    navigate('/shop/products')
+  }
+
   if (attemptState.status === 'owner-mismatch') {
     return (
       <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7">
@@ -477,7 +495,7 @@ export default function ShopCheckoutPage() {
           </h1>
           <p className="mt-3 text-sm leading-6 text-[#806B65]">
             {paymentInitiationUncertain
-              ? 'Đơn hàng của bạn vẫn được giữ. Bạn có thể xem thêm bánh trong lúc chờ xác nhận thanh toán.'
+              ? 'Đơn hàng này chưa có kết quả thanh toán. Bạn có thể kiểm tra lại hoặc chọn tạo đơn mới.'
               : 'Đang kiểm tra đơn hàng. Bạn có thể tiếp tục xem thêm bánh trong lúc chờ.'}
           </p>
           {paymentInitiationUncertain && (
@@ -531,6 +549,19 @@ export default function ShopCheckoutPage() {
               {isCancellingOrder ? 'Đang hủy đơn...' : 'Hủy đơn hàng'}
             </button>
           )}
+          {isVnPayAttempt && pendingAttempt.orderId && (
+            <div className="mt-4 rounded-xl bg-[#FCF9F3] p-3 text-xs leading-5 text-[#675650]">
+              Đơn cũ sẽ không bị hủy. Nếu ngân hàng xác nhận giao dịch sau đó, đơn cũ vẫn có thể được thanh toán.
+              <button
+                type="button"
+                onClick={startNewOrder}
+                disabled={isCancellingOrder || isCheckingPaymentStatus || isRetryingPayment}
+                className="mt-3 flex h-11 w-full items-center justify-center rounded-full border border-[#DDCDB8] px-5 text-xs font-semibold text-[#76534D] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Tạo đơn mới
+              </button>
+            </div>
+          )}
           {!paymentInitiationUncertain && (
             <button
               type="button"
@@ -546,12 +577,14 @@ export default function ShopCheckoutPage() {
             </button>
           )}
           <div className="mt-4 flex flex-col items-center gap-3">
-            <Link
-              to="/shop/products"
-              className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#DDCDB8] px-5 text-xs font-semibold text-[#76534D] transition hover:bg-[#FCF9F3]"
-            >
-              Tiếp tục mua sắm
-            </Link>
+            {!(isVnPayAttempt && pendingAttempt.orderId) && (
+              <Link
+                to="/shop/products"
+                className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#DDCDB8] px-5 text-xs font-semibold text-[#76534D] transition hover:bg-[#FCF9F3]"
+              >
+                Tiếp tục mua sắm
+              </Link>
+            )}
           </div>
         </div>
       </section>
