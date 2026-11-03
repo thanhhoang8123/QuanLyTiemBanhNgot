@@ -104,10 +104,18 @@ export default function ShopOrderResultPage() {
             }
           } catch (error) {
             if (!active || error.name === 'AbortError') return
-            setReconciliationError(getUserFacingErrorMessage(
-              error,
-              'Chưa kết nối được để cập nhật. Đơn hàng vẫn được giữ; vui lòng thử lại sau.',
-            ))
+            if (error.status === 401) {
+              setStatusError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để xem kết quả.')
+            } else if (error.status === 403) {
+              setReconciliationError('Bạn chưa thể kiểm tra giao dịch này. Vui lòng đăng nhập lại hoặc liên hệ cửa hàng.')
+            } else if (error.status === 404) {
+              setReconciliationError('Không tìm thấy giao dịch của đơn hàng này. Vui lòng liên hệ cửa hàng để kiểm tra.')
+            } else {
+              setReconciliationError(getUserFacingErrorMessage(
+                error,
+                'Chưa kết nối được để cập nhật. Đơn hàng vẫn được giữ; vui lòng thử lại sau.',
+              ))
+            }
             if (![401, 403, 404].includes(error.status)
                 && reconciliationAttempts < maxAutomaticReconciliations) {
               timerId = window.setTimeout(loadStatus, reconciliationRetryDelay)
@@ -173,11 +181,14 @@ export default function ShopOrderResultPage() {
       if (error.status === 401) {
         setStatusError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để xem kết quả.')
       } else if (error.status === 403) {
-        setReconciliationError('Bạn chưa thể kiểm tra giao dịch này. Vui lòng liên hệ cửa hàng.')
+        setReconciliationError('Bạn chưa thể kiểm tra giao dịch này. Vui lòng đăng nhập lại hoặc liên hệ cửa hàng.')
       } else if (error.status === 404) {
-        setReconciliationError('Không tìm thấy thông tin thanh toán. Vui lòng xem lại đơn hàng.')
+        setReconciliationError('Không tìm thấy giao dịch của đơn hàng này. Vui lòng liên hệ cửa hàng để kiểm tra.')
       } else {
-        setReconciliationError('Chưa kết nối được để cập nhật. Đơn hàng vẫn được giữ; vui lòng thử lại sau.')
+        setReconciliationError(getUserFacingErrorMessage(
+          error,
+          'Chưa kết nối được để cập nhật. Đơn hàng vẫn được giữ; vui lòng thử lại sau.',
+        ))
       }
     } finally {
       setReconciliationLoading(false)
