@@ -1,12 +1,22 @@
 package com.nhom4.QuanLyTiemBanhNgot.config;
 
+import com.nhom4.QuanLyTiemBanhNgot.controller.AccountController;
 import com.nhom4.QuanLyTiemBanhNgot.controller.AuthController;
+import com.nhom4.QuanLyTiemBanhNgot.controller.CategoryController;
+import com.nhom4.QuanLyTiemBanhNgot.controller.ProductController;
+import com.nhom4.QuanLyTiemBanhNgot.controller.PromotionController;
+import com.nhom4.QuanLyTiemBanhNgot.controller.PromotionProductController;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Account;
 import com.nhom4.QuanLyTiemBanhNgot.entity.Role;
+import com.nhom4.QuanLyTiemBanhNgot.service.AccountService;
 import com.nhom4.QuanLyTiemBanhNgot.service.AuthService;
+import com.nhom4.QuanLyTiemBanhNgot.service.CategoryService;
 import com.nhom4.QuanLyTiemBanhNgot.service.CustomerRegistrationService;
 import com.nhom4.QuanLyTiemBanhNgot.service.DatabaseUserDetailsService;
 import com.nhom4.QuanLyTiemBanhNgot.service.EmailVerificationService;
+import com.nhom4.QuanLyTiemBanhNgot.service.ProductService;
+import com.nhom4.QuanLyTiemBanhNgot.service.PromotionProductService;
+import com.nhom4.QuanLyTiemBanhNgot.service.PromotionService;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,9 +32,14 @@ import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -33,7 +48,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(AuthController.class)
+@WebMvcTest({
+        AuthController.class,
+        AccountController.class,
+        CategoryController.class,
+        ProductController.class,
+        PromotionController.class,
+        PromotionProductController.class
+})
 @Import(SecurityConfig.class)
 @org.springframework.test.context.TestPropertySource(properties = {
         "app.frontend-url=https://quanlytiembanhngot.onrender.com",
@@ -66,6 +88,21 @@ class AuthSecurityWebTests {
     @MockitoBean
     private EmailVerificationService emailVerificationService;
 
+    @MockitoBean
+    private ProductService productService;
+
+    @MockitoBean
+    private CategoryService categoryService;
+
+    @MockitoBean
+    private PromotionService promotionService;
+
+    @MockitoBean
+    private PromotionProductService promotionProductService;
+
+    @MockitoBean
+    private AccountService accountService;
+
     @Test
     void csrfEndpointAndCredentialedPreflightWorkForConfiguredOrigin() throws Exception {
         MvcResult result = mockMvc.perform(get("/api/auth/csrf").header("Origin", ORIGIN))
@@ -82,9 +119,9 @@ class AuthSecurityWebTests {
         assertTrue(csrfCookie.getSecure());
         assertEquals("/", csrfCookie.getPath());
 
-        mockMvc.perform(options("/api/auth/login")
+        mockMvc.perform(options("/api/products")
                         .header("Origin", ORIGIN)
-                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Method", "GET")
                         .header("Access-Control-Request-Headers", "content-type,x-csrf-token,x-xsrf-token"))
                 .andExpect(status().isOk())
                 .andExpect(result1 -> assertEquals(ORIGIN,
@@ -92,10 +129,32 @@ class AuthSecurityWebTests {
                 .andExpect(result1 -> assertEquals("true",
                         result1.getResponse().getHeader("Access-Control-Allow-Credentials")));
 
-        mockMvc.perform(options("/api/auth/login")
+        mockMvc.perform(options("/api/products")
                         .header("Origin", "https://attacker.example")
-                        .header("Access-Control-Request-Method", "POST"))
-                .andExpect(status().isForbidden());
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isForbidden())
+                .andExpect(result1 -> assertNull(
+                        result1.getResponse().getHeader("Access-Control-Allow-Origin")));
+    }
+
+    @Test
+    void anonymousCanReadPublicShopCatalogAndPromotions() throws Exception {
+        when(productService.getAll()).thenReturn(List.of());
+        when(categoryService.getAll()).thenReturn(List.of());
+        when(promotionService.findAll()).thenReturn(List.of());
+        when(promotionProductService.findAll()).thenReturn(List.of());
+
+        for (String path : List.of(
+                "/api/products",
+                "/api/categories",
+                "/api/promotions",
+                "/api/promotion-products")) {
+            mockMvc.perform(get(path).header("Origin", ORIGIN))
+                    .andExpect(status().isOk())
+                    .andExpect(content().json("[]"))
+                    .andExpect(result -> assertEquals(ORIGIN,
+                            result.getResponse().getHeader("Access-Control-Allow-Origin")));
+        }
     }
 
     @Test
@@ -104,6 +163,23 @@ class AuthSecurityWebTests {
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/accounts").with(user("staff01").roles("STAFF")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanAccessManagementApiAndWritesStillRequireCsrf() throws Exception {
+        when(accountService.getAll()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/accounts").with(user("admin").roles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+
+        mockMvc.perform(post("/api/products")
+                        .with(user("admin").roles("ADMIN"))
+                        .header("Origin", ORIGIN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+        verify(productService, never()).create(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
