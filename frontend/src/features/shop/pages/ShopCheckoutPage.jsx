@@ -25,7 +25,7 @@ import {
   createCustomerOrder,
   createCustomerVnPayPayment,
   getCustomerOrderByRequestKey,
-  getCustomerVnPayPaymentStatusByOrderId,
+  reconcileCustomerVnPayPaymentByOrderId,
   quoteCustomerOrder,
 } from '../services/customerOrderService.js'
 import { normalizeVietnamesePhone } from '../services/vietnamesePhone.js'
@@ -35,18 +35,6 @@ const moneyFormat = new Intl.NumberFormat('vi-VN', {
   currency: 'VND',
   maximumFractionDigits: 0,
 })
-const paymentStatusLabels = {
-  PENDING: 'Đang chờ xác nhận',
-  SUCCESS: 'Đã xác nhận',
-  FAILED: 'Chưa thành công',
-}
-const orderStatusLabels = {
-  PENDING: 'Chờ xác nhận',
-  CONFIRMED: 'Đã xác nhận',
-  COMPLETED: 'Hoàn tất',
-  CANCELLED: 'Đã hủy',
-}
-
 export default function ShopCheckoutPage() {
   const cart = useShopCart()
   const cartPagination = usePagination(cart.items)
@@ -87,6 +75,7 @@ export default function ShopCheckoutPage() {
   const [isCancellingOrder, setIsCancellingOrder] = useState(false)
   const [orderCancellationNotice, setOrderCancellationNotice] = useState('')
   const [paymentStatus, setPaymentStatus] = useState(null)
+  const [paymentStatusNotice, setPaymentStatusNotice] = useState('')
   const [paymentStatusError, setPaymentStatusError] = useState('')
 
   useEffect(() => {
@@ -326,9 +315,13 @@ export default function ShopCheckoutPage() {
     if (!pendingAttempt?.orderId || isCheckingPaymentStatus) return
     setIsCheckingPaymentStatus(true)
     setPaymentStatusError('')
+    setPaymentStatusNotice('')
     try {
-      const status = await getCustomerVnPayPaymentStatusByOrderId(pendingAttempt.orderId)
+      const reconciliation = await reconcileCustomerVnPayPaymentByOrderId(pendingAttempt.orderId)
+      const status = reconciliation?.payment
+      if (!status) throw new Error('Chưa nhận được kết quả đối soát thanh toán.')
       setPaymentStatus(status)
+      setPaymentStatusNotice(reconciliation.message || '')
       if (status.orderStatus === 'CANCELLED') {
         if (clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)) {
           setAttemptState({ status: 'none' })
@@ -357,7 +350,9 @@ export default function ShopCheckoutPage() {
     setIsRetryingPayment(true)
     setPaymentStatusError('')
     try {
-      const refreshedStatus = await getCustomerVnPayPaymentStatusByOrderId(pendingAttempt.orderId)
+      const reconciliation = await reconcileCustomerVnPayPaymentByOrderId(pendingAttempt.orderId)
+      const refreshedStatus = reconciliation?.payment
+      if (!refreshedStatus) throw new Error('Chưa nhận được kết quả đối soát thanh toán.')
       setPaymentStatus(refreshedStatus)
       if (refreshedStatus.orderStatus === 'CANCELLED') {
         if (clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)) {
@@ -373,6 +368,13 @@ export default function ShopCheckoutPage() {
       if (refreshedStatus.paymentStatus === 'SUCCESS' && refreshedStatus.attemptStatus === 'SUCCESS') {
         clearCustomerOrderAttempt(window.sessionStorage, pendingAttempt.key)
         setAttemptState({ status: 'none' })
+        return
+      }
+      if (refreshedStatus.paymentStatus !== 'FAILED'
+          || refreshedStatus.attemptStatus !== 'FAILED') {
+        setPaymentStatusError(
+          'VNPay chưa xác nhận giao dịch trước đó thất bại. Chưa thể thanh toán lại; vui lòng kiểm tra sau.',
+        )
         return
       }
       const payment = await createCustomerVnPayPayment(pendingAttempt.orderId)
@@ -469,34 +471,35 @@ export default function ShopCheckoutPage() {
         <div className="rounded-3xl border border-[#EAE3DA] bg-white p-6 shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-9">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Đơn hàng cần được xác nhận</p>
           <h1 className="font-display mt-2 text-2xl font-medium text-[#4A302B]">
-            {isVnPayAttempt ? 'Đang xác minh đơn hàng' : 'Đang xác minh yêu cầu đặt hàng'}
+            {isVnPayAttempt && pendingAttempt.orderId
+              ? `Đơn hàng #${pendingAttempt.orderId} đang chờ thanh toán`
+              : 'Đang xác nhận đơn hàng'}
           </h1>
           <p className="mt-3 text-sm leading-6 text-[#806B65]">
             {paymentInitiationUncertain
-              ? 'Đơn hàng đã được tạo và yêu cầu thanh toán đã bắt đầu. Vui lòng kiểm tra trạng thái đơn; không gửi lại yêu cầu thanh toán khi kết quả lần trước chưa rõ.'
-              : 'Hệ thống sẽ kiểm tra mã yêu cầu trước. Nếu chưa có đơn, hệ thống mới gửi lại yêu cầu; bước này giúp tránh tạo đơn trùng.'}
+              ? 'Đơn hàng của bạn vẫn được giữ. Bạn có thể xem thêm bánh trong lúc chờ xác nhận thanh toán.'
+              : 'Đang kiểm tra đơn hàng. Bạn có thể tiếp tục xem thêm bánh trong lúc chờ.'}
           </p>
-          {isVnPayAttempt && pendingAttempt.orderId && (
-            <p className="mt-3 rounded-xl bg-[#FCF9F3] p-3 text-xs text-[#675650]">
-              Mã đơn: #{pendingAttempt.orderId}
-            </p>
-          )}
           {paymentInitiationUncertain && (
             <>
               <button
                 type="button"
                 onClick={checkVnPayStatus}
                 disabled={isCheckingPaymentStatus}
-                className="mt-5 flex h-11 w-full items-center justify-center rounded-full border border-[#DDCDB8] px-5 text-xs font-semibold text-[#76534D] hover:bg-[#FCF9F3] disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-5 flex h-11 w-full items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isCheckingPaymentStatus ? 'Đang kiểm tra...' : 'Kiểm tra trạng thái thanh toán'}
+                {isCheckingPaymentStatus ? 'Đang kiểm tra...' : 'Kiểm tra thanh toán'}
               </button>
               {paymentStatus && (
                 <p role="status" className="mt-3 rounded-xl bg-[#FCF9F3] p-3 text-xs leading-5 text-[#675650]">
-                  Thanh toán: {paymentStatusLabels[paymentStatus.paymentStatus] ?? 'Đang cập nhật'} · Đơn hàng: {orderStatusLabels[paymentStatus.orderStatus] ?? 'Đang cập nhật'}.
                   {paymentStatus.paymentStatus === 'SUCCESS' && paymentStatus.attemptStatus === 'SUCCESS'
-                    ? ' Giao dịch đã được xác nhận.'
-                    : ' Chưa có xác nhận thanh toán thành công.'}
+                    ? 'Thanh toán thành công.'
+                    : paymentStatus.paymentStatus === 'FAILED' && paymentStatus.attemptStatus === 'FAILED'
+                      ? 'Thanh toán chưa thành công.'
+                      : 'Chưa có xác nhận thanh toán thành công.'}
+                  {paymentStatusNotice && (
+                    <span className="mt-1 block">{paymentStatusNotice}</span>
+                  )}
                 </p>
               )}
               {paymentStatus?.paymentStatus === 'FAILED'
@@ -536,13 +539,20 @@ export default function ShopCheckoutPage() {
               className="mt-6 flex h-11 w-full items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting
-                ? 'Đang xác minh...'
+                ? 'Đang kiểm tra...'
                 : isVnPayAttempt
-                  ? 'Tiếp tục an toàn'
-                  : 'Kiểm tra kết quả đơn hàng'}
+                  ? 'Tiếp tục thanh toán'
+                  : 'Kiểm tra đơn hàng'}
             </button>
           )}
-          <Link to="/shop/orders" className="mt-4 block text-center text-xs font-semibold text-[#76534D]">Mở lịch sử đơn hàng</Link>
+          <div className="mt-4 flex flex-col items-center gap-3">
+            <Link
+              to="/shop/products"
+              className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#DDCDB8] px-5 text-xs font-semibold text-[#76534D] transition hover:bg-[#FCF9F3]"
+            >
+              Tiếp tục mua sắm
+            </Link>
+          </div>
         </div>
       </section>
     )
