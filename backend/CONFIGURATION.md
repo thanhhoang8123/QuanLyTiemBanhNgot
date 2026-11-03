@@ -120,7 +120,8 @@ theo biến `PORT` Render cấp.
 - Email: `SPRING_MAIL_HOST` (mặc định `smtp.gmail.com`),
   `SPRING_MAIL_PORT` (mặc định `587`), `SPRING_MAIL_USERNAME` và
   `SPRING_MAIL_PASSWORD`. Với Gmail, dùng App Password và chỉ lưu trong Render
-  Environment.
+  Environment. `SPRING_MAIL_USERNAME` là địa chỉ gửi; nếu thiếu username hoặc
+  password thì ứng dụng không thể xác thực SMTP để gửi email.
 - Cloudinary: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`,
   `CLOUDINARY_API_SECRET`.
 - VNPay Sandbox: `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`. Các endpoint mặc định
@@ -186,9 +187,10 @@ Sau đó mở **Run and Debug**, chọn **WA Patisserie (dev)** và khởi chạ
 đang chạy; hãy dùng file env cục bộ nói trên hoặc mở VS Code từ chính terminal
 đã đặt biến môi trường.
 
-Nếu cần gửi email xác minh, đặt thêm `SPRING_MAIL_USERNAME` và
-`SPRING_MAIL_PASSWORD` trong terminal đó. Dùng Gmail App Password, không dùng
-mật khẩu Gmail thông thường. Chỉ bật API mô phỏng thanh toán trong môi trường
+Nếu cần gửi email xác minh hoặc xác nhận đơn hàng, đặt thêm
+`SPRING_MAIL_USERNAME` (địa chỉ tài khoản gửi) và `SPRING_MAIL_PASSWORD` trong
+terminal đó. Dùng Gmail App Password, không dùng mật khẩu Gmail thông thường.
+Chỉ bật API mô phỏng thanh toán trong môi trường
 kiểm thử có chủ đích bằng `$env:APP_PAYMENT_SIMULATION_ENABLED = "true"`;
 profile `prod` tắt chức năng này.
 

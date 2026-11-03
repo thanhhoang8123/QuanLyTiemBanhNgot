@@ -463,7 +463,7 @@ public class OrderService {
                 customer,
                 null,
                 customerRequestKey,
-                false
+                true
         );
     }
 
