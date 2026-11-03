@@ -101,6 +101,43 @@ Chế độ tự tạo/cập nhật schema và seed chỉ thuộc profile `dev`.
 profile này trên database dùng chung hoặc production. Môi trường production
 phải dùng Flyway và cấu hình database riêng.
 
+## Chuẩn bị production trên Render
+
+Backend dùng `backend/Dockerfile`. Trong Render, chọn Docker Web Service với
+Root Directory là `backend` và đặt `SPRING_PROFILES_ACTIVE=prod`. Profile này
+yêu cầu cấu hình kết nối riêng; không dùng database local/dev. Ứng dụng bind
+theo biến `PORT` Render cấp.
+
+Đặt các biến sau trong Render Environment (không commit giá trị thật):
+
+- MySQL: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`. `DB_URL` phải là JDBC URL tới
+  MySQL server; dùng TLS theo yêu cầu của nhà cung cấp database.
+- MongoDB log/history: `MONGODB_URI`.
+- Frontend/session: `FRONTEND_URL` là origin HTTPS của Static Site, không thêm
+  path hoặc dấu `/` cuối; bật `SESSION_COOKIE_SECURE=true` nếu ghi đè cấu hình.
+- Cloudinary: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`,
+  `CLOUDINARY_API_SECRET`.
+- VNPay Sandbox: `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`, `VNPAY_RETURN_URL`,
+  `VNPAY_IPN_URL`. Có thể đặt `VNPAY_PAYMENT_URL` và `VNPAY_QUERY_URL` để
+  override; mặc định vẫn là Sandbox. IPN URL còn phải được đăng ký tại cấu
+  hình merchant/test VNPay.
+- Email (nếu dùng xác minh email): `SPRING_MAIL_USERNAME`,
+  `SPRING_MAIL_PASSWORD`.
+- Tắt thanh toán mô phỏng bằng `APP_PAYMENT_SIMULATION_ENABLED=false`.
+
+Frontend là Render Static Site với Root Directory `frontend`, Build Command
+`npm ci && npm run build` và Publish Directory `dist`. Đặt
+`VITE_API_BASE_URL=https://<backend-service>.onrender.com/api` trước build;
+Vite proxy chỉ hoạt động khi chạy development. Cấu hình SPA fallback
+`/*` về `/index.html` để các route client-side hoạt động khi tải trực tiếp.
+Backend CORS chỉ cho phép origin khai báo qua `FRONTEND_URL` và cho phép
+credentials vì đăng nhập dùng session cookie và CSRF.
+
+Trước lần khởi động production đầu tiên, sao lưu database và xác nhận kế hoạch
+Flyway/baseline với schema thực tế. Profile `prod` bật Flyway; việc app khởi
+động có thể áp dụng migration, vì vậy không chạy trên database thật trước khi
+review migration và được phê duyệt.
+
 ### VNPay sandbox callback
 
 VNPay chỉ xác nhận thanh toán cho backend qua IPN hoặc truy vấn giao dịch phía
@@ -140,11 +177,11 @@ Sau đó mở **Run and Debug**, chọn **WA Patisserie (dev)** và khởi chạ
 đang chạy; hãy dùng file env cục bộ nói trên hoặc mở VS Code từ chính terminal
 đã đặt biến môi trường.
 
-Nếu cần gửi email xác minh, đặt thêm `MAIL_USERNAME` và `MAIL_PASSWORD` trong
-terminal đó. Dùng Gmail App Password, không dùng mật khẩu Gmail thông thường.
-API mô phỏng thanh toán mặc định vẫn tắt trong profile `dev`; chỉ bật tạm thời
-cho kiểm thử thủ công bằng `$env:PAYMENT_SIMULATION_ENABLED = "true"`. Không
-đặt biến này trong môi trường production.
+Nếu cần gửi email xác minh, đặt thêm `SPRING_MAIL_USERNAME` và
+`SPRING_MAIL_PASSWORD` trong terminal đó. Dùng Gmail App Password, không dùng
+mật khẩu Gmail thông thường. Chỉ bật API mô phỏng thanh toán trong môi trường
+kiểm thử có chủ đích bằng `$env:APP_PAYMENT_SIMULATION_ENABLED = "true"`;
+profile `prod` tắt chức năng này.
 
 ## Theo dõi collection MongoDB bằng Compass
 
