@@ -597,9 +597,14 @@ export default function ProductsPage({ onToast }) {
       await syncCatalog()
     } catch (error) {
       const retainedImageUrl = newlyUploadedImageUrl || uploadedImageUrl
+      const uploadErrorMessage = error.status === 503
+        ? 'Dịch vụ lưu ảnh chưa được cấu hình trên máy chủ. Hãy kiểm tra CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY và CLOUDINARY_API_SECRET trên Render.'
+        : error.status === 502
+          ? 'Cloudinary chưa nhận được ảnh. Hãy kiểm tra thông tin Cloudinary và thử lại.'
+          : getApiMessage(error)
       setFormError(retainedImageUrl
         ? `Ảnh đã tải lên thành công và URL đã được giữ lại. Không lưu được sản phẩm: ${getApiMessage(error)}`
-        : getApiMessage(error))
+        : uploadErrorMessage)
     } finally {
       setIsSaving(false)
     }

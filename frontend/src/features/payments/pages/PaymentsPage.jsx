@@ -21,6 +21,7 @@ import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-white px-3 text-sm text-rosewood outline-none transition focus:border-caramel'
 const moneyFormat = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 })
+const paymentSimulationEnabled = import.meta.env.DEV
 const paymentMethods = [
   { value: 'CASH', label: 'Tiền mặt' },
   { value: 'CARD', label: 'Thẻ' },
@@ -248,7 +249,7 @@ export default function PaymentsPage({ onToast }) {
       label: 'Thời điểm thanh toán',
       render: (payment) => formatDateTime(payment.paidAt),
     },
-    {
+    ...(paymentSimulationEnabled ? [{
       key: 'actions',
       label: 'Thanh toán thử nghiệm',
       render: (payment) => {
@@ -287,7 +288,7 @@ export default function PaymentsPage({ onToast }) {
               {payment.status === 'SUCCESS' ? 'Đã xử lý' : 'Không thể xử lý'}
             </span>
       },
-    },
+    }] : []),
   ]
 
   const selectedOrder = payableOrders.find((order) => order.id === Number(orderId))
@@ -312,7 +313,11 @@ export default function PaymentsPage({ onToast }) {
       <section aria-label="Tổng quan thanh toán" className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-3">
         {[
           { label: 'Chờ xử lý', value: pendingCount, icon: 'clock' },
-          { label: 'Giao dịch thử nghiệm đã xác nhận', value: formatMoney(successfulAmount), icon: 'check' },
+          {
+            label: paymentSimulationEnabled ? 'Giao dịch thử nghiệm đã xác nhận' : 'Đã thanh toán',
+            value: formatMoney(successfulAmount),
+            icon: 'check',
+          },
           { label: 'Thất bại', value: failedCount, icon: 'close' },
         ].map((stat) => (
           <article key={stat.label} className="soft-shadow flex items-center justify-between rounded-2xl border border-border bg-paper p-4 sm:p-5">
@@ -387,9 +392,11 @@ export default function PaymentsPage({ onToast }) {
                 />}
       </section>
 
-      <p className="rounded-xl border border-warning-line bg-warning-soft px-4 py-3 text-xs leading-5 text-warning">
-        Chế độ thanh toán thử nghiệm không kết nối ngân hàng, thẻ hoặc ví điện tử thật.
-      </p>
+      {paymentSimulationEnabled && (
+        <p className="rounded-xl border border-warning-line bg-warning-soft px-4 py-3 text-xs leading-5 text-warning">
+          Chế độ thanh toán thử nghiệm không kết nối ngân hàng, thẻ hoặc ví điện tử thật.
+        </p>
+      )}
 
       <Modal
         open={createOpen}
