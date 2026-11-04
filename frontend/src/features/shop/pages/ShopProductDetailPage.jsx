@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Icon from '../../../components/Icon.jsx'
 import { ProductArtwork } from '../../products/components/ProductArtwork.jsx'
-import { getProductById } from '../../products/services/productService.js'
+import {
+  getProductById,
+  PRODUCT_CATALOG_UPDATED_EVENT,
+} from '../../products/services/productService.js'
 import { getPromotions } from '../../promotions/services/promotionService.js'
 import { getPromotionProducts } from '../../promotion-products/services/promotionProductService.js'
 import { toProductViewModel } from '../../products/adapters/productAdapter.js'
@@ -12,6 +15,8 @@ import {
   findBestShopPromotion,
   getActiveShopPromotions,
 } from '../services/shopPromotions.js'
+
+const PRODUCT_CATALOG_UPDATED_STORAGE_KEY = 'wa_cake_product_catalog_updated'
 
 const currency = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -29,6 +34,21 @@ export default function ShopProductDetailPage() {
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
   const [activePromotions, setActivePromotions] = useState([])
+  const [catalogReloadVersion, setCatalogReloadVersion] = useState(0)
+
+  useEffect(() => {
+    const reloadCatalog = () => setCatalogReloadVersion((version) => version + 1)
+    const handleStorage = (event) => {
+      if (event.key === PRODUCT_CATALOG_UPDATED_STORAGE_KEY) reloadCatalog()
+    }
+
+    window.addEventListener(PRODUCT_CATALOG_UPDATED_EVENT, reloadCatalog)
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener(PRODUCT_CATALOG_UPDATED_EVENT, reloadCatalog)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -71,7 +91,7 @@ export default function ShopProductDetailPage() {
       })
 
     return () => controller.abort()
-  }, [productId])
+  }, [catalogReloadVersion, productId])
 
   const originalPrice = Number(product?.price ?? 0)
   const unitPromotion = findBestShopPromotion(activePromotions, originalPrice)

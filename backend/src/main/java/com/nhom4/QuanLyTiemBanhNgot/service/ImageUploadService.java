@@ -14,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class ImageUploadService {
@@ -68,6 +69,8 @@ public class ImageUploadService {
                     file.getBytes(),
                     ObjectUtils.asMap(
                             "folder", "quan-ly-tiem-banh/products",
+                            "public_id", "product_" + UUID.randomUUID(),
+                            "overwrite", false,
                             "resource_type", "image"));
         } catch (IOException | RuntimeException exception) {
             // Không log exception message vì lỗi từ SDK có thể chứa thông tin request.

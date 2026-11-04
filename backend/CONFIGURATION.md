@@ -101,10 +101,59 @@ Chế độ tự tạo/cập nhật schema và seed chỉ thuộc profile `dev`.
 profile này trên database dùng chung hoặc production. Môi trường production
 phải dùng Flyway và cấu hình database riêng.
 
+## Chuẩn bị production trên Render
+
+Backend dùng `backend/Dockerfile`. Trong Render, chọn Docker Web Service với
+Root Directory là `backend` và đặt `SPRING_PROFILES_ACTIVE=prod`. Profile này
+yêu cầu cấu hình kết nối riêng; không dùng database local/dev. Ứng dụng bind
+theo biến `PORT` Render cấp.
+
+Đặt các biến sau trong Render Environment (không commit giá trị thật):
+
+- MySQL: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`. `DB_URL` phải là JDBC URL tới
+  MySQL server; dùng TLS theo yêu cầu của nhà cung cấp database.
+- MongoDB log/history: `MONGODB_URI`.
+- Frontend/session: profile production cho phép origin
+  `https://quanlytiembanhngot.onrender.com`; cập nhật
+  `app.frontend-url` trong `application-prod.properties` nếu domain Static Site
+  thay đổi. Cookie session production đã bật `Secure`.
+- Email: `SPRING_MAIL_HOST` (mặc định `smtp.gmail.com`),
+  `SPRING_MAIL_PORT` (mặc định `587`), `SPRING_MAIL_USERNAME` và
+  `SPRING_MAIL_PASSWORD`. Với Gmail, dùng App Password và chỉ lưu trong Render
+  Environment. `SPRING_MAIL_USERNAME` là địa chỉ gửi; nếu thiếu username hoặc
+  password thì ứng dụng không thể xác thực SMTP để gửi email.
+- Cloudinary: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`,
+  `CLOUDINARY_API_SECRET`.
+- VNPay Sandbox: `VNPAY_TMN_CODE`, `VNPAY_HASH_SECRET`. Các endpoint mặc định
+  là Sandbox; callback mặc định lần lượt là
+  `https://quanlytiembanh-backend.onrender.com/api/payments/vnpay/return` và
+  `https://quanlytiembanh-backend.onrender.com/api/payments/vnpay/ipn`. Có thể
+  override qua `VNPAY_PAYMENT_URL`, `VNPAY_QUERY_URL`, `VNPAY_RETURN_URL` và
+  `VNPAY_IPN_URL`. Đăng ký IPN URL trong cấu hình merchant/test VNPay.
+- Không commit URI MongoDB, mật khẩu email hoặc khóa VNPay vào repository.
+  Nếu credential đã được gửi qua chat hoặc ảnh chụp, hãy thu hồi/đổi chúng
+  trước khi cấu hình lại.
+- Tắt thanh toán mô phỏng bằng `APP_PAYMENT_SIMULATION_ENABLED=false`.
+
+Frontend là Render Static Site với Root Directory `frontend`, Build Command
+`npm ci && npm run build` và Publish Directory `dist`. Đặt
+`VITE_API_BASE_URL=https://<backend-service>.onrender.com/api` trước build;
+Vite proxy chỉ hoạt động khi chạy development. Cấu hình SPA fallback
+`/*` về `/index.html` để các route client-side hoạt động khi tải trực tiếp.
+Backend CORS chỉ cho phép origin production đã cấu hình và cho phép credentials
+vì đăng nhập dùng session cookie và CSRF.
+
+Trước lần khởi động production đầu tiên, sao lưu database và xác nhận kế hoạch
+Flyway/baseline với schema thực tế. Profile `prod` bật Flyway; việc app khởi
+động có thể áp dụng migration, vì vậy không chạy trên database thật trước khi
+review migration và được phê duyệt.
+
 ### VNPay sandbox callback
 
 VNPay chỉ xác nhận thanh toán cho backend qua IPN hoặc truy vấn giao dịch phía
-server; trang người dùng quay về không tự xác nhận thanh toán. Khi dùng ngrok
+server; trang người dùng quay về không tự xác nhận thanh toán. Backend xác minh
+chữ ký callback return và chuyển callback hợp lệ qua cùng luồng xử lý IPN trước
+khi chuyển khách về cửa hàng; callback trùng được xử lý idempotent. Khi dùng ngrok
 hoặc tunnel khác, `VNPAY_RETURN_URL` phải trỏ đến backend đang chạy. Đồng thời,
 cấu hình URL IPN công khai kết thúc bằng
 `/api/payments/vnpay/ipn` trong phần cấu hình merchant/test của VNPay. Biến
@@ -140,11 +189,12 @@ Sau đó mở **Run and Debug**, chọn **WA Patisserie (dev)** và khởi chạ
 đang chạy; hãy dùng file env cục bộ nói trên hoặc mở VS Code từ chính terminal
 đã đặt biến môi trường.
 
-Nếu cần gửi email xác minh, đặt thêm `MAIL_USERNAME` và `MAIL_PASSWORD` trong
-terminal đó. Dùng Gmail App Password, không dùng mật khẩu Gmail thông thường.
-API mô phỏng thanh toán mặc định vẫn tắt trong profile `dev`; chỉ bật tạm thời
-cho kiểm thử thủ công bằng `$env:PAYMENT_SIMULATION_ENABLED = "true"`. Không
-đặt biến này trong môi trường production.
+Đăng ký khách hàng không cần gửi email xác minh. Nếu cần gửi email xác nhận đơn
+hàng, đặt `SPRING_MAIL_USERNAME` (địa chỉ tài khoản gửi) và
+`SPRING_MAIL_PASSWORD` trong terminal đó. Dùng Gmail App Password, không dùng mật khẩu Gmail thông thường.
+Chỉ bật API mô phỏng thanh toán trong môi trường
+kiểm thử có chủ đích bằng `$env:APP_PAYMENT_SIMULATION_ENABLED = "true"`;
+profile `prod` tắt chức năng này.
 
 ## Theo dõi collection MongoDB bằng Compass
 
@@ -167,37 +217,49 @@ Thực hiện một thao tác phù hợp trên ứng dụng rồi refresh Compas
 `order_status_histories` cho lịch sử đơn bán, `activity_logs` cho nhật ký phiếu
 nhập. Không chia sẻ URI thật hoặc đưa URI vào repository.
 
-## Cấu hình production
+## Cấu hình Render
 
-Production phải chạy với `SPRING_PROFILES_ACTIVE=prod`. Profile này không nạp
-seed dev, tắt SQL logging, bật cookie session `Secure` và yêu cầu các
-biến cấu hình sau; nếu thiếu, Spring Boot sẽ dừng khi khởi động thay vì dùng
-localhost hoặc credential trống:
+Backend trên Render phải chạy với `SPRING_PROFILES_ACTIVE=prod`. Profile này
+không nạp seed dev, tắt SQL logging và bật cookie session `Secure`. Các biến
+được đánh dấu **bắt buộc** phải có; email, Cloudinary và VNPay có thể để trống
+nếu chưa dùng dịch vụ tương ứng.
 
 | Biến môi trường | Mục đích |
 | --- | --- |
-| `DB_URL` | JDBC URL của MySQL production |
-| `DB_USERNAME` | Tài khoản MySQL riêng cho ứng dụng |
-| `DB_PASSWORD` | Mật khẩu MySQL |
-| `MONGODB_URI` | URI kết nối MongoDB cho lịch sử hoạt động |
-| `MAIL_USERNAME` | Tài khoản SMTP gửi email xác minh |
-| `MAIL_PASSWORD` | SMTP password/App Password |
-| `FRONTEND_URL` | Origin frontend production dùng trong email xác minh |
-| `SHOP_CONTACT_EMAIL` | Hộp thư cửa hàng nhận tin từ trang liên hệ |
-| `VNPAY_TMN_CODE` | Mã merchant VNPay production |
-| `VNPAY_HASH_SECRET` | Khóa ký callback VNPay production |
-| `VNPAY_PAYMENT_URL` | URL thanh toán do VNPay production cung cấp |
-| `VNPAY_QUERY_URL` | URL truy vấn giao dịch do VNPay production cung cấp |
-| `VNPAY_RETURN_URL` | Return URL HTTPS của backend production |
-| `VNPAY_IPN_URL` | IPN URL HTTPS của backend production |
+| `DB_URL` **bắt buộc** | JDBC URL MySQL Aiven; bật TLS theo thông tin Aiven |
+| `DB_USERNAME` **bắt buộc** | Tài khoản MySQL |
+| `DB_PASSWORD` **bắt buộc** | Mật khẩu MySQL |
+| `MONGODB_URI` **bắt buộc** | URI MongoDB Atlas cho lịch sử hoạt động |
+| `FRONTEND_URL` **bắt buộc** | Origin frontend, ví dụ `https://quanlytiembanhngot.onrender.com`, không có path/dấu `/` cuối |
+| `SPRING_MAIL_HOST` | SMTP host; mặc định `smtp.gmail.com` |
+| `SPRING_MAIL_PORT` | SMTP port; mặc định `587` |
+| `SPRING_MAIL_USERNAME` | Tài khoản gửi email nghiệp vụ |
+| `SPRING_MAIL_PASSWORD` | Gmail App Password hoặc SMTP password |
+| `SHOP_CONTACT_EMAIL` | Hộp thư cửa hàng nhận tin liên hệ |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name; cần đủ cả ba biến Cloudinary để upload ảnh |
+| `CLOUDINARY_API_KEY` | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | Cloudinary API secret |
+| `VNPAY_TMN_CODE` | Mã merchant VNPay Sandbox |
+| `VNPAY_HASH_SECRET` | Khóa ký VNPay Sandbox |
+| `VNPAY_PAYMENT_URL` | Tuỳ chọn; mặc định endpoint thanh toán Sandbox |
+| `VNPAY_QUERY_URL` | Tuỳ chọn; mặc định endpoint truy vấn Sandbox |
+| `VNPAY_RETURN_URL` | Tuỳ chọn; mặc định callback return backend Render |
+| `VNPAY_IPN_URL` | Tuỳ chọn; mặc định callback IPN backend Render |
 
-Profile production không bật API mô phỏng thanh toán. Ngay cả khi deployment
-quên đặt `SPRING_PROFILES_ACTIVE=prod`, profile mặc định `dev` cũng không bật
-mô phỏng nếu không có biến `PAYMENT_SIMULATION_ENABLED=true`. Đảm bảo file
-`application-prod.properties` được đưa vào artifact phát hành và luôn đặt profile
-production rõ ràng. Không dùng thông tin sandbox, URL ngrok hoặc secret dev
-trong production. Cấu hình VNPAY phải lấy từ merchant production đã được cấp;
-nếu chưa có, chưa nên mở thanh toán VNPay thật.
+Widget chat **tawk.to** đã được nhúng trực tiếp trong frontend tại
+`src/layouts/ShopLayout.jsx`; không cần API key hay biến backend riêng. Muốn
+đổi sang property tawk.to khác thì cập nhật URL widget ở frontend và deploy lại
+Static Site. Trang quản trị dùng dashboard/inbox tawk.to.
+
+Các giá trị SMTP password, MongoDB URI, Cloudinary API secret và VNPay secret
+chỉ nhập trực tiếp trong **Render → backend service → Environment**; không
+commit hoặc gửi trong chat. Vì credential đã xuất hiện trong chat/ảnh trước đó,
+hãy thu hồi/tạo mới rồi mới nhập. Render service không thể được cập nhật từ
+source code trong workspace này.
+
+Đây là cấu hình để kiểm thử trên Render với VNPay Sandbox. Không dùng merchant
+Sandbox cho thanh toán tiền thật; chuyển sang production chỉ khi VNPay cấp bộ
+credential và endpoint production riêng.
 
 Ví dụ PowerShell (thay giá trị mẫu bằng cấu hình từ secret manager của môi
 trường deploy, không lưu các giá trị này vào repository):
@@ -208,16 +270,18 @@ $env:DB_URL = "jdbc:mysql://db.example.invalid:3306/production_db?serverTimezone
 $env:DB_USERNAME = "app_user"
 $env:DB_PASSWORD = "set-from-secret-manager"
 $env:MONGODB_URI = "mongodb+srv://user:password@cluster.example.invalid/quanlytiembanh_logs"
-$env:MAIL_USERNAME = "your-email@example.com"
-$env:MAIL_PASSWORD = "set-from-secret-manager"
-$env:FRONTEND_URL = "https://shop.example.invalid"
+$env:SPRING_MAIL_HOST = "smtp.gmail.com"
+$env:SPRING_MAIL_PORT = "587"
+$env:SPRING_MAIL_USERNAME = "your-email@example.com"
+$env:SPRING_MAIL_PASSWORD = "set-from-secret-manager"
 $env:SHOP_CONTACT_EMAIL = "support@example.invalid"
+$env:CLOUDINARY_CLOUD_NAME = "your-cloud-name"
+$env:CLOUDINARY_API_KEY = "set-from-secret-manager"
+$env:CLOUDINARY_API_SECRET = "set-from-secret-manager"
 $env:VNPAY_TMN_CODE = "set-from-secret-manager"
 $env:VNPAY_HASH_SECRET = "set-from-secret-manager"
-$env:VNPAY_PAYMENT_URL = "https://provider-production.example.invalid/payment"
-$env:VNPAY_QUERY_URL = "https://provider-production.example.invalid/query"
-$env:VNPAY_RETURN_URL = "https://api.example.invalid/api/payments/vnpay/return"
-$env:VNPAY_IPN_URL = "https://api.example.invalid/api/payments/vnpay/ipn"
+$env:VNPAY_RETURN_URL = "https://quanlytiembanh-backend.onrender.com/api/payments/vnpay/return"
+$env:VNPAY_IPN_URL = "https://quanlytiembanh-backend.onrender.com/api/payments/vnpay/ipn"
 .\mvnw.cmd spring-boot:run
 ```
 

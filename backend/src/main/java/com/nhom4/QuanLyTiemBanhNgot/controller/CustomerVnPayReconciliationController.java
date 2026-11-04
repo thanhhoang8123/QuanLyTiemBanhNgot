@@ -30,4 +30,14 @@ public class CustomerVnPayReconciliationController {
                 transactionReference
         );
     }
+
+    @PostMapping("/by-order/{orderId}/reconcile")
+    public VnPayReconciliationResponse reconcileLatestByOrderId(
+            Authentication authentication,
+            @PathVariable Long orderId) {
+        return reconciliationService.reconcileLatestByOrderId(
+                authentication == null ? null : authentication.getName(),
+                orderId
+        );
+    }
 }

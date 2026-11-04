@@ -7,7 +7,10 @@ import com.nhom4.QuanLyTiemBanhNgot.repository.AccountRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
 
 @Service
 public class AuthService {
@@ -20,6 +23,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
     }
 
+    @Transactional
     public Account login(String username, String password) {
 
         if (username == null || username.isBlank()
@@ -47,11 +51,13 @@ public class AuthService {
 
         if (account.getRole() != null
                 && "CUSTOMER".equalsIgnoreCase(account.getRole().getRoleCode())
-                && !Boolean.TRUE.equals(account.getEmailVerified())) {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Vui lòng xác minh email trước khi đăng nhập"
-            );
+                && "PENDING_VERIFICATION".equalsIgnoreCase(account.getStatus())) {
+            account.setEmailVerified(true);
+            account.setStatus("ACTIVE");
+            account.setEmailVerificationTokenHash(null);
+            account.setEmailVerificationTokenExpiresAt(null);
+            account.setUpdatedAt(LocalDateTime.now());
+            account = accountRepository.save(account);
         }
 
         if (!"ACTIVE".equalsIgnoreCase(account.getStatus())) {

@@ -8,6 +8,9 @@ import com.nhom4.QuanLyTiemBanhNgot.entity.Order;
 import com.nhom4.QuanLyTiemBanhNgot.entity.PaymentTransactionAttempt;
 import com.nhom4.QuanLyTiemBanhNgot.exception.ResourceNotFoundException;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PaymentTransactionAttemptRepository;
+import org.springframework.data.domain.PageRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -30,6 +33,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Service
 public class VnPayReconciliationService {
 
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(VnPayReconciliationService.class);
     private static final ZoneId VNPAY_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter VNPAY_DATE_FORMAT =
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
@@ -74,25 +79,38 @@ public class VnPayReconciliationService {
                     "Thanh toán đã được xác nhận."
             );
         }
+        if ("FAILED".equalsIgnoreCase(attempt.getStatus())
+                && "FAILED".equalsIgnoreCase(attempt.getPayment().getStatus())) {
+            return new VnPayReconciliationResponse(
+                    statusOf(attempt),
+                    "Thanh toán chưa thành công. Bạn có thể thử lại."
+            );
+        }
         if (!claimQuerySlot(transactionReference)) {
             return new VnPayReconciliationResponse(
                     statusOf(attempt),
-                    "Vừa kiểm tra giao dịch. Vui lòng chờ một chút rồi thử lại."
+                    "Bạn vừa kiểm tra giao dịch. Vui lòng chờ ít nhất 15 giây rồi kiểm tra lại."
             );
         }
 
-        Map<String, String> response = queryClient.query(createSignedQuery(attempt));
-        validateQueryResponse(response, attempt);
+        Map<String, String> response;
+        try {
+            response = queryClient.query(createSignedQuery(attempt));
+            validateQueryResponse(response, attempt);
+        } catch (IllegalStateException exception) {
+            LOGGER.error("VNPay payment status reconciliation failed", exception);
+            throw exception;
+        }
         if (!"00".equals(response.get("vnp_ResponseCode"))) {
             return new VnPayReconciliationResponse(
                     statusOf(attempt),
-                    "Chưa thể xác nhận giao dịch. Trạng thái đơn hàng chưa thay đổi."
+                    "VNPay chưa trả kết quả cuối cùng. Đơn hàng vẫn được giữ; vui lòng kiểm tra lại sau."
             );
         }
         if (!"00".equals(response.get("vnp_TransactionStatus"))) {
             return new VnPayReconciliationResponse(
                     statusOf(attempt),
-                    "Giao dịch chưa thành công. Trạng thái đơn hàng chưa thay đổi."
+                    "VNPay chưa xác nhận thanh toán thành công. Đơn hàng vẫn được giữ; vui lòng kiểm tra lại sau."
             );
         }
 
@@ -105,6 +123,22 @@ public class VnPayReconciliationService {
                 updated,
                 "Thanh toán đã được xác nhận."
         );
+    }
+
+    public VnPayReconciliationResponse reconcileLatestByOrderId(String username, Long orderId) {
+        Customer customer = customerResolver.requireActiveCustomer(username);
+        if (orderId == null || orderId <= 0) {
+            throw new ResourceNotFoundException("Không tìm thấy giao dịch");
+        }
+
+        PaymentTransactionAttempt attempt = attemptRepository.findByOrderIdAndCustomerId(
+                        orderId,
+                        customer.getId(),
+                        PageRequest.of(0, 1)
+                ).stream()
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch"));
+        return reconcile(username, attempt.getTxnRef());
     }
 
     private Map<String, String> createSignedQuery(PaymentTransactionAttempt attempt) {

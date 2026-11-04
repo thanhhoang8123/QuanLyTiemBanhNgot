@@ -53,6 +53,13 @@ public class CustomerOrderService {
         return orderService.findByIdAndCustomerId(orderId, customer.getId());
     }
 
+    @Transactional
+    public OrderResponse cancel(String username, Long orderId) {
+        Customer customer = customerResolver.requireActiveCustomer(username);
+        orderService.findByIdAndCustomerId(orderId, customer.getId());
+        return orderService.cancel(orderId, "Khách hàng hủy đơn hàng");
+    }
+
     @Transactional(readOnly = true)
     public OrderResponse findByRequestKey(String username, String requestKey) {
         Customer customer = customerResolver.requireActiveCustomer(username);

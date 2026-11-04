@@ -39,6 +39,13 @@ export function reconcileCustomerVnPayPayment(transactionReference, { signal } =
   )
 }
 
+export function reconcileCustomerVnPayPaymentByOrderId(orderId, { signal } = {}) {
+  return apiRequest(
+    `/customer/payments/vnpay/by-order/${encodeURIComponent(orderId)}/reconcile`,
+    { method: 'POST', signal },
+  )
+}
+
 export function getCustomerVnPayPaymentStatusByOrderId(orderId, { signal } = {}) {
   return apiRequest(
     `/customer/payments/vnpay/by-order/${encodeURIComponent(orderId)}`,
@@ -52,6 +59,12 @@ export function getCustomerOrders({ signal } = {}) {
 
 export function getCustomerOrderById(id, { signal } = {}) {
   return apiRequest(`/customer/orders/${encodeURIComponent(id)}`, { signal })
+}
+
+export function cancelCustomerOrder(id) {
+  return apiRequest(`/customer/orders/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+  })
 }
 
 export function getCustomerOrderByRequestKey(key) {

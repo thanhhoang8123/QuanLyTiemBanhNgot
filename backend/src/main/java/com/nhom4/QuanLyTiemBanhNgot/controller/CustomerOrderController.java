@@ -59,4 +59,9 @@ public class CustomerOrderController {
     public OrderResponse findById(Authentication authentication, @PathVariable Long id) {
         return customerOrderService.findById(authentication.getName(), id);
     }
+
+    @PostMapping("/{id}/cancel")
+    public OrderResponse cancel(Authentication authentication, @PathVariable Long id) {
+        return customerOrderService.cancel(authentication.getName(), id);
+    }
 }

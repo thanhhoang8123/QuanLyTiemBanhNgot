@@ -21,11 +21,10 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.Map;
 
 @RestController
@@ -33,24 +32,26 @@ import java.util.Map;
 public class AuthController {
     private static final String USER_SESSION_KEY = "AUTHENTICATED_ACCOUNT";
     private static final String CSRF_SESSION_KEY = "AUTH_CSRF_TOKEN";
-    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final AuthService authService;
     private final CustomerRegistrationService registrationService;
     private final EmailVerificationService emailVerificationService;
     private final AuthenticationManager authenticationManager;
     private final SecurityContextRepository securityContextRepository;
+    private final CookieCsrfTokenRepository csrfTokenRepository;
 
     public AuthController(AuthService authService,
                           CustomerRegistrationService registrationService,
                           EmailVerificationService emailVerificationService,
                           AuthenticationManager authenticationManager,
-                          SecurityContextRepository securityContextRepository) {
+                          SecurityContextRepository securityContextRepository,
+                          CookieCsrfTokenRepository csrfTokenRepository) {
         this.authService = authService;
         this.registrationService = registrationService;
         this.emailVerificationService = emailVerificationService;
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
+        this.csrfTokenRepository = csrfTokenRepository;
     }
 
     @GetMapping("/csrf")
@@ -65,8 +66,8 @@ public class AuthController {
     public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterRequest request) {
         registrationService.register(request.username(), request.password(), request.fullName(),
                 request.email(), request.phone(), request.address());
-        return ResponseEntity.accepted().body(new MessageResponse(
-                "Tài khoản đã được tạo. Nếu chưa nhận được email xác minh, vui lòng yêu cầu gửi lại sau khi đủ thời gian chờ."));
+        return ResponseEntity.status(HttpStatus.CREATED).body(new MessageResponse(
+                "Đăng ký thành công. Bạn có thể đăng nhập ngay."));
     }
 
     @PostMapping("/resend-verification")
@@ -105,7 +106,9 @@ public class AuthController {
         httpRequest.changeSessionId();
         HttpSession session = httpRequest.getSession(false);
         session.setAttribute(USER_SESSION_KEY, accountResponse(account));
-        String nextCsrf = createCsrf();
+        CsrfToken nextCsrfToken = csrfTokenRepository.generateToken(httpRequest);
+        csrfTokenRepository.saveToken(nextCsrfToken, httpRequest, httpResponse);
+        String nextCsrf = nextCsrfToken.getToken();
         session.setAttribute(CSRF_SESSION_KEY, nextCsrf);
         return ResponseEntity.ok(new LoginResponse(accountResponse(account), nextCsrf));
     }
@@ -122,10 +125,13 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpSession session,
                                        @RequestHeader(value = "X-CSRF-Token", required = false) String csrfToken,
-                                       @RequestHeader(value = "X-XSRF-TOKEN", required = false) String xsrfToken) {
+                                       @RequestHeader(value = "X-XSRF-TOKEN", required = false) String xsrfToken,
+                                       HttpServletRequest request,
+                                       HttpServletResponse response) {
         requireValidCsrf(session, tokenForValidation(csrfToken, xsrfToken));
         SecurityContextHolder.clearContext();
         session.invalidate();
+        csrfTokenRepository.saveToken(null, request, response);
         return ResponseEntity.noContent().build();
     }
 
@@ -147,20 +153,6 @@ public class AuthController {
         if (!(expected instanceof String token) || provided == null || !constantTimeEquals(token, provided)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "CSRF token không hợp lệ. Hãy tải lại trang và thử lại.");
         }
-    }
-
-    private String getOrCreateCsrf(HttpSession session) {
-        Object token = session.getAttribute(CSRF_SESSION_KEY);
-        if (token instanceof String value && !value.isBlank()) return value;
-        String value = createCsrf();
-        session.setAttribute(CSRF_SESSION_KEY, value);
-        return value;
-    }
-
-    private String createCsrf() {
-        byte[] bytes = new byte[32];
-        RANDOM.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     private boolean constantTimeEquals(String expected, String provided) {

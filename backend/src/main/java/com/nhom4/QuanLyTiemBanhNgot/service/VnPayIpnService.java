@@ -34,6 +34,7 @@ public class VnPayIpnService {
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentService paymentService;
+    private final OrderService orderService;
 
     public VnPayIpnService(
             VnPayProperties properties,
@@ -41,13 +42,15 @@ public class VnPayIpnService {
             PaymentTransactionAttemptRepository attemptRepository,
             OrderRepository orderRepository,
             PaymentRepository paymentRepository,
-            PaymentService paymentService) {
+            PaymentService paymentService,
+            OrderService orderService) {
         this.properties = properties;
         this.signatureService = signatureService;
         this.attemptRepository = attemptRepository;
         this.orderRepository = orderRepository;
         this.paymentRepository = paymentRepository;
         this.paymentService = paymentService;
+        this.orderService = orderService;
     }
 
     @Transactional
@@ -141,6 +144,8 @@ public class VnPayIpnService {
                 paymentRepository.save(payment);
                 attempt.setStatus(FAILED);
                 attempt.setUpdatedAt(now);
+                attemptRepository.saveAndFlush(attempt);
+                orderService.cancel(orderId, "Hủy đơn hàng do thanh toán VNPay thất bại");
             } else {
                 attempt.setStatus(RECONCILIATION_REQUIRED);
             }

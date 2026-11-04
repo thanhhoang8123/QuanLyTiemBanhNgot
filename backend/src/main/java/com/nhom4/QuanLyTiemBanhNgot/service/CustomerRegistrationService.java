@@ -23,18 +23,15 @@ public class CustomerRegistrationService {
     private final AccountRepository accountRepository;
     private final CustomerRepository customerRepository;
     private final RoleRepository roleRepository;
-    private final EmailVerificationService emailVerificationService;
     private final PasswordEncoder passwordEncoder;
 
     public CustomerRegistrationService(AccountRepository accountRepository,
                                        CustomerRepository customerRepository,
                                        RoleRepository roleRepository,
-                                       EmailVerificationService emailVerificationService,
                                        PasswordEncoder passwordEncoder) {
         this.accountRepository = accountRepository;
         this.customerRepository = customerRepository;
         this.roleRepository = roleRepository;
-        this.emailVerificationService = emailVerificationService;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -86,14 +83,11 @@ public class CustomerRegistrationService {
         account.setPasswordHash(passwordEncoder.encode(password));
         account.setRole(customerRole);
         account.setEmail(cleanEmail);
-        account.setEmailVerified(false);
+        account.setEmailVerified(true);
         account.setCustomer(customer);
-        account.setStatus("PENDING_VERIFICATION");
+        account.setStatus("ACTIVE");
         account.setCreatedAt(LocalDateTime.now());
         account.setUpdatedAt(LocalDateTime.now());
-        account = accountRepository.save(account);
-
-        // Token được lưu trong transaction; dịch vụ chỉ gửi email sau khi transaction commit.
-        emailVerificationService.sendVerification(account);
+        accountRepository.save(account);
     }
 }

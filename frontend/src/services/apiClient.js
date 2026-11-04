@@ -4,6 +4,8 @@ const apiBaseUrl = configuredBaseUrl.replace(/\/+$/, '')
 const GENERIC_ERROR_MESSAGE = 'Chưa thể hoàn tất thao tác. Vui lòng thử lại.'
 const TECHNICAL_ERROR_PATTERN =
   /\b(api|backend|frontend|request|response|sql|stack trace|json|typeerror|referenceerror|syntaxerror)\b|\w*exception|org\.[\w.]+|http\s*\d{3}|lỗi nội bộ|cannot read (?:properties|property)|is not a function|failed to fetch/i
+let csrfTokenCache = null
+let csrfTokenRequest = null
 
 function getSafeErrorMessage(message, status) {
   if (status === 401) return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
@@ -46,36 +48,40 @@ export class ApiError extends Error {
   }
 }
 
-function readCookie(name) {
-  if (typeof document === 'undefined') return ''
+async function getCsrfToken() {
+  if (csrfTokenCache) return csrfTokenCache
+  if (csrfTokenRequest) return csrfTokenRequest
 
-  const prefix = `${name}=`
-  const cookie = document.cookie
-    .split('; ')
-    .find((entry) => entry.startsWith(prefix))
+  csrfTokenRequest = (async () => {
+    const response = await fetch(`${apiBaseUrl}/auth/csrf`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'include',
+    })
 
-  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : ''
-}
+    if (!response.ok) {
+      throw new ApiError('Phiên làm việc đã hết hạn. Vui lòng tải lại trang.', response.status)
+    }
 
-async function getCsrfCookieToken() {
-  let token = readCookie('XSRF-TOKEN')
-  if (token) return token
+    let data
+    try {
+      data = await response.json()
+    } catch {
+      throw new ApiError('Không thể bắt đầu phiên làm việc. Vui lòng tải lại trang.')
+    }
 
-  const response = await fetch(`${apiBaseUrl}/auth/csrf`, {
-    headers: { Accept: 'application/json' },
-    credentials: 'include',
-  })
+    if (typeof data?.csrfToken !== 'string' || !data.csrfToken) {
+      throw new ApiError('Không thể bắt đầu phiên làm việc. Vui lòng tải lại trang.')
+    }
 
-  if (!response.ok) {
-    throw new ApiError('Phiên làm việc đã hết hạn. Vui lòng tải lại trang.', response.status)
+    csrfTokenCache = data.csrfToken
+    return data.csrfToken
+  })()
+
+  try {
+    return await csrfTokenRequest
+  } finally {
+    csrfTokenRequest = null
   }
-
-  token = readCookie('XSRF-TOKEN')
-  if (!token) {
-    throw new ApiError('Không thể bắt đầu phiên làm việc. Vui lòng tải lại trang.')
-  }
-
-  return token
 }
 
 export async function apiRequest(
@@ -95,7 +101,7 @@ export async function apiRequest(
   if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(requestMethod)
         && (!headers.has('X-XSRF-TOKEN') || !headers.has('X-CSRF-Token'))) {
     try {
-        const csrfToken = await getCsrfCookieToken()
+        const csrfToken = await getCsrfToken()
         if (!headers.has('X-XSRF-TOKEN')) headers.set('X-XSRF-TOKEN', csrfToken)
         if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', csrfToken)
     } catch (error) {
@@ -109,6 +115,7 @@ export async function apiRequest(
     headers,
     signal,
     credentials: 'include',
+    cache: requestMethod === 'GET' ? 'no-store' : undefined,
   }
 
   if (body !== undefined) {
@@ -137,6 +144,7 @@ export async function apiRequest(
   }
 
   if (response.status === 204) {
+    if (normalizedPath === '/auth/logout') csrfTokenCache = null
     return null
   }
 
@@ -157,6 +165,7 @@ export async function apiRequest(
   }
 
   if (!response.ok) {
+    if (response.status === 403) csrfTokenCache = null
     const serverMessage =
       typeof data?.message === 'string'
         ? data.message
@@ -172,6 +181,14 @@ export async function apiRequest(
       safeMessage,
       response.status,
     )
+  }
+
+  if (normalizedPath === '/auth/csrf' && typeof data?.csrfToken === 'string') {
+    csrfTokenCache = data.csrfToken
+  } else if (normalizedPath === '/auth/login' && typeof data?.csrfToken === 'string') {
+    csrfTokenCache = data.csrfToken
+  } else if (normalizedPath === '/auth/logout') {
+    csrfTokenCache = null
   }
 
   return data

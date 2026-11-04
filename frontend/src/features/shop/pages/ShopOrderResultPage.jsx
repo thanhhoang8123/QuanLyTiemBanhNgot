@@ -9,7 +9,6 @@ import {
   getCustomerVnPayPaymentStatus,
   reconcileCustomerVnPayPayment,
 } from '../services/customerOrderService.js'
-import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const orderStatusLabels = {
   PENDING: 'Chờ xác nhận',
@@ -43,20 +42,23 @@ export default function ShopOrderResultPage() {
   const transactionReference = getVnPayReturnTransactionReference(search)
   const [paymentStatus, setPaymentStatus] = useState(null)
   const [statusError, setStatusError] = useState('')
-  const [statusLoading, setStatusLoading] = useState(false)
+  const [statusLoading, setStatusLoading] = useState(true)
   const [reconciliationLoading, setReconciliationLoading] = useState(false)
   const [reconciliationMessage, setReconciliationMessage] = useState('')
   const [reconciliationError, setReconciliationError] = useState('')
-  const [refreshVersion, setRefreshVersion] = useState(0)
 
   useEffect(() => {
-    if (!hasVnPayReturn || !transactionReference) return undefined
+    if (!hasVnPayReturn || !transactionReference) {
+      setStatusLoading(false)
+      return undefined
+    }
 
     const controller = new AbortController()
     let timerId
     let pollCount = 0
     let reconciliationAttempts = 0
     let active = true
+    setStatusLoading(true)
     setReconciliationMessage('')
     setReconciliationError('')
 
@@ -92,30 +94,30 @@ export default function ShopOrderResultPage() {
             }
             const reconciledPayment = reconciliation?.payment ?? result
             if (!isTerminalPaymentStatus(reconciledPayment)) {
-              const providerMessage = reconciliation?.message
-              const isProviderPending = providerMessage
-                && !providerMessage.startsWith('Vừa kiểm tra giao dịch')
               setReconciliationMessage(
-                isProviderPending
-                  ? `${providerMessage} Hệ thống sẽ tự kiểm tra lại sau 15 giây.`
-                  : 'Chưa nhận được xác nhận cuối cùng từ VNPay. Hệ thống sẽ tự kiểm tra lại sau 15 giây.',
+                'Ngân hàng chưa gửi kết quả. Đơn hàng vẫn được giữ và hệ thống sẽ tự kiểm tra lại.',
               )
               if (reconciliationAttempts < maxAutomaticReconciliations) {
                 timerId = window.setTimeout(loadStatus, reconciliationRetryDelay)
               } else {
                 setReconciliationMessage(
-                  'VNPay chưa gửi xác nhận cuối cùng. Đơn hàng vẫn được giữ; vui lòng kiểm tra lại sau hoặc liên hệ cửa hàng.',
+                  'Chưa nhận được xác nhận từ ngân hàng. Đơn hàng vẫn được giữ; bạn có thể kiểm tra lại sau.',
                 )
               }
             }
           } catch (error) {
             if (!active || error.name === 'AbortError') return
-            setReconciliationError(getUserFacingErrorMessage(
-              error,
-              reconciliationAttempts < maxAutomaticReconciliations
-                ? 'Chưa thể xác minh thanh toán. Hệ thống sẽ thử lại sau 15 giây.'
-                : 'Chưa thể xác minh thanh toán tự động. Vui lòng liên hệ cửa hàng.',
-            ))
+            if (error.status === 401) {
+              setStatusError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để xem kết quả.')
+            } else if (error.status === 403) {
+              setReconciliationError('Bạn chưa thể kiểm tra giao dịch này. Vui lòng đăng nhập lại hoặc liên hệ cửa hàng.')
+            } else if (error.status === 404) {
+              setReconciliationError('Không tìm thấy giao dịch của đơn hàng này. Vui lòng liên hệ cửa hàng để kiểm tra.')
+            } else {
+              setReconciliationError(
+                'Chưa kết nối hoặc đối soát được với ngân hàng. Đơn hàng vẫn được giữ, trạng thái thanh toán chưa xác định. Vui lòng thử lại sau; đừng thanh toán lần nữa.',
+              )
+            }
             if (![401, 403, 404].includes(error.status)
                 && reconciliationAttempts < maxAutomaticReconciliations) {
               timerId = window.setTimeout(loadStatus, reconciliationRetryDelay)
@@ -129,9 +131,9 @@ export default function ShopOrderResultPage() {
         if (error.status === 401) {
           setStatusError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để xem kết quả.')
         } else if (error.status === 404) {
-          setStatusError('Không tìm thấy giao dịch. Vui lòng kiểm tra lịch sử đơn hàng.')
+          setStatusError('Không tìm thấy thông tin thanh toán. Vui lòng xem lại đơn hàng.')
         } else {
-          setStatusError(getUserFacingErrorMessage(error, 'Chưa thể tải trạng thái thanh toán.'))
+          setStatusError('Chưa tải được trạng thái thanh toán. Vui lòng thử lại.')
         }
       } finally {
         if (active) setStatusLoading(false)
@@ -144,38 +146,52 @@ export default function ShopOrderResultPage() {
       controller.abort()
       window.clearTimeout(timerId)
     }
-  }, [hasVnPayReturn, refreshVersion, transactionReference])
+  }, [hasVnPayReturn, transactionReference])
 
   const verifiedSuccess = paymentStatus?.paymentStatus === 'SUCCESS'
     && paymentStatus?.attemptStatus === 'SUCCESS'
   const verifiedFailure = paymentStatus?.paymentStatus === 'FAILED'
     && paymentStatus?.attemptStatus === 'FAILED'
   const reconciliationRequired = paymentStatus?.attemptStatus === 'RECONCILIATION_REQUIRED'
+  const loginRequired = statusError.includes('Phiên đăng nhập')
+  const paymentCheckFailed = Boolean(statusError || reconciliationError)
+  const paymentCheckInProgress = statusLoading || reconciliationLoading
+  const paymentFeedback = statusError
+    ? statusError
+    : reconciliationError
+      ? reconciliationError
+      : reconciliationMessage && !verifiedSuccess && !verifiedFailure
+        ? reconciliationMessage
+        : ''
 
   const reconcilePayment = async () => {
     if (!transactionReference || reconciliationLoading) return
 
     setReconciliationLoading(true)
+    setStatusError('')
     setReconciliationMessage('')
     setReconciliationError('')
     try {
       const result = await reconcileCustomerVnPayPayment(transactionReference)
       if (result?.payment) setPaymentStatus(result.payment)
       setReconciliationMessage(
-        result?.message || 'Đã kiểm tra kết quả thanh toán.',
+        result?.payment?.paymentStatus === 'SUCCESS'
+          ? 'Thanh toán đã được xác nhận.'
+          : result?.payment?.paymentStatus === 'FAILED'
+            ? 'Thanh toán chưa hoàn tất.'
+            : 'Ngân hàng chưa gửi kết quả. Đơn hàng vẫn được giữ và hệ thống sẽ tự kiểm tra lại.',
       )
     } catch (error) {
       if (error.status === 401) {
-        setReconciliationError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+        setStatusError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để xem kết quả.')
       } else if (error.status === 403) {
-        setReconciliationError('Bạn chưa thể kiểm tra giao dịch này. Vui lòng liên hệ cửa hàng.')
+        setReconciliationError('Bạn chưa thể kiểm tra giao dịch này. Vui lòng đăng nhập lại hoặc liên hệ cửa hàng.')
       } else if (error.status === 404) {
-        setReconciliationError('Không tìm thấy giao dịch. Vui lòng kiểm tra lịch sử đơn hàng.')
+        setReconciliationError('Không tìm thấy giao dịch của đơn hàng này. Vui lòng liên hệ cửa hàng để kiểm tra.')
       } else {
-        setReconciliationError(getUserFacingErrorMessage(
-          error,
-          'Không thể kiểm tra giao dịch với VNPay lúc này. Trạng thái đơn chưa thay đổi.',
-        ))
+        setReconciliationError(
+          'Chưa kết nối hoặc đối soát được với ngân hàng. Đơn hàng vẫn được giữ, trạng thái thanh toán chưa xác định. Vui lòng thử lại sau; đừng thanh toán lần nữa.',
+        )
       }
     } finally {
       setReconciliationLoading(false)
@@ -186,25 +202,53 @@ export default function ShopOrderResultPage() {
     <section className="mx-auto max-w-3xl px-4 py-12 sm:px-7 sm:py-16">
       {hasVnPayReturn ? (
         <div role="status" className="rounded-3xl border border-[#EAE3DA] bg-white p-7 text-center shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-10">
+          <span
+            aria-hidden="true"
+            className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl ${
+              verifiedSuccess
+                ? 'bg-[#EEF2E8] text-[#536B50]'
+                : verifiedFailure
+                  ? 'bg-[#F6E9E6] text-[#914E46]'
+                  : 'bg-[#FCF9F3] text-[#76534D]'
+            }`}
+          >
+            {verifiedSuccess
+              ? '✓'
+              : verifiedFailure
+                ? '!'
+                : paymentCheckFailed || reconciliationRequired || !paymentCheckInProgress
+                  ? '!'
+                  : <span className="h-6 w-6 animate-spin rounded-full border-2 border-[#DDCDB8] border-t-[#76534D]" />}
+          </span>
           <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B]">
             {verifiedSuccess
               ? 'Thanh toán thành công'
               : verifiedFailure
                 ? 'Thanh toán chưa thành công'
-                : reconciliationRequired
-                  ? 'Đang kiểm tra'
-                  : 'Đang xác minh'}
+                : paymentCheckFailed
+                  ? 'Chưa cập nhật được thanh toán'
+                  : reconciliationRequired
+                  ? 'Đang kiểm tra thêm'
+                  : paymentCheckInProgress && !paymentStatus
+                    ? 'Đang kiểm tra thanh toán'
+                    : paymentCheckInProgress
+                      ? 'Đang xác nhận thanh toán'
+                      : 'Đang chờ ngân hàng xác nhận'}
           </h1>
           <p className="mt-3 text-sm leading-6 text-[#806B65]">
             {verifiedSuccess
-              ? 'Đơn hàng đã được xác nhận.'
+              ? 'Đơn hàng của bạn đã được xác nhận.'
               : verifiedFailure
-                ? 'Bạn có thể xem đơn hàng hoặc thử lại.'
-                : reconciliationRequired
-                  ? 'Cửa hàng đang kiểm tra giao dịch.'
+                ? paymentStatus?.orderStatus === 'CANCELLED'
+                  ? 'Đơn đã được hủy. Bạn có thể đặt lại khi sẵn sàng.'
+                  : 'Thanh toán chưa hoàn tất. Bạn có thể thử lại từ đơn hàng.'
+                : paymentCheckFailed
+                  ? 'Đơn hàng đã được ghi nhận nhưng chưa có kết quả cuối cùng. Đừng thanh toán lại; hãy thử kiểm tra lại hoặc xem đơn hàng.'
+                  : reconciliationRequired
+                  ? 'Chúng tôi đang xác nhận với ngân hàng. Bạn chưa cần thanh toán lại.'
                     : paymentStatus?.paymentStatus === 'PENDING'
-                      ? 'Giao dịch đang được xác minh. Vui lòng không thanh toán lại trong lúc chờ kết quả.'
-                    : 'Vui lòng chờ trong giây lát.'}
+                      ? 'Đơn hàng đã được ghi nhận. Bạn chưa cần thao tác thêm.'
+                      : 'Vui lòng chờ trong giây lát.'}
           </p>
           {paymentStatus && (
             <dl className="mx-auto mt-5 grid max-w-md gap-2 rounded-2xl bg-[#FCF9F3] p-4 text-left text-xs text-[#675650]">
@@ -223,45 +267,39 @@ export default function ShopOrderResultPage() {
               {paymentStatus.paidAt && <div className="flex justify-between gap-3"><dt>Thời gian</dt><dd>{new Date(paymentStatus.paidAt).toLocaleString('vi-VN')}</dd></div>}
             </dl>
           )}
-          {statusError && (
-            <p role="alert" className="mt-4 text-xs leading-5 text-[#914E46]">
-              {statusError}
-              {statusError.includes('Phiên đăng nhập') && (
+          {paymentFeedback && !verifiedSuccess && !verifiedFailure && (
+            <p
+              role={statusError || reconciliationError ? 'alert' : 'status'}
+              className={`mx-auto mt-4 max-w-md text-xs leading-5 ${
+                statusError || reconciliationError ? 'text-[#914E46]' : 'text-[#536B50]'
+              }`}
+            >
+              {paymentFeedback}
+              {loginRequired && (
                 <> <Link to="/shop/login" state={{ from: location }} className="font-semibold underline">Đăng nhập lại</Link>.</>
               )}
             </p>
           )}
-          {reconciliationMessage && !verifiedSuccess && !verifiedFailure && (
-            <p role="status" className="mt-4 text-xs leading-5 text-[#536B50]">
-              {reconciliationMessage}
-            </p>
-          )}
-          {reconciliationError && (
-            <p role="alert" className="mt-4 text-xs leading-5 text-[#914E46]">
-              {reconciliationError}
-            </p>
-          )}
-          {transactionReference && !verifiedSuccess && !verifiedFailure && (
-            <div className="mt-5 flex flex-wrap justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => setRefreshVersion((version) => version + 1)}
-                disabled={statusLoading || reconciliationLoading}
-                className="inline-flex h-10 items-center justify-center rounded-full border border-[#DDCDB8] px-5 text-xs font-semibold text-[#76534D] disabled:opacity-50"
-              >
-                {statusLoading ? 'Đang kiểm tra...' : 'Cập nhật'}
-              </button>
+          {transactionReference && !verifiedSuccess && !verifiedFailure && !loginRequired && (
+            <div className="mt-5 flex flex-col items-center gap-3">
               <button
                 type="button"
                 onClick={reconcilePayment}
                 disabled={statusLoading || reconciliationLoading}
-                className="inline-flex h-10 items-center justify-center rounded-full bg-[#76534D] px-5 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:opacity-50"
+                className="inline-flex h-11 min-w-48 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white hover:bg-[#4A302B] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {reconciliationLoading ? 'Đang kiểm tra...' : 'Kiểm tra'}
+                {statusLoading || reconciliationLoading ? 'Đang kiểm tra...' : 'Kiểm tra lại'}
               </button>
+              <Link to="/shop/orders" className="text-xs font-semibold text-[#76534D] underline-offset-4 hover:underline">
+                Xem đơn hàng của tôi
+              </Link>
             </div>
           )}
-          <Link to="/shop/orders" className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white hover:bg-[#4A302B]">Xem đơn</Link>
+          {(verifiedSuccess || verifiedFailure || !transactionReference) && (
+            <Link to="/shop/orders" className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#76534D] px-6 text-xs font-semibold text-white hover:bg-[#4A302B]">
+              Xem đơn hàng của tôi
+            </Link>
+          )}
         </div>
       ) : order ? (
         <div className="rounded-3xl border border-[#EAE3DA] bg-white p-6 text-center shadow-[0_18px_60px_rgba(91,61,53,0.06)] sm:p-10">

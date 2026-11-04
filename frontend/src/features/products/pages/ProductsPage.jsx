@@ -119,6 +119,7 @@ export default function ProductsPage({ onToast }) {
   const [imageFile, setImageFile] = useState(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState('')
   const [uploadedImageUrl, setUploadedImageUrl] = useState('')
+  const [saveStage, setSaveStage] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [discardTarget, setDiscardTarget] = useState(null)
   const [discardQty, setDiscardQty] = useState(1)
@@ -573,6 +574,7 @@ export default function ProductsPage({ onToast }) {
 
     setIsSaving(true)
     setFormError('')
+    setSaveStage(imageFile && !uploadedImageUrl ? 'Đang tải ảnh lên...' : 'Đang lưu sản phẩm...')
     let imageUrl = uploadedImageUrl || form.imageUrl
     let newlyUploadedImageUrl = ''
     try {
@@ -581,6 +583,7 @@ export default function ProductsPage({ onToast }) {
         imageUrl = newlyUploadedImageUrl
         setUploadedImageUrl(newlyUploadedImageUrl)
         setForm((current) => ({ ...current, imageUrl: newlyUploadedImageUrl }))
+        setSaveStage('Đang lưu sản phẩm...')
       }
 
       const payload = toProductRequest({ ...form, imageUrl })
@@ -594,14 +597,20 @@ export default function ProductsPage({ onToast }) {
       setForm(emptyForm)
       clearImageSelection()
       onToast(editing ? 'Đã cập nhật sản phẩm.' : 'Đã thêm sản phẩm.')
-      await syncCatalog()
+      void syncCatalog()
     } catch (error) {
       const retainedImageUrl = newlyUploadedImageUrl || uploadedImageUrl
+      const uploadErrorMessage = error.status === 503
+        ? 'Dịch vụ lưu ảnh chưa được cấu hình trên máy chủ. Hãy kiểm tra CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY và CLOUDINARY_API_SECRET trên Render.'
+        : error.status === 502
+          ? 'Cloudinary chưa nhận được ảnh. Hãy kiểm tra thông tin Cloudinary và thử lại.'
+          : getApiMessage(error)
       setFormError(retainedImageUrl
         ? `Ảnh đã tải lên thành công và URL đã được giữ lại. Không lưu được sản phẩm: ${getApiMessage(error)}`
-        : getApiMessage(error))
+        : uploadErrorMessage)
     } finally {
       setIsSaving(false)
+      setSaveStage('')
     }
   }
 
@@ -862,10 +871,10 @@ export default function ProductsPage({ onToast }) {
           <section aria-label="Tổng quan sản phẩm" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { label: 'Tổng sản phẩm', value: pageInfo.totalElements, icon: 'package' },
-              { label: 'Đang kinh doanh', value: activeCount, icon: 'check' },
-              { label: 'Tồn kho thấp (≤ 5)', value: lowStockCount, icon: 'receipt' },
+              { label: 'Đang kinh doanh (trang này)', value: activeCount, icon: 'check' },
+              { label: 'Tồn kho thấp (≤ 5, trang này)', value: lowStockCount, icon: 'receipt' },
               {
-                label: 'Sắp hết hạn (≤ 1 ngày)',
+                label: 'Sắp hết hạn (≤ 1 ngày, trang này)',
                 value: expiringItems.length,
                 icon: 'bell',
                 highlight: expiringItems.length > 0,
@@ -1043,7 +1052,7 @@ export default function ProductsPage({ onToast }) {
           {formError && <p role="alert" className="rounded-xl border border-danger-line bg-danger-soft px-3 py-2 text-xs text-danger">{formError}</p>}
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="secondary" disabled={isSaving} onClick={closeProductForm}>Hủy</Button>
-            <Button type="submit" disabled={isSaving}><Icon name="check" size={15} /> {isSaving ? 'Đang lưu...' : 'Lưu sản phẩm'}</Button>
+            <Button type="submit" disabled={isSaving}><Icon name="check" size={15} /> {isSaving ? saveStage : 'Lưu sản phẩm'}</Button>
           </div>
         </form>
       </Modal>
