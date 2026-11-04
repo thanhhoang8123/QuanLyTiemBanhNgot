@@ -151,7 +151,9 @@ review migration và được phê duyệt.
 ### VNPay sandbox callback
 
 VNPay chỉ xác nhận thanh toán cho backend qua IPN hoặc truy vấn giao dịch phía
-server; trang người dùng quay về không tự xác nhận thanh toán. Khi dùng ngrok
+server; trang người dùng quay về không tự xác nhận thanh toán. Backend xác minh
+chữ ký callback return và chuyển callback hợp lệ qua cùng luồng xử lý IPN trước
+khi chuyển khách về cửa hàng; callback trùng được xử lý idempotent. Khi dùng ngrok
 hoặc tunnel khác, `VNPAY_RETURN_URL` phải trỏ đến backend đang chạy. Đồng thời,
 cấu hình URL IPN công khai kết thúc bằng
 `/api/payments/vnpay/ipn` trong phần cấu hình merchant/test của VNPay. Biến

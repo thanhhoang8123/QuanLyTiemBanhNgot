@@ -75,9 +75,22 @@ public class VnPayCallbackController {
                 if (references != null && references.size() == 1) {
                     transactionReference = references.get(0);
                 }
+                VnPayIpnResponse processingResult = ipnService.process(parameters);
+                if (!"00".equals(processingResult.rspCode())
+                        && !"02".equals(processingResult.rspCode())) {
+                    logger.warn(
+                            "VNPay Return callback was verified but payment update was rejected with code {}",
+                            processingResult.rspCode());
+                }
             }
-        } catch (IllegalArgumentException | DataAccessException | IllegalStateException exception) {
-            logger.warn("VNPay Return validation failed; redirecting without a transaction reference");
+        } catch (IllegalArgumentException
+                 | DataAccessException
+                 | IllegalStateException
+                 | ConflictException
+                 | ResourceNotFoundException exception) {
+            logger.warn(
+                    "VNPay Return callback could not be processed; redirecting for status reconciliation",
+                    exception);
         }
 
         URI redirectUri = buildFrontendResultUri(transactionReference);
