@@ -9,7 +9,6 @@ import {
   getCustomerVnPayPaymentStatus,
   reconcileCustomerVnPayPayment,
 } from '../services/customerOrderService.js'
-import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
 
 const orderStatusLabels = {
   PENDING: 'Chờ xác nhận',
@@ -43,19 +42,23 @@ export default function ShopOrderResultPage() {
   const transactionReference = getVnPayReturnTransactionReference(search)
   const [paymentStatus, setPaymentStatus] = useState(null)
   const [statusError, setStatusError] = useState('')
-  const [statusLoading, setStatusLoading] = useState(false)
+  const [statusLoading, setStatusLoading] = useState(true)
   const [reconciliationLoading, setReconciliationLoading] = useState(false)
   const [reconciliationMessage, setReconciliationMessage] = useState('')
   const [reconciliationError, setReconciliationError] = useState('')
 
   useEffect(() => {
-    if (!hasVnPayReturn || !transactionReference) return undefined
+    if (!hasVnPayReturn || !transactionReference) {
+      setStatusLoading(false)
+      return undefined
+    }
 
     const controller = new AbortController()
     let timerId
     let pollCount = 0
     let reconciliationAttempts = 0
     let active = true
+    setStatusLoading(true)
     setReconciliationMessage('')
     setReconciliationError('')
 
@@ -111,10 +114,9 @@ export default function ShopOrderResultPage() {
             } else if (error.status === 404) {
               setReconciliationError('Không tìm thấy giao dịch của đơn hàng này. Vui lòng liên hệ cửa hàng để kiểm tra.')
             } else {
-              setReconciliationError(getUserFacingErrorMessage(
-                error,
-                'Chưa kết nối được để cập nhật. Đơn hàng vẫn được giữ; vui lòng thử lại sau.',
-              ))
+              setReconciliationError(
+                'Chưa kết nối hoặc đối soát được với ngân hàng. Đơn hàng vẫn được giữ, trạng thái thanh toán chưa xác định. Vui lòng thử lại sau; đừng thanh toán lần nữa.',
+              )
             }
             if (![401, 403, 404].includes(error.status)
                 && reconciliationAttempts < maxAutomaticReconciliations) {
@@ -152,10 +154,12 @@ export default function ShopOrderResultPage() {
     && paymentStatus?.attemptStatus === 'FAILED'
   const reconciliationRequired = paymentStatus?.attemptStatus === 'RECONCILIATION_REQUIRED'
   const loginRequired = statusError.includes('Phiên đăng nhập')
+  const paymentCheckFailed = Boolean(statusError || reconciliationError)
+  const paymentCheckInProgress = statusLoading || reconciliationLoading
   const paymentFeedback = statusError
     ? statusError
     : reconciliationError
-      ? 'Chưa kết nối được để cập nhật. Đơn hàng vẫn được giữ; vui lòng thử lại sau.'
+      ? reconciliationError
       : reconciliationMessage && !verifiedSuccess && !verifiedFailure
         ? reconciliationMessage
         : ''
@@ -185,10 +189,9 @@ export default function ShopOrderResultPage() {
       } else if (error.status === 404) {
         setReconciliationError('Không tìm thấy giao dịch của đơn hàng này. Vui lòng liên hệ cửa hàng để kiểm tra.')
       } else {
-        setReconciliationError(getUserFacingErrorMessage(
-          error,
-          'Chưa kết nối được để cập nhật. Đơn hàng vẫn được giữ; vui lòng thử lại sau.',
-        ))
+        setReconciliationError(
+          'Chưa kết nối hoặc đối soát được với ngân hàng. Đơn hàng vẫn được giữ, trạng thái thanh toán chưa xác định. Vui lòng thử lại sau; đừng thanh toán lần nữa.',
+        )
       }
     } finally {
       setReconciliationLoading(false)
@@ -213,18 +216,24 @@ export default function ShopOrderResultPage() {
               ? '✓'
               : verifiedFailure
                 ? '!'
-                : <span className="h-6 w-6 animate-spin rounded-full border-2 border-[#DDCDB8] border-t-[#76534D]" />}
+                : paymentCheckFailed || reconciliationRequired || !paymentCheckInProgress
+                  ? '!'
+                  : <span className="h-6 w-6 animate-spin rounded-full border-2 border-[#DDCDB8] border-t-[#76534D]" />}
           </span>
           <h1 className="font-display mt-2 text-3xl font-medium text-[#4A302B]">
             {verifiedSuccess
               ? 'Thanh toán thành công'
               : verifiedFailure
                 ? 'Thanh toán chưa thành công'
-                : reconciliationRequired
+                : paymentCheckFailed
+                  ? 'Chưa cập nhật được thanh toán'
+                  : reconciliationRequired
                   ? 'Đang kiểm tra thêm'
-                  : statusLoading && !paymentStatus
+                  : paymentCheckInProgress && !paymentStatus
                     ? 'Đang kiểm tra thanh toán'
-                    : 'Đang xác nhận thanh toán'}
+                    : paymentCheckInProgress
+                      ? 'Đang xác nhận thanh toán'
+                      : 'Đang chờ ngân hàng xác nhận'}
           </h1>
           <p className="mt-3 text-sm leading-6 text-[#806B65]">
             {verifiedSuccess
@@ -233,7 +242,9 @@ export default function ShopOrderResultPage() {
                 ? paymentStatus?.orderStatus === 'CANCELLED'
                   ? 'Đơn đã được hủy. Bạn có thể đặt lại khi sẵn sàng.'
                   : 'Thanh toán chưa hoàn tất. Bạn có thể thử lại từ đơn hàng.'
-                : reconciliationRequired
+                : paymentCheckFailed
+                  ? 'Đơn hàng đã được ghi nhận nhưng chưa có kết quả cuối cùng. Đừng thanh toán lại; hãy thử kiểm tra lại hoặc xem đơn hàng.'
+                  : reconciliationRequired
                   ? 'Chúng tôi đang xác nhận với ngân hàng. Bạn chưa cần thanh toán lại.'
                     : paymentStatus?.paymentStatus === 'PENDING'
                       ? 'Đơn hàng đã được ghi nhận. Bạn chưa cần thao tác thêm.'

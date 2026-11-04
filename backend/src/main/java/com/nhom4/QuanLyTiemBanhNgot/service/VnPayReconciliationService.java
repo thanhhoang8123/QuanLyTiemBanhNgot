@@ -9,6 +9,8 @@ import com.nhom4.QuanLyTiemBanhNgot.entity.PaymentTransactionAttempt;
 import com.nhom4.QuanLyTiemBanhNgot.exception.ResourceNotFoundException;
 import com.nhom4.QuanLyTiemBanhNgot.repository.PaymentTransactionAttemptRepository;
 import org.springframework.data.domain.PageRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -31,6 +33,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Service
 public class VnPayReconciliationService {
 
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(VnPayReconciliationService.class);
     private static final ZoneId VNPAY_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter VNPAY_DATE_FORMAT =
             DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
@@ -89,8 +93,14 @@ public class VnPayReconciliationService {
             );
         }
 
-        Map<String, String> response = queryClient.query(createSignedQuery(attempt));
-        validateQueryResponse(response, attempt);
+        Map<String, String> response;
+        try {
+            response = queryClient.query(createSignedQuery(attempt));
+            validateQueryResponse(response, attempt);
+        } catch (IllegalStateException exception) {
+            LOGGER.error("VNPay payment status reconciliation failed", exception);
+            throw exception;
+        }
         if (!"00".equals(response.get("vnp_ResponseCode"))) {
             return new VnPayReconciliationResponse(
                     statusOf(attempt),
