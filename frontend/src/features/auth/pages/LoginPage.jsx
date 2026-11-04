@@ -55,7 +55,7 @@ export default function LoginPage() {
         </div>
         <form onSubmit={handleSubmit} className="p-8 sm:p-10">
           <h2 className="font-display text-2xl font-semibold text-[#4A302B]">Đăng nhập</h2>
-          <p className="mt-2 text-xs leading-5 text-[#806B65]">Dùng tài khoản đã xác minh email để đăng nhập.</p>
+          <p className="mt-2 text-xs leading-5 text-[#806B65]">Đăng nhập bằng tên đăng nhập và mật khẩu của bạn.</p>
           {error && <div role="alert" className="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs leading-5 text-rose-800">{error}</div>}
           <label className="mt-6 block text-xs font-semibold text-[#5F4039]" htmlFor="username">Tên đăng nhập</label>
           <input id="username" autoComplete="username" required value={username} onChange={(e) => setUsername(e.target.value)} className="mt-2 h-11 w-full rounded-xl border border-[#EAE3DA] bg-[#FCF9F3] px-4 text-sm outline-none transition focus:border-[#B98A63] focus:ring-2 focus:ring-[#D0A263]/20" />

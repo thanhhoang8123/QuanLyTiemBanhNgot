@@ -66,8 +66,8 @@ public class AuthController {
     public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterRequest request) {
         registrationService.register(request.username(), request.password(), request.fullName(),
                 request.email(), request.phone(), request.address());
-        return ResponseEntity.accepted().body(new MessageResponse(
-                "Tài khoản đã được tạo. Nếu chưa nhận được email xác minh, vui lòng yêu cầu gửi lại sau khi đủ thời gian chờ."));
+        return ResponseEntity.status(HttpStatus.CREATED).body(new MessageResponse(
+                "Đăng ký thành công. Bạn có thể đăng nhập ngay."));
     }
 
     @PostMapping("/resend-verification")

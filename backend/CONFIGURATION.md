@@ -187,9 +187,9 @@ Sau đó mở **Run and Debug**, chọn **WA Patisserie (dev)** và khởi chạ
 đang chạy; hãy dùng file env cục bộ nói trên hoặc mở VS Code từ chính terminal
 đã đặt biến môi trường.
 
-Nếu cần gửi email xác minh hoặc xác nhận đơn hàng, đặt thêm
-`SPRING_MAIL_USERNAME` (địa chỉ tài khoản gửi) và `SPRING_MAIL_PASSWORD` trong
-terminal đó. Dùng Gmail App Password, không dùng mật khẩu Gmail thông thường.
+Đăng ký khách hàng không cần gửi email xác minh. Nếu cần gửi email xác nhận đơn
+hàng, đặt `SPRING_MAIL_USERNAME` (địa chỉ tài khoản gửi) và
+`SPRING_MAIL_PASSWORD` trong terminal đó. Dùng Gmail App Password, không dùng mật khẩu Gmail thông thường.
 Chỉ bật API mô phỏng thanh toán trong môi trường
 kiểm thử có chủ đích bằng `$env:APP_PAYMENT_SIMULATION_ENABLED = "true"`;
 profile `prod` tắt chức năng này.
@@ -231,7 +231,7 @@ nếu chưa dùng dịch vụ tương ứng.
 | `FRONTEND_URL` **bắt buộc** | Origin frontend, ví dụ `https://quanlytiembanhngot.onrender.com`, không có path/dấu `/` cuối |
 | `SPRING_MAIL_HOST` | SMTP host; mặc định `smtp.gmail.com` |
 | `SPRING_MAIL_PORT` | SMTP port; mặc định `587` |
-| `SPRING_MAIL_USERNAME` | Tài khoản gửi email xác minh |
+| `SPRING_MAIL_USERNAME` | Tài khoản gửi email nghiệp vụ |
 | `SPRING_MAIL_PASSWORD` | Gmail App Password hoặc SMTP password |
 | `SHOP_CONTACT_EMAIL` | Hộp thư cửa hàng nhận tin liên hệ |
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name; cần đủ cả ba biến Cloudinary để upload ảnh |

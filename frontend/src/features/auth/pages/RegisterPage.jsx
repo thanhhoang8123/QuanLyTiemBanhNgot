@@ -10,29 +10,9 @@ export default function RegisterPage() {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
-  const [isResending, setIsResending] = useState(false)
-  const [resendMessage, setResendMessage] = useState('')
-  const [resendError, setResendError] = useState('')
   const navigate = useNavigate()
 
   const update = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
-
-  async function resendVerification() {
-    setIsResending(true)
-    setResendMessage('')
-    setResendError('')
-    try {
-      const result = await apiRequest('/auth/resend-verification', {
-        method: 'POST',
-        body: { email: form.email.trim() },
-      })
-      setResendMessage(result?.message || 'Nếu tài khoản đang chờ xác minh, hướng dẫn sẽ được gửi nếu đủ điều kiện.')
-    } catch (requestError) {
-      setResendError(getUserFacingErrorMessage(requestError, 'Chưa thể gửi lại email. Vui lòng thử lại sau.'))
-    } finally {
-      setIsResending(false)
-    }
-  }
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -75,22 +55,17 @@ export default function RegisterPage() {
       <div className="mx-auto w-full max-w-xl rounded-[28px] border border-[#EAE3DA] bg-white p-5 shadow-[0_18px_60px_rgba(91,61,53,0.07)] sm:p-8 lg:p-10">
         {submitted ? (
           <div className="py-8 text-center">
-            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#EAF0E8] text-[#536B50]"><Icon name="mail" size={28} /></span>
-            <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Kiểm tra hộp thư</p>
-            <h2 className="font-display mt-3 text-3xl text-[#4A302B]">Bạn sắp hoàn tất rồi!</h2>
-            <p className="mt-4 text-sm leading-7 text-[#806B65]">Nếu email được gửi thành công, hãy mở thư xác minh từ WA Patisserie. Liên kết có hiệu lực trong 30 phút.</p>
-            {resendMessage && <p role="status" className="mt-4 rounded-xl bg-[#EAF0E8] px-4 py-3 text-xs leading-5 text-[#536B50]">{resendMessage}</p>}
-            {resendError && <p role="alert" className="mt-4 rounded-xl bg-[#F6E9E6] px-4 py-3 text-xs leading-5 text-[#914E46]">{resendError}</p>}
-            <button type="button" disabled={isResending} onClick={resendVerification} className="mt-5 rounded-full border border-[#DDCDB8] px-5 py-3 text-sm font-semibold text-[#76534D] transition hover:bg-[#FCF9F3] disabled:cursor-not-allowed disabled:opacity-60">
-              {isResending ? 'Đang gửi...' : 'Gửi lại email xác minh'}
-            </button>
-            <button type="button" onClick={() => navigate('/shop')} className="mt-7 rounded-full bg-[#76534D] px-6 py-3 text-sm font-semibold text-white hover:bg-[#4A302B]">Quay lại cửa hàng</button>
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#EAF0E8] text-[#536B50]"><Icon name="check" size={28} /></span>
+            <p className="mt-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Tạo tài khoản thành công</p>
+            <h2 className="font-display mt-3 text-3xl text-[#4A302B]">Chào mừng bạn đến với WA Patisserie!</h2>
+            <p className="mt-4 text-sm leading-7 text-[#806B65]">Tài khoản đã sẵn sàng. Bạn có thể đăng nhập ngay mà không cần xác minh email.</p>
+            <button type="button" onClick={() => navigate('/shop/login')} className="mt-7 rounded-full bg-[#76534D] px-6 py-3 text-sm font-semibold text-white hover:bg-[#4A302B]">Đăng nhập ngay</button>
           </div>
         ) : (
           <>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A97668]">Tài khoản khách hàng</p>
             <h2 className="font-display mt-2 text-3xl font-medium text-[#4A302B] sm:text-4xl">Tạo tài khoản</h2>
-            <p className="mt-3 text-sm leading-6 text-[#806B65]">Điền thông tin bên dưới. Email của bạn cần được xác minh trước khi đăng nhập.</p>
+            <p className="mt-3 text-sm leading-6 text-[#806B65]">Điền thông tin bên dưới để tạo tài khoản. Bạn có thể đăng nhập ngay sau khi đăng ký.</p>
             {error && <div role="alert" className="mt-5 rounded-xl border border-[#E2C5BF] bg-[#F6E9E6] px-4 py-3 text-sm text-[#914E46]">{error}</div>}
             <form onSubmit={handleSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
               <label className="grid gap-1.5 text-xs font-semibold text-[#675650] sm:col-span-2">Họ và tên *<input required maxLength={100} name="fullName" value={form.fullName} onChange={update} autoComplete="name" className="h-11 rounded-xl border border-[#EAE3DA] bg-[#FCF9F3]/60 px-3 text-sm font-normal outline-none focus:border-[#D0A263]" placeholder="Nguyễn Thị An" /></label>
@@ -100,7 +75,7 @@ export default function RegisterPage() {
               <label className="grid gap-1.5 text-xs font-semibold text-[#675650] sm:col-span-2">Địa chỉ giao hàng<input name="address" value={form.address} onChange={update} autoComplete="street-address" maxLength={255} className="h-11 rounded-xl border border-[#EAE3DA] bg-[#FCF9F3]/60 px-3 text-sm font-normal outline-none focus:border-[#D0A263]" placeholder="Số nhà, đường, quận/huyện" /></label>
               <label className="grid gap-1.5 text-xs font-semibold text-[#675650]">Mật khẩu *<input required type="password" minLength={8} maxLength={72} name="password" value={form.password} onChange={update} autoComplete="new-password" className="h-11 rounded-xl border border-[#EAE3DA] bg-[#FCF9F3]/60 px-3 text-sm font-normal outline-none focus:border-[#D0A263]" placeholder="Ít nhất 8 ký tự" /></label>
               <label className="grid gap-1.5 text-xs font-semibold text-[#675650]">Nhập lại mật khẩu *<input required type="password" minLength={8} maxLength={72} name="confirmPassword" value={form.confirmPassword} onChange={update} autoComplete="new-password" className="h-11 rounded-xl border border-[#EAE3DA] bg-[#FCF9F3]/60 px-3 text-sm font-normal outline-none focus:border-[#D0A263]" placeholder="Nhập lại mật khẩu" /></label>
-              <button disabled={isSubmitting} type="submit" className="mt-2 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#76534D] px-5 text-sm font-semibold text-white transition hover:bg-[#4A302B] disabled:opacity-60 sm:col-span-2">{isSubmitting ? 'Đang tạo tài khoản…' : 'Đăng ký và xác minh email'} <Icon name="arrowUpRight" size={16} /></button>
+              <button disabled={isSubmitting} type="submit" className="mt-2 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#76534D] px-5 text-sm font-semibold text-white transition hover:bg-[#4A302B] disabled:opacity-60 sm:col-span-2">{isSubmitting ? 'Đang tạo tài khoản…' : 'Đăng ký'} <Icon name="arrowUpRight" size={16} /></button>
             </form>
             <p className="mt-6 text-center text-xs text-[#806B65]">Đã có tài khoản? <Link to="/shop/login" className="font-semibold text-[#76534D] underline underline-offset-4">Đăng nhập</Link></p>
           </>
