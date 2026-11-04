@@ -1,5 +1,19 @@
 import { ApiError, apiRequest } from '../../../services/apiClient.js'
 
+export const PRODUCT_CATALOG_UPDATED_EVENT = 'product-catalog-updated'
+const PRODUCT_CATALOG_UPDATED_STORAGE_KEY = 'wa_cake_product_catalog_updated'
+
+function notifyProductCatalogUpdated() {
+  if (typeof window === 'undefined') return
+
+  window.dispatchEvent(new Event(PRODUCT_CATALOG_UPDATED_EVENT))
+  try {
+    window.localStorage.setItem(PRODUCT_CATALOG_UPDATED_STORAGE_KEY, String(Date.now()))
+  } catch (error) {
+    console.warn('Could not notify other tabs about product changes.', error)
+  }
+}
+
 export async function uploadProductImage(file) {
   const formData = new FormData()
   formData.append('file', file)
@@ -51,22 +65,29 @@ export function getProductById(id, { signal } = {}) {
   return apiRequest(`/products/${encodeURIComponent(id)}`, { signal })
 }
 
-export function createProduct(product) {
-  return apiRequest('/products', { method: 'POST', body: product })
+export async function createProduct(product) {
+  const createdProduct = await apiRequest('/products', { method: 'POST', body: product })
+  notifyProductCatalogUpdated()
+  return createdProduct
 }
 
-export function updateProduct(id, product, expectedQuantity) {
-  return apiRequest(`/products/${encodeURIComponent(id)}`, {
+export async function updateProduct(id, product, expectedQuantity) {
+  const updatedProduct = await apiRequest(`/products/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: product,
     headers: { 'X-Expected-Quantity': String(expectedQuantity) },
   })
+  notifyProductCatalogUpdated()
+  return updatedProduct
 }
 
-export function deactivateProduct(id) {
-  return apiRequest(`/products/${encodeURIComponent(id)}/deactivate`, { method: 'POST' })
+export async function deactivateProduct(id) {
+  const product = await apiRequest(`/products/${encodeURIComponent(id)}/deactivate`, { method: 'POST' })
+  notifyProductCatalogUpdated()
+  return product
 }
 
-export function deleteProduct(id) {
-  return apiRequest(`/products/${encodeURIComponent(id)}`, { method: 'DELETE' })
+export async function deleteProduct(id) {
+  await apiRequest(`/products/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  notifyProductCatalogUpdated()
 }

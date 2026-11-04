@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getCategories } from '../../categories/services/categoryService.js'
 import { toProductViewModel } from '../../products/adapters/productAdapter.js'
-import { getProducts } from '../../products/services/productService.js'
+import {
+  getProducts,
+  PRODUCT_CATALOG_UPDATED_EVENT,
+} from '../../products/services/productService.js'
 import { getUserFacingErrorMessage } from '../../../services/apiClient.js'
+
+const PRODUCT_CATALOG_UPDATED_STORAGE_KEY = 'wa_cake_product_catalog_updated'
 
 function getErrorMessage(error) {
   return getUserFacingErrorMessage(error, 'Chưa thể tải danh sách sản phẩm. Vui lòng thử lại.')
@@ -46,6 +51,20 @@ export default function useShopCatalog() {
     void loadCatalog()
     return () => controller.abort()
   }, [reloadVersion])
+
+  useEffect(() => {
+    const reloadCatalog = () => setReloadVersion((version) => version + 1)
+    const handleStorage = (event) => {
+      if (event.key === PRODUCT_CATALOG_UPDATED_STORAGE_KEY) reloadCatalog()
+    }
+
+    window.addEventListener(PRODUCT_CATALOG_UPDATED_EVENT, reloadCatalog)
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener(PRODUCT_CATALOG_UPDATED_EVENT, reloadCatalog)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
 
   return { categories, products, isLoading, error, retry }
 }

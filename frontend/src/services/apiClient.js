@@ -101,6 +101,7 @@ export async function apiRequest(
     headers,
     signal,
     credentials: 'include',
+    cache: requestMethod === 'GET' ? 'no-store' : undefined,
   }
 
   if (body !== undefined) {
