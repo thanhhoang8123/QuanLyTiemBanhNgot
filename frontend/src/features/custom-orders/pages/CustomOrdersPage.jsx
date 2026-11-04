@@ -79,9 +79,11 @@ function toUtcLocalDateTime(value) {
   return new Date(value).toISOString().slice(0, 19)
 }
 
-function validateForm(form) {
+function validateForm(form, activeEmployees) {
   if (!form.customerId) return 'Vui lòng chọn khách hàng đang hoạt động.'
-  if (!form.employeeId) return 'Vui lòng chọn nhân viên đang hoạt động tiếp nhận đơn.'
+  if (!activeEmployees.some((employee) => String(employee.id) === form.employeeId)) {
+    return 'Vui lòng chọn nhân viên đang hoạt động tiếp nhận đơn.'
+  }
   if (!form.cakeName.trim()) return 'Vui lòng nhập tên bánh theo yêu cầu.'
   if (form.cakeName.trim().length > 150) return 'Tên bánh không được vượt quá 150 ký tự.'
   if (form.requestDescription.trim()
@@ -281,7 +283,7 @@ export default function CustomOrdersPage({ onToast }) {
 
   const saveOrder = async (event) => {
     event.preventDefault()
-    const validationError = validateForm(form)
+    const validationError = validateForm(form, activeEmployees)
     if (validationError) {
       setFormError(validationError)
       return
@@ -595,12 +597,18 @@ export default function CustomOrdersPage({ onToast }) {
                   ? <select
                       {...fieldProps}
                       value={form.employeeId}
-                      disabled
+                      onChange={(event) => {
+                        setForm((current) => ({ ...current, employeeId: event.target.value }))
+                        setFormError('')
+                      }}
                       className={inputClass}
                     >
-                      {activeEmployees
-                        .filter((employee) => String(employee.id) === form.employeeId)
-                        .map((employee) => <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>)}
+                      {!activeEmployees.some((employee) => String(employee.id) === form.employeeId)
+                        && <option value={form.employeeId} disabled>Nhân viên hiện tại không hoạt động — hãy chọn người khác</option>}
+                      <option value="">Chọn nhân viên đang hoạt động</option>
+                      {activeEmployees.map((employee) => (
+                        <option key={employee.id} value={employee.id}>{employeeLabel(employee)}</option>
+                      ))}
                     </select>
                   : <input
                       {...fieldProps}
