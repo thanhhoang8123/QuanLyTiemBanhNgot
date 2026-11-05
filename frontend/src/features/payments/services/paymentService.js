@@ -47,3 +47,10 @@ export async function simulatePayment(id, result) {
   })
   return validatePaymentResponse(payment, { id, status: result })
 }
+
+export async function confirmPosPayment(id) {
+  const payment = await apiRequest(`/payments/${encodeURIComponent(id)}/pos-confirmation`, {
+    method: 'POST',
+  })
+  return validatePaymentResponse(payment, { id, status: 'SUCCESS' })
+}

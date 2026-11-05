@@ -84,6 +84,11 @@ public class PaymentController {
         return paymentService.simulate(id, request);
     }
 
+    @PostMapping("/{id}/pos-confirmation")
+    public PaymentResponse confirmPosPayment(@PathVariable Long id) {
+        return paymentService.confirmPosPayment(id);
+    }
+
     /**
      * PUT /api/payments/{id}
      *

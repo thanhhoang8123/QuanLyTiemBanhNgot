@@ -224,22 +224,66 @@ public class PaymentService {
         }
 
         if ("SUCCESS".equals(request.result())) {
-            payment.setStatus("SUCCESS");
-            payment.setPaidAt(LocalDateTime.now(ZoneOffset.UTC));
-            settleLoyaltyPoints(order, payment.getAmount());
-            if ("PENDING".equals(order.getStatus())) {
-                String oldStatus = order.getStatus();
-                order.setStatus("CONFIRMED");
-                orderRepository.save(order);
-                orderStatusHistoryService.recordStatusChangeAfterCommit(
-                        order.getId(), oldStatus, order.getStatus(), "Thanh toán thành công");
-            }
+            markPaymentSuccessful(payment, order, "Thanh toán thành công");
         } else {
             payment.setStatus("FAILED");
             payment.setPaidAt(null);
         }
 
         return paymentMapper.toResponse(paymentRepository.save(payment));
+    }
+
+    @Transactional
+    public PaymentResponse confirmPosPayment(Long id) {
+        Payment existingPayment = paymentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy thanh toán với ID: " + id
+                ));
+        Long orderId = existingPayment.getOrder().getId();
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy đơn hàng của thanh toán với ID: " + id
+                ));
+        Payment payment = paymentRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy thanh toán với ID: " + id
+                ));
+
+        if (!List.of("CASH", "CARD", "EWALLET").contains(payment.getPaymentMethod())) {
+            throw new ConflictException(
+                    "Chỉ có thể xác nhận thanh toán tiền mặt, thẻ hoặc ví tại quầy"
+            );
+        }
+        if ("SUCCESS".equals(payment.getStatus())) {
+            return paymentMapper.toResponse(payment);
+        }
+        if (!"PENDING".equals(payment.getStatus())) {
+            throw new ConflictException(
+                    "Trạng thái thanh toán hiện tại không cho phép xác nhận tại quầy"
+            );
+        }
+        if ("CANCELLED".equals(order.getStatus())
+                || "COMPLETED".equals(order.getStatus())) {
+            throw new ConflictException(
+                    "Không thể thanh toán đơn hàng đã hủy hoặc hoàn tất"
+            );
+        }
+
+        markPaymentSuccessful(payment, order, "Thanh toán tại quầy thành công");
+        return paymentMapper.toResponse(paymentRepository.save(payment));
+    }
+
+    private void markPaymentSuccessful(Payment payment, Order order, String reason) {
+        payment.setStatus("SUCCESS");
+        payment.setPaidAt(LocalDateTime.now(ZoneOffset.UTC));
+        settleLoyaltyPoints(order, payment.getAmount());
+        if ("PENDING".equals(order.getStatus())) {
+            String oldStatus = order.getStatus();
+            order.setStatus("CONFIRMED");
+            orderRepository.save(order);
+            orderStatusHistoryService.recordStatusChangeAfterCommit(
+                    order.getId(), oldStatus, order.getStatus(), reason);
+        }
     }
 
     private void settleLoyaltyPoints(Order order, BigDecimal paidAmount) {
