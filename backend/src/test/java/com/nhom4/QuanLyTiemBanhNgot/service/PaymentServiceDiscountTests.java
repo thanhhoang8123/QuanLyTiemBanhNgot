@@ -133,6 +133,56 @@ class PaymentServiceDiscountTests {
     }
 
     @Test
+    void posConfirmationCompletesPendingCashPayment() {
+        Order order = order(48L, "125000.00", "0.00");
+        Payment payment = payment(15L, order, "125000.00");
+        when(paymentRepository.findById(15L)).thenReturn(Optional.of(payment));
+        when(paymentRepository.findByIdForUpdate(15L)).thenReturn(Optional.of(payment));
+        when(orderRepository.findByIdForUpdate(48L)).thenReturn(Optional.of(order));
+        when(paymentRepository.save(payment)).thenReturn(payment);
+
+        PaymentResponse result = paymentService.confirmPosPayment(15L);
+
+        assertEquals("SUCCESS", result.status());
+        assertEquals("CONFIRMED", order.getStatus());
+        verify(orderRepository).save(order);
+        verify(orderStatusHistoryService).recordStatusChangeAfterCommit(
+                48L, "PENDING", "CONFIRMED", "Thanh toán tại quầy thành công");
+    }
+
+    @Test
+    void posConfirmationRejectsVnPayPayments() {
+        Order order = order(49L, "125000.00", "0.00");
+        Payment payment = payment(16L, order, "125000.00");
+        payment.setPaymentMethod("VNPAY");
+        when(paymentRepository.findById(16L)).thenReturn(Optional.of(payment));
+        when(paymentRepository.findByIdForUpdate(16L)).thenReturn(Optional.of(payment));
+        when(orderRepository.findByIdForUpdate(49L)).thenReturn(Optional.of(order));
+
+        assertThrows(ConflictException.class, () -> paymentService.confirmPosPayment(16L));
+
+        assertEquals("PENDING", payment.getStatus());
+        verify(paymentRepository, never()).save(payment);
+    }
+
+    @Test
+    void posConfirmationIsIdempotentForAlreadySuccessfulPayment() {
+        Order order = order(50L, "125000.00", "0.00");
+        order.setStatus("CONFIRMED");
+        Payment payment = payment(17L, order, "125000.00");
+        payment.setStatus("SUCCESS");
+        when(paymentRepository.findById(17L)).thenReturn(Optional.of(payment));
+        when(paymentRepository.findByIdForUpdate(17L)).thenReturn(Optional.of(payment));
+        when(orderRepository.findByIdForUpdate(50L)).thenReturn(Optional.of(order));
+
+        PaymentResponse result = paymentService.confirmPosPayment(17L);
+
+        assertEquals("SUCCESS", result.status());
+        verify(paymentRepository, never()).save(payment);
+        verify(customerRepository, never()).save(any());
+    }
+
+    @Test
     void failedPaymentDoesNotRedeemCustomerPoints() {
         Order order = order(47L, "190000.00", "10000.00");
         Customer customer = new Customer();

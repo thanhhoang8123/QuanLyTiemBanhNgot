@@ -15,7 +15,7 @@ import {
   getEmployees,
   quotePosOrder,
 } from '../../orders/services/orderService.js'
-import { createPayment, simulatePayment } from '../../payments/services/paymentService.js'
+import { confirmPosPayment, createPayment } from '../../payments/services/paymentService.js'
 import { getProducts } from '../../products/services/productService.js'
 import { getPromotions } from '../../promotions/services/promotionService.js'
 import { getPromotionProducts } from '../../promotion-products/services/promotionProductService.js'
@@ -372,7 +372,7 @@ export default function PosPage({
     setCheckoutError('')
     try {
       // 1. Tạo đơn hàng
-      const order = await createOrder({
+      const order = createdOrder || await createOrder({
         customerId: Number(customerId),
         employeeId: Number(targetEmployeeId),
         deliveryAddress: null,
@@ -388,13 +388,16 @@ export default function PosPage({
 
       // 2. Tạo bản ghi thanh toán (nếu đơn 0đ thì phương thức là LOYALTY_POINTS)
       const effectivePaymentMethod = Number(order.finalAmount) <= 0 ? 'LOYALTY_POINTS' : paymentMethod
-      const payment = await createPayment({
+      const payment = createdPayment || await createPayment({
         orderId: order.id,
         paymentMethod: effectivePaymentMethod,
       })
+      setCreatedPayment(payment)
 
       // 3. Tự động xác nhận thành công ngay lập tức cho thu ngân
-      const confirmedPayment = await simulatePayment(payment.id, 'SUCCESS')
+      const confirmedPayment = payment.status === 'SUCCESS'
+        ? payment
+        : await confirmPosPayment(payment.id)
       setCreatedPayment(confirmedPayment)
 
       // 4. Cập nhật điểm khách hàng trong local state
